@@ -4,8 +4,23 @@
 
 :root {
 	--color-fd-primary: oklch(0.462 0.141 155.4);
+	--color-mori-green: oklch(0.462 0.141 155.4);
 }
 
 .dark {
 	--color-fd-primary: oklch(0.62 0.16 155.4);
+	--color-mori-green: oklch(0.62 0.16 155.4);
+}
+
+#nd-page :is(h1, h2, h3, h4, h5, h6) {
+	color: var(--color-mori-green);
+}
+
+#nd-page a:not(.not-prose a) {
+	color: var(--color-mori-green);
+}
+
+.prose {
+	--tw-prose-headings: var(--color-mori-green);
+	--tw-prose-links: var(--color-mori-green);
 }
