@@ -4,7 +4,7 @@ description: Field-by-field reference for mori.dhall
 icon: List
 ---
 
-This is the field-by-field reference for `mori.dhall`, the project manifest that defines a Mori project's identity, packages, dependencies, and agent configuration.
+This is the field-by-field reference for `mori.dhall`, the project manifest that defines a Mori project's identity, packages, dependencies, and agent configuration. All types are defined in the `mori-schema` package and re-exported through `package.dhall`.
 
 ## Root Fields
 
@@ -35,6 +35,16 @@ The `(namespace, name)` pair forms the unique registry key.
 | `domains` | `List Text` | Domain tags |
 | `owners` | `List Text` | Team or individual owners |
 
+## repos
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `name` | `Text` | Repository name |
+| `github` | `Optional Text` | GitHub reference (`"owner/repo"`) |
+| `gitlab` | `Optional Text` | GitLab reference (`"namespace/project"`) |
+| `git` | `Optional Text` | Generic git URL |
+| `localPath` | `Optional Text` | Path relative to project root |
+
 ## packages
 
 | Field | Type | Notes |
@@ -50,20 +60,36 @@ The `(namespace, name)` pair forms the unique registry key.
 | `docs` | `List DocRef` | Package-specific documentation |
 | `config` | `List ConfigItem` | Configuration requirements |
 
+### Runtime
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `deployable` | `Bool` | Whether this package is deployed as a running process |
+| `exposesApi` | `Bool` | Whether this package exposes an API |
+
 ### Dependency
 
-**Simple form:**
+A union type with two forms.
+
+**Simple form — by name:**
 
 ```haskell
 Schema.Dependency.ByName "effectful"
 ```
 
-**Augmented form:**
+**Augmented form — with extra docs or path override:**
 
 ```haskell
 Schema.Dependency.WithAugmentation
   { name = "hasql"
-  , extraDocs = [ ... ]
+  , extraDocs =
+    [ { key = "migration-guide"
+      , kind = Schema.DocKind.Guide
+      , audience = Schema.DocAudience.Module
+      , description = Some "Team migration notes"
+      , location = Schema.DocLocation.LocalFile "./docs/hasql-migration.md"
+      }
+    ]
   , localPathOverride = None Text
   }
 ```
@@ -79,6 +105,27 @@ Schema.Dependency.WithAugmentation
 | `sourceHint` | `Optional ConfigSourceHint` | Where to find the value |
 | `example` | `Optional Text` | Example value |
 
+### DocRef
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `key` | `Text` | Unique key for this doc reference |
+| `kind` | `DocKind` | Classification of the document |
+| `audience` | `DocAudience` | Intended audience |
+| `description` | `Optional Text` | Brief description |
+| `location` | `DocLocation` | Where the document lives |
+
+## bundles
+
+Package bundles group related packages that are typically used together. When a dependency name matches a bundle, Mori resolves all packages in the bundle.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `name` | `Text` | Bundle name (used for dependency resolution) |
+| `description` | `Optional Text` | Brief description |
+| `packages` | `List Text` | Package names included in this bundle |
+| `primary` | `Text` | Main package for imports (must be listed in `packages`) |
+
 ## apis
 
 | Field | Type | Notes |
@@ -90,6 +137,23 @@ Schema.Dependency.WithAugmentation
 | `dependencies` | `List ApiDependency` | Packages that depend on this API |
 | `updatePolicy` | `Optional ApiUpdatePolicy` | Update propagation policy |
 
+### ApiDependency
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `package` | `Text` | Package name |
+| `role` | `ApiDependencyRole` | `Client` or `Consumer` |
+
+### ApiUpdatePolicy
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `strategy` | `ApiUpdateStrategy` | How updates propagate |
+| `allowBreaking` | `Bool` | Whether breaking changes are permitted |
+| `requireTests` | `Bool` | Whether tests must pass before propagation |
+| `consumerBatching` | `ConsumerBatching` | `Sequential` or `Parallel` |
+| `notes` | `Optional Text` | Free-form notes about the policy |
+
 ## agents
 
 | Field | Type | Notes |
@@ -99,6 +163,26 @@ Schema.Dependency.WithAugmentation
 | `includePaths` | `List Text` | Paths the agent should focus on |
 | `excludePaths` | `List Text` | Paths the agent should ignore |
 | `relatedPackages` | `List Text` | Package names relevant to this role |
+
+## StandardProject
+
+Standard projects publish shared documentation and conventions. They are referenced by name in the `standards` field and resolved as registered projects.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `name` | `Text` | Standard name |
+| `scope` | `StandardScope` | Organizational scope |
+| `description` | `Optional Text` | Brief description |
+| `repo` | `Repo` | Repository containing the standard |
+| `docs` | `List DocRef` | Documentation references |
+| `appliesTo` | Record | Which project types and languages this applies to |
+
+The `appliesTo` record contains:
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `types` | `List PackageType` | Project types this standard applies to |
+| `languages` | `List Language` | Languages this standard applies to |
 
 ## Type Enums
 
@@ -118,6 +202,14 @@ Schema.Dependency.WithAugmentation
 
 `Public` | `Internal` | `Private`
 
+### DependencyKind
+
+`Internal` | `ThirdParty`
+
+### DependencySource
+
+`Hackage` | `Npm` | `PyPI` | `Crates` | `Maven` | `GitHub` | `GitLab` | `Git` | `Local` | `Other <text>`
+
 ### DocKind
 
 `Reference` | `Guide` | `Cookbook` | `Spec` | `Runbook` | `Notes` | `Other <text>`
@@ -134,6 +226,18 @@ Schema.Dependency.WithAugmentation
 
 `OpenAPI` | `GraphQL` | `GRPC` | `AsyncAPI` | `Smithy` | `Other <text>`
 
+### ApiDependencyRole
+
+`Client` | `Consumer`
+
+### ApiUpdateStrategy
+
+`ClientFirst` | `ManualApproval` | `NoAutomation`
+
+### ConsumerBatching
+
+`Sequential` | `Parallel`
+
 ### ConfigValueType
 
 `String` | `Integer` | `Boolean` | `Secret` | `Url` | `FilePath` | `Duration` | `Json` | `Other <text>`
@@ -141,6 +245,10 @@ Schema.Dependency.WithAugmentation
 ### ConfigSourceHint
 
 `EnvVar <name>` | `K8sSecret <name>` | `K8sConfigMap <name>` | `Vault <path>` | `File <path>` | `Default <value>`
+
+### StandardScope
+
+`Organization` | `Domain` | `Platform` | `Language` | `Team` | `Other <text>`
 
 ## Validation Rules
 

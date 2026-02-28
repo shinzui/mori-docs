@@ -15,7 +15,137 @@ The `mori.dhall` schema defines the **identity layer** of Mori configuration. It
 5. **Knowledge lives where it is owned** — shared knowledge in shared projects
 6. **Identity precedes behavior** — `mori.dhall` describes what a project *is*
 
-## Core Types
+## Schema Package Structure
+
+The schema is organized into three directories:
+
+```
+mori-schema/
+├── package.dhall              # Entry point — re-exports all types
+├── Project.dhall              # Root project manifest type
+├── types/                     # 16 union types (enumerations)
+│   ├── Language.dhall
+│   ├── PackageType.dhall
+│   ├── Lifecycle.dhall
+│   ├── Visibility.dhall
+│   ├── DependencyKind.dhall
+│   ├── DependencySource.dhall
+│   ├── DocKind.dhall
+│   ├── DocLocation.dhall
+│   ├── DocAudience.dhall
+│   ├── ApiType.dhall
+│   ├── ApiDependencyRole.dhall
+│   ├── ApiUpdateStrategy.dhall
+│   ├── ConsumerBatching.dhall
+│   ├── ConfigValueType.dhall
+│   ├── ConfigSourceHint.dhall
+│   └── StandardScope.dhall
+├── records/                   # 12 record types
+│   ├── Repo.dhall
+│   ├── Package.dhall
+│   ├── PackageBundle.dhall
+│   ├── Dependency.dhall
+│   ├── DocRef.dhall
+│   ├── Runtime.dhall
+│   ├── ConfigItem.dhall
+│   ├── Api.dhall
+│   ├── ApiDependency.dhall
+│   ├── ApiUpdatePolicy.dhall
+│   ├── AgentHint.dhall
+│   └── StandardProject.dhall
+└── automation/                # 5 automation types
+    ├── Automation.dhall
+    ├── EventSelector.dhall
+    ├── Reaction.dhall
+    ├── ReactionAction.dhall
+    └── ExecutionPolicy.dhall
+```
+
+All types are re-exported through `package.dhall`, so consumers import a single file:
+
+```haskell
+let Schema = ./schema/package.dhall
+
+in  Schema.Project::{ ... }
+```
+
+## Type Hierarchy
+
+```
+Project (root — mori.dhall)
+├── project metadata
+│   ├── type: PackageType
+│   ├── language: Language
+│   └── lifecycle: Lifecycle
+├── repos: List Repo
+├── packages: List Package
+│   ├── type: PackageType
+│   ├── language: Language
+│   ├── visibility: Visibility
+│   ├── runtime: Runtime
+│   ├── dependencies: List Dependency
+│   │   └── WithAugmentation → DocRef
+│   ├── docs: List DocRef
+│   │   ├── kind: DocKind
+│   │   ├── audience: DocAudience
+│   │   └── location: DocLocation
+│   └── config: List ConfigItem
+│       ├── type: ConfigValueType
+│       └── sourceHint: ConfigSourceHint
+├── bundles: List PackageBundle
+├── apis: List Api
+│   ├── type: ApiType
+│   ├── dependencies: List ApiDependency
+│   │   └── role: ApiDependencyRole
+│   └── updatePolicy: ApiUpdatePolicy
+│       ├── strategy: ApiUpdateStrategy
+│       └── consumerBatching: ConsumerBatching
+├── agents: List AgentHint
+├── standards: List Text
+└── docs: List DocRef
+
+Automation (mori.automation.dhall)
+├── events: List EventSelector
+│   ├── ChangesetSelector
+│   └── RefSelector
+├── reactions: List Reaction
+│   └── actions: List ReactionAction
+│       ├── RunCommand
+│       ├── EmitEvent
+│       ├── Notify
+│       └── Schedule → ScheduledAction
+└── execution: ExecutionPolicy
+```
+
+## Root Type: Project
+
+The `Project` type defines the shape of every `mori.dhall` file:
+
+```haskell
+{ project :
+    { name : Text
+    , namespace : Text
+    , type : PackageType
+    , description : Optional Text
+    , language : Language
+    , lifecycle : Lifecycle
+    , domains : List Text
+    , owners : List Text
+    }
+, repos : List Repo
+, packages : List Package
+, bundles : List PackageBundle
+, dependencies : List Text
+, apis : List Api
+, agents : List AgentHint
+, standards : List Text
+, docs : List DocRef
+}
+```
+
+## Core Union Types
+
+Union types provide extensibility through an `Other : Text` escape hatch where appropriate.
 
 ```haskell
 -- Language.dhall
@@ -23,10 +153,22 @@ The `mori.dhall` schema defines the **identity layer** of Mori configuration. It
 | Java | Kotlin | Swift | Ruby | Elixir | Clojure | Scala
 | Dhall | Nix | SQL | Shell | Other : Text >
 
--- PackageType.dhall (used for both projects and packages)
+-- PackageType.dhall
 < Application | Library | Client | Worker | Tool | Other : Text >
 
--- Dependency.dhall (Registry-First)
+-- Lifecycle.dhall
+< Active | Experimental | Deprecated | Archived >
+
+-- Visibility.dhall
+< Public | Internal | Private >
+```
+
+## Dependency Model
+
+Dependencies use a **registry-first** model with two forms:
+
+```haskell
+-- Dependency.dhall
 < ByName : Text
 | WithAugmentation :
     { name : Text
@@ -36,9 +178,18 @@ The `mori.dhall` schema defines the **identity layer** of Mori configuration. It
 >
 ```
 
-## Dependency Resolution Rules
+Additional types classify dependencies:
 
-Mori defines deterministic, explicit rules for resolving dependencies:
+```haskell
+-- DependencyKind.dhall
+< Internal | ThirdParty >
+
+-- DependencySource.dhall
+< Hackage | Npm | PyPI | Crates | Maven
+| GitHub | GitLab | Git | Local | Other : Text >
+```
+
+### Resolution Rules
 
 1. **Extract dependency name** from declaration
 2. **Query local registry** for name
@@ -47,13 +198,30 @@ Mori defines deterministic, explicit rules for resolving dependencies:
 5. **Else check `localPathOverride`** (fallback for unregistered deps)
 6. **Else**: treat as unannotated, warn user
 
-### Key Principles
+Key principles: registry-first lookup, single authority per dependency, consumers augment but never redefine, deterministic resolution, offline-capable.
 
-- **Registry-first**: name lookup before path fallback
-- **Single authority**: exactly one `mori.dhall` per dependency
-- **No override**: consumers augment, never redefine
-- **Deterministic**: same name produces same resolution
-- **Offline-capable**: local registry works without network
+## Documentation Model
+
+Documentation references attach structured knowledge to projects, packages, and dependencies:
+
+```haskell
+-- DocRef
+{ key : Text
+, kind : DocKind
+, audience : DocAudience
+, description : Optional Text
+, location : DocLocation
+}
+
+-- DocKind.dhall
+< Reference | Guide | Cookbook | Spec | Runbook | Notes | Other : Text >
+
+-- DocAudience.dhall
+< Module | User | API | Internal | Other : Text >
+
+-- DocLocation.dhall
+< LocalFile : Text | LocalDir : Text | RepoPath : Text | Url : Text >
+```
 
 ## API Update Graph
 
@@ -63,21 +231,31 @@ APIs form a directed update graph:
 API Owner → Client Library → Application Consumers
 ```
 
-The `ApiUpdatePolicy` describes how changes propagate:
+```haskell
+-- ApiUpdatePolicy
+{ strategy : ApiUpdateStrategy
+, allowBreaking : Bool
+, requireTests : Bool
+, consumerBatching : ConsumerBatching
+, notes : Optional Text
+}
 
-| Field | Options |
-|-------|---------|
-| `strategy` | `ClientFirst`, `ManualApproval`, `NoAutomation` |
-| `allowBreaking` | `Bool` |
-| `requireTests` | `Bool` |
-| `consumerBatching` | `Sequential`, `Parallel` |
+-- ApiUpdateStrategy.dhall
+< ClientFirst | ManualApproval | NoAutomation >
+
+-- ApiDependencyRole.dhall
+< Client | Consumer >
+
+-- ConsumerBatching.dhall
+< Sequential | Parallel >
+```
 
 ## Configuration Specification
 
-Packages can declare runtime configuration requirements:
+Packages declare runtime configuration requirements with source hints for tooling:
 
 ```haskell
--- ConfigItem.dhall
+-- ConfigItem
 { key : Text
 , type : ConfigValueType
 , required : Bool
@@ -85,16 +263,39 @@ Packages can declare runtime configuration requirements:
 , sourceHint : Optional ConfigSourceHint
 , example : Optional Text
 }
-```
 
-Source hints tell tooling where config values come from (`EnvVar`, `K8sSecret`, `K8sConfigMap`, `Vault`, `File`, `Default`).
+-- ConfigValueType.dhall
+< String | Integer | Boolean | Secret | Url
+| FilePath | Duration | Json | Other : Text >
+
+-- ConfigSourceHint.dhall
+< EnvVar : Text | K8sSecret : Text | K8sConfigMap : Text
+| Vault : Text | File : Text | Default : Text >
+```
 
 ## Standards
 
-Standard projects are Mori projects whose primary purpose is to publish shared documentation and conventions. They do not define packages or APIs.
+Standard projects publish shared documentation and conventions. They have a scope and declare which project types and languages they apply to:
+
+```haskell
+-- StandardProject
+{ name : Text
+, scope : StandardScope
+, description : Optional Text
+, repo : Repo
+, docs : List DocRef
+, appliesTo :
+    { types : List PackageType
+    , languages : List Language
+    }
+}
+
+-- StandardScope.dhall
+< Organization | Domain | Platform | Language | Team | Other : Text >
+```
 
 Standards are declared, not inferred. Mori never assumes standards apply unless explicitly referenced.
 
 ## Mental Model
 
-> `mori.dhall` is the **identity layer**. It declares what a project *is*, what it contains, and what agents should know. It does **not** declare what happens when events occur.
+> `mori.dhall` is the **identity layer**. It declares what a project *is*, what it contains, and what agents should know. It does **not** declare what happens when events occur — that belongs in `mori.automation.dhall`.
