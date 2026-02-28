@@ -10,7 +10,12 @@ function Home() {
 	return (
 		<HomeLayout {...baseOptions()}>
 			<div className="flex flex-col flex-1 justify-center px-4 py-16 text-center">
-				<h1 className="font-bold text-4xl mb-4">森 mori</h1>
+				<img
+					src="/mori-logo.png"
+					alt="mori logo"
+					className="size-20 mx-auto mb-6"
+				/>
+				<h1 className="font-bold text-4xl mb-4">mori</h1>
 				<p className="text-fd-muted-foreground text-lg mb-2">
 					Project Identity & Automation
 				</p>

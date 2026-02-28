@@ -5,7 +5,12 @@ export function NotFound() {
 	return (
 		<HomeLayout
 			nav={{
-				title: "森 mori",
+				title: (
+					<div className="flex items-center gap-2">
+						<img src="/mori-logo.png" alt="" className="size-6" />
+						<span className="font-semibold">mori</span>
+					</div>
+				),
 			}}
 			className="text-center py-32 justify-center"
 		>

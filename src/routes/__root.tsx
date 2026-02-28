@@ -27,7 +27,10 @@ export const Route = createRootRoute({
 					"Documentation for mori, a Haskell-based project identity and automation system",
 			},
 		],
-		links: [{ rel: "stylesheet", href: appCss }],
+		links: [
+			{ rel: "icon", href: "/mori-logo.png", type: "image/png" },
+			{ rel: "stylesheet", href: appCss },
+		],
 	}),
 	component: RootComponent,
 });
