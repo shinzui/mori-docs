@@ -1,0 +1,225 @@
+---
+title: Schema Guide
+description: How to write and maintain a mori.dhall project manifest
+icon: FileText
+---
+
+This guide explains how to write and maintain a `mori.dhall` project manifest. It covers the concepts behind each section, common patterns, and practical recipes.
+
+For a field-by-field reference, see [Schema Reference](/docs/guides/schema-reference).
+
+## What is `mori.dhall`?
+
+`mori.dhall` is the **identity layer** of your project. It declares what a project _is_ — its name, ownership, packages, dependencies, APIs, and agent configuration — using [Dhall](https://dhall-lang.org/), a typed configuration language.
+
+Mori uses this file as the single source of truth for:
+
+- **Dependency resolution** — locating packages on disk via the local registry
+- **Agent context assembly** — building structured JSON that AI agents consume
+- **Automation** — pairing project identity with reactive behavior
+- **Validation** — ensuring project metadata is well-typed and consistent
+
+The companion file `mori.automation.dhall` describes what _happens_ (reactions to VCS events). This guide focuses exclusively on the identity layer.
+
+## Project Identity
+
+The `project` record is the core of your manifest:
+
+```haskell
+let Schema = ./schema/package.dhall
+
+in  { project =
+      { name = "payment-service"
+      , namespace = "acme"
+      , type = Schema.PackageType.Application
+      , description = Some "Handles payment processing"
+      , language = Schema.Language.Haskell
+      , lifecycle = Schema.Lifecycle.Active
+      , domains = [ "Billing", "Platform" ]
+      , owners = [ "team-payments" ]
+      }
+    -- ...
+    }
+```
+
+### Choosing a namespace and name
+
+The `(namespace, name)` pair forms the project's unique identity in the registry:
+
+```
+@acme/payment-service
+@acme/shared-libs
+@platform/backend-standards
+```
+
+- **namespace** is typically your organization or team name
+- **name** is the project name, unique within the namespace
+
+### Project type
+
+| Type | Use when |
+|------|----------|
+| `Application` | Deployable service, web app, or standalone process |
+| `Library` | Reusable library consumed by other projects |
+| `Client` | Generated API client |
+| `Worker` | Background job processor, queue consumer |
+| `Tool` | CLI, migration script, admin utility |
+| `Other "..."` | Anything else |
+
+### Lifecycle
+
+| Stage | Meaning |
+|-------|---------|
+| `Active` | Under active development and maintenance |
+| `Experimental` | Not yet stable, may change significantly |
+| `Deprecated` | Still functional but no longer recommended |
+| `Archived` | Frozen, read-only, kept for reference |
+
+## Packages
+
+Packages are the buildable units within a project:
+
+```haskell
+, packages =
+  [ { name = "payments-core"
+    , type = Schema.PackageType.Library
+    , language = Schema.Language.Haskell
+    , path = Some "payments-core"
+    , description = Some "Core payment domain logic"
+    , visibility = Schema.Visibility.Internal
+    , runtime = { deployable = False, exposesApi = False }
+    , dependencies =
+      [ Schema.Dependency.ByName "effectful"
+      , Schema.Dependency.ByName "aeson"
+      ]
+    , docs = [] : List Schema.DocRef
+    , config = [] : List Schema.ConfigItem
+    }
+  ]
+```
+
+## Dependencies
+
+Mori uses a **registry-first** model. Instead of hardcoding filesystem paths, you declare dependencies by name and let the local registry resolve them.
+
+### Two levels of dependencies
+
+**Project-level** — simple name list:
+
+```haskell
+, dependencies = [ "effectful", "aeson", "hasql" ]
+```
+
+**Package-level** — uses the `Dependency` union type:
+
+```haskell
+, dependencies =
+  [ Schema.Dependency.ByName "effectful"
+  , Schema.Dependency.ByName "aeson"
+  ]
+```
+
+## Package Bundles
+
+Bundles group related packages that are typically used together:
+
+```haskell
+, bundles =
+  [ { name = "streamly"
+    , description = Some "Streaming data processing"
+    , packages = [ "streamly", "streamly-core" ]
+    , primary = "streamly"
+    }
+  ]
+```
+
+## APIs
+
+If your project exposes APIs, the `apis` list describes them:
+
+```haskell
+, apis =
+  [ { name = "payments-api"
+    , type = Schema.ApiType.OpenAPI
+    , specPath = "api/openapi.yaml"
+    , owner = "payments-service"
+    , dependencies =
+      [ { package = "payments-client"
+        , role = Schema.ApiDependencyRole.Client
+        }
+      ]
+    , updatePolicy = Some
+      { strategy = Schema.ApiUpdateStrategy.ClientFirst
+      , allowBreaking = False
+      , requireTests = True
+      , consumerBatching = Schema.ConsumerBatching.Sequential
+      , notes = None Text
+      }
+    }
+  ]
+```
+
+## Agent Hints
+
+Agent hints tell AI coding assistants which parts of your codebase are relevant to specific roles:
+
+```haskell
+, agents =
+  [ { role = "backend"
+    , description = Some "Backend development and bug fixes"
+    , includePaths = [ "src/", "lib/" ]
+    , excludePaths = [ "dist-newstyle/", "node_modules/" ]
+    , relatedPackages = [ "payments-core", "payments-service" ]
+    }
+  ]
+```
+
+## Standards
+
+Standards are shared knowledge projects that your project explicitly follows:
+
+```haskell
+, standards = [ "backend-architecture", "haskell-conventions", "api-guidelines" ]
+```
+
+Each name is resolved as a registered project in the local registry.
+
+## Dhall Tips
+
+### Optional values
+
+```haskell
+, description = Some "Core payment logic"   -- present
+, description = None Text                    -- absent
+```
+
+### Empty lists
+
+```haskell
+, packages = [] : List Schema.Package
+, standards = [] : List Text
+```
+
+### Integer literals
+
+Dhall requires a `+` prefix for positive integers:
+
+```haskell
+, timeout = Some +300
+, delaySeconds = +60
+```
+
+## What Belongs in `mori.dhall` vs `mori.automation.dhall`
+
+| Concern | File |
+|---------|------|
+| Project name, type, ownership | `mori.dhall` |
+| Packages and their structure | `mori.dhall` |
+| Dependencies | `mori.dhall` |
+| APIs and update policies | `mori.dhall` |
+| Agent roles and context hints | `mori.dhall` |
+| Event selectors (what to watch) | `mori.automation.dhall` |
+| Reactions (what to do) | `mori.automation.dhall` |
+| Execution policy | `mori.automation.dhall` |
+
+**Rule of thumb:** `mori.dhall` describes what a project _is_; `mori.automation.dhall` describes what _happens_.

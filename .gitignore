@@ -3,3 +3,10 @@ node_modules/
 
 .direnv/
 .envrc
+
+dist/
+.source/
+.vite/
+.tanstack/
+source.generated.ts
+src/routeTree.gen.ts

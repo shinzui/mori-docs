@@ -1,0 +1,152 @@
+---
+title: Schema Reference
+description: Field-by-field reference for mori.dhall
+icon: List
+---
+
+This is the field-by-field reference for `mori.dhall`, the project manifest that defines a Mori project's identity, packages, dependencies, and agent configuration.
+
+## Root Fields
+
+| Field | Type | Purpose |
+|-------|------|---------|
+| `project` | Record | Project identity (name, namespace, type, etc.) |
+| `repos` | `List Repo` | Repository references |
+| `packages` | `List Package` | Buildable units within the project |
+| `bundles` | `List PackageBundle` | Package groupings |
+| `dependencies` | `List Text` | Project-level dependency names |
+| `apis` | `List Api` | API definitions |
+| `agents` | `List AgentHint` | AI agent role configuration |
+| `standards` | `List Text` | Standard projects this project follows |
+| `docs` | `List DocRef` | Project-level documentation |
+
+## project
+
+The `(namespace, name)` pair forms the unique registry key.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `name` | `Text` | Project name, unique within namespace |
+| `namespace` | `Text` | Organization namespace (e.g., `"acme"`) |
+| `type` | `PackageType` | Primary project type |
+| `description` | `Optional Text` | Brief description |
+| `language` | `Language` | Primary language |
+| `lifecycle` | `Lifecycle` | Project lifecycle stage |
+| `domains` | `List Text` | Domain tags |
+| `owners` | `List Text` | Team or individual owners |
+
+## packages
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `name` | `Text` | Package name |
+| `type` | `PackageType` | Package classification |
+| `language` | `Language` | Primary language |
+| `path` | `Optional Text` | Path relative to project root |
+| `description` | `Optional Text` | Brief description |
+| `visibility` | `Visibility` | `Public`, `Internal`, `Private` |
+| `runtime` | `Runtime` | `deployable` and `exposesApi` booleans |
+| `dependencies` | `List Dependency` | Package-level dependencies |
+| `docs` | `List DocRef` | Package-specific documentation |
+| `config` | `List ConfigItem` | Configuration requirements |
+
+### Dependency
+
+**Simple form:**
+
+```haskell
+Schema.Dependency.ByName "effectful"
+```
+
+**Augmented form:**
+
+```haskell
+Schema.Dependency.WithAugmentation
+  { name = "hasql"
+  , extraDocs = [ ... ]
+  , localPathOverride = None Text
+  }
+```
+
+### ConfigItem
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `key` | `Text` | Configuration key name |
+| `type` | `ConfigValueType` | Expected value type |
+| `required` | `Bool` | Whether required |
+| `description` | `Optional Text` | Description |
+| `sourceHint` | `Optional ConfigSourceHint` | Where to find the value |
+| `example` | `Optional Text` | Example value |
+
+## apis
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `name` | `Text` | API name |
+| `type` | `ApiType` | Specification type |
+| `specPath` | `Text` | Path to the API spec file |
+| `owner` | `Text` | Package name that owns this API |
+| `dependencies` | `List ApiDependency` | Packages that depend on this API |
+| `updatePolicy` | `Optional ApiUpdatePolicy` | Update propagation policy |
+
+## agents
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `role` | `Text` | Unique role identifier |
+| `description` | `Optional Text` | What this role is for |
+| `includePaths` | `List Text` | Paths the agent should focus on |
+| `excludePaths` | `List Text` | Paths the agent should ignore |
+| `relatedPackages` | `List Text` | Package names relevant to this role |
+
+## Type Enums
+
+### Language
+
+`Haskell` | `TypeScript` | `JavaScript` | `Python` | `Go` | `Rust` | `Java` | `Kotlin` | `Swift` | `Ruby` | `Elixir` | `Clojure` | `Scala` | `Dhall` | `Nix` | `SQL` | `Shell` | `Other <text>`
+
+### PackageType
+
+`Application` | `Library` | `Client` | `Worker` | `Tool` | `Other <text>`
+
+### Lifecycle
+
+`Active` | `Experimental` | `Deprecated` | `Archived`
+
+### Visibility
+
+`Public` | `Internal` | `Private`
+
+### DocKind
+
+`Reference` | `Guide` | `Cookbook` | `Spec` | `Runbook` | `Notes` | `Other <text>`
+
+### DocLocation
+
+`LocalFile <path>` | `LocalDir <path>` | `RepoPath <path>` | `Url <url>`
+
+### DocAudience
+
+`Module` | `User` | `API` | `Internal` | `Other <text>`
+
+### ApiType
+
+`OpenAPI` | `GraphQL` | `GRPC` | `AsyncAPI` | `Smithy` | `Other <text>`
+
+### ConfigValueType
+
+`String` | `Integer` | `Boolean` | `Secret` | `Url` | `FilePath` | `Duration` | `Json` | `Other <text>`
+
+### ConfigSourceHint
+
+`EnvVar <name>` | `K8sSecret <name>` | `K8sConfigMap <name>` | `Vault <path>` | `File <path>` | `Default <value>`
+
+## Validation Rules
+
+Beyond Dhall type-checking, mori applies semantic validation:
+
+1. **Namespace** — must be non-empty and contain no whitespace
+2. **No duplicate package names** — package names must be unique within a project
+3. **Non-empty dependencies** — all dependency names must be non-empty strings
+4. **Bundle integrity** — bundle `primary` must be listed in `packages`

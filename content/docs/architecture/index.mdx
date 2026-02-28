@@ -1,0 +1,96 @@
+---
+title: Architecture Overview
+description: High-level architecture of mori's data plane and control plane
+icon: Blocks
+---
+
+Mori is designed to react to VCS events, remain local-first and replayable, scale safely to CI and organization-wide automation, and separate execution from governance.
+
+> **Local Mori executes automation. Global Mori governs trust and policy.**
+
+## Component Diagram
+
+```
+┌──────────────────────────────┐
+│      Global Mori Registry    │
+│                              │
+│  - Project index             │
+│  - mori.dhall metadata       │
+│  - Org-level policies        │
+│  - Automation allow/deny     │
+│  - Trust levels              │
+└───────────────┬──────────────┘
+                │
+          (sync / pull)
+                │
+┌───────────────▼──────────────┐
+│      Local Mori Runtime      │
+│                              │
+│  ┌────────────────────────┐  │
+│  │ Local Registry          │  │
+│  │ (PostgreSQL projection) │  │
+│  └──────────┬─────────────┘  │
+│             │                │
+│  ┌──────────▼─────────────┐  │
+│  │ VCS Adapter (git | jj)  │  │
+│  └──────────┬─────────────┘  │
+│             │                │
+│  ┌──────────▼─────────────┐  │
+│  │ Event Store             │  │
+│  │ (MessageDB/PostgreSQL)  │  │
+│  └──────────┬─────────────┘  │
+│             │                │
+│  ┌──────────▼─────────────┐  │
+│  │ Reaction Engine         │  │
+│  │ - event selectors       │  │
+│  │ - idempotency           │  │
+│  │ - scheduling            │  │
+│  └──────────┬─────────────┘  │
+│             │                │
+│  ┌──────────▼─────────────┐  │
+│  │ Agent Context Assembler │  │
+│  └──────────────────────────┘│
+└──────────────────────────────┘
+```
+
+## Event Flow
+
+```
+VCS Event (git commit, jj operation)
+   ↓
+Normalize to canonical events
+   ↓
+Write to MessageDB (repository-{id} stream)
+   ↓
+Subscriptions process events:
+   ├── mori-automation: match events → trigger reactions
+   ├── mori-registry: update project/dependency projections
+   └── mori-reaction-executor: execute triggered reactions
+   ↓
+Emit effects (run commands, notify, emit new events)
+```
+
+## Local vs CI Execution
+
+| Aspect | Local Mori | CI Mori |
+|--------|-----------|---------|
+| Execution | Always allowed | Registry-gated |
+| Config loading | Local FS | Ephemeral checkout |
+| Policy source | Local + optional registry | Registry required |
+| Replay | Yes | Yes |
+
+CI uses the **same runtime**, only stricter policy resolution.
+
+## Design Invariants
+
+1. Events are the source of truth
+2. Configuration is domain data
+3. Execution is local and deterministic
+4. Governance is centralized and declarative
+5. Replay always yields identical behavior
+
+## Architecture Deep Dives
+
+- [CLI Architecture](/docs/architecture/cli) — command specification and internal design
+- [Schema Architecture](/docs/architecture/schema) — the `mori.dhall` type system
+- [Registry Design](/docs/architecture/registry) — registry and navigation commands

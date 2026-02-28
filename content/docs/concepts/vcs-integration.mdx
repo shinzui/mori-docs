@@ -1,0 +1,99 @@
+---
+title: VCS Integration
+description: How mori normalizes Git and Jujutsu events into a unified schema
+icon: GitBranch
+---
+
+Mori defines a **VCS-neutral, event-sourced schema** for reacting to version-control activity across **Git** and **Jujutsu (jj)**.
+
+## Goals
+
+- Support **Git today, Jujutsu tomorrow** without schema breakage
+- Treat VCS activity as an **append-only event log**
+- Be **provider-agnostic** (local repos, hosted platforms later)
+- Survive **rebases, amends, squashes, and force pushes**
+- Enable **deterministic replay and idempotent reactions**
+
+Core principle:
+
+> Git and Jujutsu are *event sources*. The schema models **observations**, not assumptions.
+
+## Canonical Events
+
+### ChangesetObserved
+
+The foundation event. Represents **observing a changeset node in the DAG**:
+
+```haskell
+data ChangesetObservedV1 = ChangesetObservedV1
+  { repo         :: RepoId
+  , changesetId  :: ObjectId
+  , treeId       :: ObjectId
+  , parents      :: Set ObjectId
+  , author       :: PersonStamp
+  , committer    :: PersonStamp
+  , message      :: Message
+  , refs         :: Set Ref
+  , touchedPaths :: Set FilePath   -- files changed in this changeset
+  , metadata     :: Map Text Text
+  }
+```
+
+### ChangesetRewritten
+
+Represents **history mutation** (first-class in jj, inferred in Git):
+
+```haskell
+data ChangesetRewrittenV1 = ChangesetRewrittenV1
+  { repo       :: RepoId
+  , oldId      :: ObjectId
+  , newId      :: ObjectId
+  , reason     :: RewriteReason  -- Rebase | Amend | Squash | ConflictResolution | Unknown
+  , metadata   :: Map Text Text
+  }
+```
+
+### RefObserved
+
+Represents observing a **named pointer** at a moment in time:
+
+```haskell
+data RefObservedV1 = RefObservedV1
+  { repo   :: RepoId
+  , ref    :: Ref
+  , target :: Maybe ObjectId   -- Nothing = deleted
+  , kind   :: RefKind          -- Branch | Tag | Bookmark | OtherRef
+  }
+```
+
+## Normalization Rules
+
+### Git to Canonical
+
+- Commit SHA maps to `ObjectId Git`
+- Author/Committer preserved exactly
+- Commit message parsed into subject/body/trailers
+- Branches detected via ref inspection, emitted as `RefObserved`
+- Rewrites usually not explicit; ref movement is authoritative
+
+### Jujutsu to Canonical
+
+- Changeset ID maps to `ObjectId Jujutsu`
+- Rewrites emitted explicitly as `ChangesetRewritten`
+- Bookmarks emitted as `RefObserved (kind = Bookmark)`
+- Multiple heads are normal and supported
+
+## Event Invariants
+
+1. Events are immutable and append-only
+2. Events are never deleted
+3. Rewrites emit new events, never mutations
+4. Refs are observational, time-indexed pointers
+5. Current state is **always derived** by folding events
+6. Replay must be safe and deterministic
+
+## Key Design Takeaway
+
+> **Changesets are observed facts. Rewrites are first-class events. Refs are views.**
+
+This model treats Git as a constrained subset of Jujutsu and remains stable as workflows evolve.

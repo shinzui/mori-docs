@@ -1,0 +1,96 @@
+---
+title: Registry Design
+description: Registry architecture for project discovery and navigation
+icon: Globe
+---
+
+The Mori registry provides project discovery, dependency resolution, and navigation. It operates in two tiers: a local registry (Phase 1, complete) and a global registry (Phase 2, planned).
+
+## Core Principles
+
+1. **Local-first, registry-enhanced** — Mori works fully offline
+2. **Explicit actions, no background magic** — registration is always user-initiated
+3. **Explainability over convenience** — every decision can be inspected
+4. **One root per project** — CLI commands operate relative to a single `mori.dhall` root
+
+## Local Registry
+
+The local registry is an **event-sourced read model** derived from events in MessageDB. It is the authoritative source for development.
+
+### Responsibilities
+
+- **Project registration** — track all Mori projects on the local filesystem
+- **Dependency resolution** — resolve names to filesystem paths
+- **Agent context assembly** — provide structured context for coding agents
+
+### Registry Hierarchy
+
+```
+Local Registry (machine-specific, authoritative for dev)
+       ↓ fallback
+Global Registry (org-wide defaults)
+       ↓ fallback
+Not Found
+```
+
+## `mori register`
+
+Register the current project in the registry:
+
+```bash
+mori register --local
+```
+
+Steps:
+1. Load and validate `mori.dhall`
+2. Evaluate Dhall to canonical form
+3. Emit registration events to MessageDB
+4. Record registration receipt locally
+
+Flags: `--dry-run`, `--explain`, `--force`, `--local`
+
+## `mori cd`
+
+Navigate to a registered project from anywhere:
+
+```bash
+mori cd agent-qualification
+mori cd streamly
+```
+
+Resolution rules:
+1. Prefer existing local checkout known to Mori
+2. If missing, prompt to clone
+3. Never clone implicitly without confirmation
+
+## `mori search`
+
+Discover existing projects, packages, or standards:
+
+```bash
+mori search streamly
+mori search --type library
+mori search --language haskell
+```
+
+## Global Registry (Phase 2)
+
+The Global Mori Registry will provide:
+
+- Project discovery and indexing
+- Ownership and team metadata
+- Organization-wide automation policies
+- Trust levels (local-only, CI-approved, org-wide)
+
+It will **not**:
+
+- Execute reactions
+- Push automation into repos
+- Override local configuration
+
+## Design Invariants
+
+- Registry access is optional
+- CLI behavior is deterministic
+- All side effects are explicit
+- All resolution decisions are explainable

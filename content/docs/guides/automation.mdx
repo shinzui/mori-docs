@@ -1,0 +1,214 @@
+---
+title: Automation
+description: Configure reactive automation with event selectors and reactions
+icon: Zap
+---
+
+Mori's automation engine reacts to VCS events (commits, branch/tag changes) by matching them against configurable selectors and executing actions. It runs as a long-lived process that continuously processes events from the event store.
+
+## Prerequisites
+
+- Database set up and migrations run (see [Local Registry](/docs/concepts/local-registry))
+- A `mori.dhall` project config in the current directory
+- A repository initialized with `mori init` (provides the repo TypeID)
+
+## Configuration
+
+Create `mori.automation.dhall` in your project root with three sections: event selectors, reactions, and an execution policy.
+
+### Full example
+
+```haskell
+let EventSelector = ./schema/automation/EventSelector.dhall
+let ReactionAction = ./schema/automation/ReactionAction.dhall
+
+in  { events =
+      [ EventSelector.ChangesetSelector
+          { name = "core-changes"
+          , paths = [ "payments-core/**" ]
+          , branches = [ "main" ]
+          , messagePatterns = [] : List Text
+          }
+      , EventSelector.RefSelector
+          { name = "release-tags"
+          , refPatterns = [ "release/*" ]
+          , kinds = [ "tag" ]
+          }
+      ]
+    , reactions =
+      [ { name = "test-on-core-change"
+        , on = [ "core-changes" ]
+        , actions =
+          [ ReactionAction.RunCommand
+              { command = "cabal"
+              , args = [ "test", "payments-core" ]
+              , workingDir = None Text
+              , timeout = Some +120
+              , env = [] : List { mapKey : Text, mapValue : Text }
+              }
+          ]
+        }
+      , { name = "notify-release"
+        , on = [ "release-tags" ]
+        , actions =
+          [ ReactionAction.Notify
+              { url = "https://hooks.example.com/releases"
+              , method = None Text
+              , headers = [] : List { mapKey : Text, mapValue : Text }
+              , bodyTemplate = Some "New release tag created"
+              }
+          ]
+        }
+      ]
+    , execution =
+      { allowLocal = True
+      , allowCI = False
+      , maxConcurrency = None Integer
+      }
+    }
+```
+
+## Event Selectors
+
+### ChangesetSelector
+
+Matches `ChangesetObserved` events (commits ingested via `mori automate ingest git`).
+
+| Field | Type | Behavior |
+|-------|------|----------|
+| `name` | `Text` | Unique selector name |
+| `paths` | `List Text` | Glob patterns for touched file paths. Empty = match all. |
+| `branches` | `List Text` | Branch name patterns. Empty = match all. |
+| `messagePatterns` | `List Text` | Commit message patterns. Empty = match all. |
+
+### RefSelector
+
+Matches `RefObserved` events (branch/tag pointer changes).
+
+| Field | Type | Behavior |
+|-------|------|----------|
+| `name` | `Text` | Unique selector name |
+| `refPatterns` | `List Text` | Ref name patterns. Empty = match all. |
+| `kinds` | `List Text` | `"branch"`, `"tag"`, or both. Empty = match all. |
+
+### Glob Patterns
+
+- `*` matches any characters within a single path segment (stops at `/`)
+- `**` matches any characters across path segments (crosses `/`)
+- Empty pattern lists act as wildcards — they match everything
+
+| Pattern | Matches | Does not match |
+|---------|---------|----------------|
+| `src/**` | `src/Foo.hs`, `src/a/b/c.hs` | `test/Foo.hs` |
+| `*.cabal` | `mori.cabal` | `src/mori.cabal` |
+| `src/*.hs` | `src/Main.hs` | `src/Mori/Core.hs` |
+
+## Action Types
+
+### RunCommand
+
+Execute a shell command:
+
+```haskell
+ReactionAction.RunCommand
+  { command = "make"
+  , args = [ "test" ]
+  , workingDir = Some "./packages/core"
+  , timeout = Some +300
+  , env = [ { mapKey = "CI", mapValue = "true" } ]
+  }
+```
+
+### EmitEvent
+
+Write an event to a MessageDB stream:
+
+```haskell
+ReactionAction.EmitEvent
+  { eventType = "DeployRequested"
+  , streamName = "deployment-staging"
+  , eventData = [ { mapKey = "env", mapValue = "staging" } ]
+  }
+```
+
+### Notify
+
+Send an HTTP request (uses `curl` under the hood):
+
+```haskell
+ReactionAction.Notify
+  { url = "https://hooks.slack.com/services/..."
+  , method = Some "POST"
+  , headers = [ { mapKey = "Content-Type", mapValue = "application/json" } ]
+  , bodyTemplate = Some "{\"text\": \"Build complete\"}"
+  }
+```
+
+### Schedule
+
+Defer an action for later execution via pgmq + shibuya:
+
+```haskell
+ReactionAction.Schedule
+  { delaySeconds = +300
+  , action =
+      (./schema/automation/ReactionAction.dhall).RunCommand
+        { command = "make"
+        , args = [ "deploy", "staging" ]
+        , workingDir = None Text
+        , timeout = Some +600
+        , env = [] : List { mapKey : Text, mapValue : Text }
+        }
+  }
+```
+
+## Workflow
+
+### 1. Ingest VCS events
+
+```bash
+mori automate ingest git
+```
+
+### 2. Start the automation engine
+
+```bash
+mori automate run
+```
+
+This starts a long-running process with concurrent subscriptions for automation, reaction execution, and registry updates.
+
+### 3. Inspect configuration
+
+```bash
+mori automate inspect
+```
+
+### 4. Explain event matching
+
+```bash
+mori automate explain 42
+```
+
+## Event Flow
+
+```
+git commits
+    │
+    ▼
+mori automate ingest git
+    │
+    ▼  ChangesetObserved / RefObserved events
+    │
+    ▼
+mori automate run
+    │
+    ├─ mori-automation subscription
+    │  matches against selectors → triggers reactions
+    │
+    ├─ mori-reaction-executor subscription
+    │  executes RunCommand / Notify / EmitEvent
+    │
+    └─ shibuya worker
+       processes delayed Schedule actions from pgmq
+```

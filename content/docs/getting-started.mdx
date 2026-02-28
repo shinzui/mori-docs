@@ -1,0 +1,268 @@
+---
+title: Getting Started
+description: A practical, step-by-step guide to using mori for project identity and automation
+icon: Rocket
+---
+
+## Prerequisites
+
+**Required:**
+
+- PostgreSQL with [MessageDB](https://github.com/message-db/message-db) installed
+- The `mori` CLI built and on your PATH (`cabal install mori-cli`)
+- A `MORI_PG_CONNECTION_STRING` environment variable pointing to your database:
+
+```bash
+export MORI_PG_CONNECTION_STRING="host=localhost port=5432 dbname=message_store"
+```
+
+**Verify your setup:**
+
+```bash
+mori doctor
+```
+
+Expected output:
+
+```
+mori v0.1.0
+
+PostgreSQL connection... [OK]
+MessageDB installation... [OK]
+
+All checks passed.
+```
+
+## 1. Initialize a Project
+
+Navigate to your project's git repository and run:
+
+```bash
+mori init
+```
+
+This creates two things:
+
+- `mori.dhall` — your project identity manifest
+- `mori/` — a directory for local configuration
+
+The project name defaults to the current directory name. To override:
+
+```bash
+mori init --name payments
+```
+
+### The generated `mori.dhall`
+
+If your repository has a `schema/` directory, the scaffold uses typed imports:
+
+```haskell
+let Schema = ./schema/package.dhall
+
+in  { project =
+      { name = "payments"
+      , namespace = "default"
+      , type = Schema.PackageType.Application
+      , description = None Text
+      , language = Schema.Language.Haskell
+      , lifecycle = Schema.Lifecycle.Active
+      , domains = [] : List Text
+      , owners = [] : List Text
+      }
+    , repos = [] : List Schema.Repo
+    , packages = [] : List Schema.Package
+    , bundles = [] : List Schema.PackageBundle
+    , dependencies = [] : List Text
+    , apis = [] : List Schema.Api
+    , agents = [] : List Schema.AgentHint
+    , standards = [] : List Text
+    , docs = [] : List Schema.DocRef
+    }
+```
+
+### Key fields to customize
+
+| Field | Options |
+|---|---|
+| `type` | `Application`, `Library`, `Client`, `Worker`, `Tool`, `Other` |
+| `language` | `Haskell`, `TypeScript`, `JavaScript`, `Python`, `Go`, `Rust`, `Java`, `Kotlin`, `Swift`, `Ruby`, `Elixir`, `Clojure`, `Scala`, `Dhall`, `Nix`, `SQL`, `Shell`, `Other` |
+| `lifecycle` | `Active`, `Experimental`, `Deprecated`, `Archived` |
+| `visibility` | `Public`, `Internal`, `Private` |
+
+## 2. Validate and Show
+
+### Validate your configuration
+
+```bash
+mori validate
+```
+
+If the Dhall type-checks correctly:
+
+```
+Configuration is valid.
+```
+
+### Show the project summary
+
+```bash
+mori show
+```
+
+```
+Project: payments
+  Namespace: acme
+  Type: Application
+  Language: Haskell
+  Lifecycle: Active
+  Description: Core payments service
+
+Repos: 1
+Packages: 2
+```
+
+JSON output:
+
+```bash
+mori show --json
+```
+
+## 3. Register in the Local Registry
+
+Register your project in the event-sourced local registry:
+
+```bash
+mori register --local
+```
+
+Registration is idempotent — running it multiple times with the same config produces no duplicate events. If you change `mori.dhall` and re-register, mori computes a granular diff and emits only the specific change events.
+
+## 4. Dependency Management
+
+### Declare dependencies
+
+Project-level dependencies are listed by name in `mori.dhall`:
+
+```haskell
+, dependencies = [ "effectful", "aeson", "hasql" ]
+```
+
+### Resolve dependencies
+
+```bash
+mori deps resolve
+```
+
+```
+  [found]     effectful
+  [found]     aeson
+  [not found] hasql
+```
+
+### Locate a specific dependency
+
+```bash
+mori deps locate effectful
+```
+
+### Explain resolution
+
+```bash
+mori deps explain effectful
+```
+
+All `deps` subcommands accept `--json` for structured output.
+
+## 5. Agent Context
+
+Agent hints tell AI coding assistants which parts of your project are relevant to specific roles.
+
+### Declare agent hints
+
+```haskell
+    , agents =
+      [ { role = "backend"
+        , description = Some "Backend development agent"
+        , includePaths = [ "payments-core/", "payments-service/" ]
+        , excludePaths = [ "node_modules/", ".stack-work/" ]
+        , relatedPackages = [ "payments-core", "payments-service" ]
+        }
+      ]
+```
+
+### Generate agent context
+
+```bash
+mori agent context backend
+```
+
+This outputs a JSON object with the role's include/exclude paths, related packages, and resolved dependency information — ready to feed into an AI coding agent.
+
+## 6. Automation
+
+Create `mori.automation.dhall` in your project root to declare which repository events to watch and how to react:
+
+```haskell
+let EventSelector = ./schema/automation/EventSelector.dhall
+let ReactionAction = ./schema/automation/ReactionAction.dhall
+
+in  { events =
+      [ EventSelector.ChangesetSelector
+          { name = "src-changes"
+          , paths = [ "src/**" ]
+          , branches = [ "main" ]
+          , messagePatterns = [] : List Text
+          }
+      ]
+    , reactions =
+      [ { name = "lint-on-change"
+        , on = [ "src-changes" ]
+        , actions =
+          [ ReactionAction.RunCommand
+              { command = "make"
+              , args = [ "lint" ]
+              , workingDir = None Text
+              , timeout = None Integer
+              , env = [] : List { mapKey : Text, mapValue : Text }
+              }
+          ]
+        }
+      ]
+    , execution =
+      { allowLocal = True
+      , allowCI = False
+      , maxConcurrency = None Integer
+      }
+    }
+```
+
+### Ingest and run
+
+```bash
+# Ingest git history
+mori automate ingest git
+
+# Start the reactive engine
+mori automate run
+```
+
+See the [Automation Guide](/docs/guides/automation) for full details.
+
+## Quick Reference
+
+| Command | Description |
+|---|---|
+| `mori doctor` | Check PostgreSQL and MessageDB |
+| `mori init [--name NAME]` | Create `mori.dhall` scaffold |
+| `mori validate` | Type-check `mori.dhall` |
+| `mori show [--json]` | Display project summary |
+| `mori register [--local]` | Register in local registry |
+| `mori deps resolve [--json]` | Check dependency resolution |
+| `mori deps locate NAME [--json]` | Find a dependency |
+| `mori deps explain NAME [--json]` | Full resolution trace |
+| `mori agent list [--json]` | List agent roles |
+| `mori agent context ROLE` | Generate agent context JSON |
+| `mori automate ingest git` | Ingest git history |
+| `mori automate run` | Start reactive engine |
+| `mori automate inspect [--json]` | Config summary + stats |
+| `mori automate explain POS [--json]` | Explain event matching |

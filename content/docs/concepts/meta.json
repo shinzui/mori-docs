@@ -1,0 +1,10 @@
+{
+	"title": "Concepts",
+	"pages": [
+		"index",
+		"event-sourcing",
+		"vcs-integration",
+		"agent-context",
+		"local-registry"
+	]
+}

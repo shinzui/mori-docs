@@ -1,0 +1,109 @@
+---
+title: Local Registry
+description: Event-sourced project registration and dependency resolution
+icon: Archive
+---
+
+The local registry is mori's event-sourced store for project metadata. It records every change to your projects as immutable events in MessageDB, then projects those events into PostgreSQL tables that power dependency resolution, agent context, and automation.
+
+## Two Layers
+
+1. **Event store** — events written to MessageDB streams (`project-{namespace}:{name}`)
+2. **Read model** — projection tables in the `mori` schema, populated by a subscription
+
+Commands like `deps resolve`, `deps locate`, `deps explain`, and `agent context` query the read model.
+
+## Database Setup
+
+Mori requires PostgreSQL with [MessageDB](https://github.com/message-db/message-db) installed.
+
+```bash
+export MORI_PG_CONNECTION_STRING="host=localhost port=5432 dbname=mori_dev"
+mori doctor
+```
+
+### Running Migrations
+
+```bash
+cabal run mori-migrations
+```
+
+Migrations are idempotent — safe to re-run at any time.
+
+## Registry Tables
+
+All tables live in the `mori` schema:
+
+| Table | Purpose |
+|-------|---------|
+| `projects` | Project identity and metadata |
+| `packages` | Per-package metadata |
+| `dependencies` | Dependency name to project path mapping |
+| `bundles` | Package groupings |
+| `repository_configs` | Observed automation configuration |
+| `reaction_history` | Reaction execution log |
+| `checkpoints` | Subscription progress tracking |
+
+## How Registration Works
+
+When you run `mori register --local`:
+
+1. **Load config** — reads `mori.dhall` from the current directory
+2. **Check existence** — queries the read model for `(namespace, name)`
+3. **New project** — generates a `proj_*` TypeID and emits `ProjectRegistered`
+4. **Existing project** — computes a granular diff, emits only specific change events
+5. **Write events** — appends to `project-{namespace}:{name}` stream
+
+## Event Types
+
+| Event | When emitted |
+|-------|-------------|
+| `ProjectRegistered` | First registration of a project |
+| `ProjectTypeChanged` | Project type differs from stored value |
+| `ProjectPathChanged` | Project path differs from stored value |
+| `ProjectPackageAdded` | New package not in current state |
+| `ProjectPackageRemoved` | Package removed from config |
+| `ProjectPackageUpdated` | Package exists but fields changed |
+| `ProjectDependencyAdded` | New dependency added |
+| `ProjectDependencyRemoved` | Dependency removed from config |
+| `ProjectBundleAdded` | New bundle added |
+| `ProjectBundleRemoved` | Bundle removed from config |
+| `ProjectBundleUpdated` | Bundle exists but fields changed |
+
+## Populating the Read Model
+
+Registration and projection are separate steps:
+
+```bash
+# Step 1: Write events to MessageDB
+mori register --local
+
+# Step 2: Start subscriptions to populate read model tables
+mori automate run
+```
+
+Without step 2, the read model tables stay empty. Once `mori automate run` is running, it continuously processes new events.
+
+## Troubleshooting
+
+### Read model empty despite events existing
+
+The subscription hasn't been started. Run `mori automate run`.
+
+### Stale projections
+
+Check the subscription checkpoint:
+
+```sql
+SELECT name, last_processed_global_position, last_processed_at
+FROM checkpoints
+WHERE name = 'mori-registry';
+```
+
+### Replaying from scratch
+
+```sql
+DELETE FROM checkpoints WHERE name = 'mori-registry';
+```
+
+Then restart `mori automate run`. The subscription reprocesses all events from the beginning. All operations are idempotent.

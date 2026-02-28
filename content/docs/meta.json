@@ -1,0 +1,17 @@
+{
+	"title": "Documentation",
+	"pages": [
+		"---Getting Started---",
+		"index",
+		"getting-started",
+		"schema-guide",
+		"---Concepts---",
+		"concepts",
+		"---User Guide---",
+		"guides",
+		"---Architecture---",
+		"architecture",
+		"---Reference---",
+		"roadmap"
+	]
+}

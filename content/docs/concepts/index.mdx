@@ -1,0 +1,56 @@
+---
+title: Core Concepts
+description: Understanding mori's architecture and design principles
+icon: Lightbulb
+---
+
+Mori is built on several foundational concepts that work together to provide a comprehensive project identity and automation system.
+
+## Two-Plane Architecture
+
+Mori consists of two primary planes:
+
+### Data Plane (Local Runtime)
+
+- Lives on developer machines and CI workers
+- Observes repositories and executes reactions
+- Fully functional without any central service
+
+### Control Plane (Global Registry)
+
+- Central, shared service (Phase 2)
+- Indexes projects and policies
+- Never executes automation directly
+
+Core principle:
+
+> **Local Mori executes automation. Global Mori governs trust and policy.**
+
+## Configuration Layers
+
+### Project Manifest (`mori.dhall`)
+
+- Declares project identity, ownership, and dependencies
+- Indexed by the registry
+- Does **not** enable automation
+
+### Automation Policy (`mori.automation.dhall`)
+
+- Declares event selectors and reactions
+- Enforces execution constraints
+- Optional and opt-in
+
+## Key Design Principles
+
+1. **Events are the source of truth** — all state is derived by folding events
+2. **Configuration is domain data** — treated as first-class events
+3. **Execution is local and deterministic** — same inputs always produce same outputs
+4. **Governance is centralized and declarative** — policies, not scripts
+5. **Replay always yields identical behavior** — full audit trail
+
+## Deep Dives
+
+- [Event Sourcing](/docs/concepts/event-sourcing) — MessageDB, streams, projections, and subscriptions
+- [VCS Integration](/docs/concepts/vcs-integration) — how Git and Jujutsu events are normalized
+- [Agent Context](/docs/concepts/agent-context) — structured context assembly for AI agents
+- [Local Registry](/docs/concepts/local-registry) — dependency resolution and project registration

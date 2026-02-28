@@ -1,0 +1,96 @@
+---
+title: CLI Architecture
+description: Command specification and internal architecture of the mori CLI
+icon: SquareTerminal
+---
+
+The mori CLI is designed as a **single binary** that is local-first, registry-enhanced, with explicit side effects and explainable behavior.
+
+## Command Groups
+
+| Group | Commands |
+|-------|---------|
+| Core | `init`, `validate`, `show` |
+| Registry | `register`, `search`, `registry status`, `registry sync` |
+| Navigation | `cd`, `open` |
+| Dependencies | `deps resolve`, `deps explain`, `deps locate`, `introspect` |
+| APIs | `api graph`, `api impact`, `api update-plan` |
+| Agents | `agent list`, `agent context` |
+| Standards | `standards list`, `standards show` |
+| Config | `config list`, `config validate` |
+| Automation | `automate ingest`, `automate run`, `automate inspect`, `automate explain` |
+| Diagnostics | `explain`, `doctor` |
+
+## Core Commands
+
+### `mori init`
+
+Initialize Mori in a repository. Creates `mori.dhall` and `mori/` directory. Never overwrites existing files without confirmation.
+
+### `mori validate`
+
+Validate the current Mori configuration: Dhall type-checking, schema compatibility, and internal reference integrity.
+
+### `mori show`
+
+Render evaluated Mori metadata in human-readable or JSON format.
+
+## Internal Architecture
+
+Every CLI command follows the same pipeline:
+
+```
+Command
+  ↓
+Argument Parsing
+  ↓
+Context Discovery
+  ↓
+Mori Load & Validation
+  ↓
+Resolution (local + registry)
+  ↓
+Decision / Planning
+  ↓
+Rendering (human / json)
+```
+
+### Core Modules
+
+1. **CLI Frontend** — parse arguments, select command, collect flags. No business logic.
+2. **Execution Context** — locate `mori.dhall` root, load user config, determine registry mode.
+3. **Mori Loader** — load and type-check Dhall files, evaluate to canonical representation.
+4. **Resolution Engine** — pure dependency/standard resolution. Produces both results and an explanation trace.
+5. **Registry Client** — optional remote registry access. Never mutates local state.
+6. **Planning Layer** — interpret resolved model for a command. Plans are data, not actions.
+7. **Rendering Layer** — render output in human-readable or JSON format.
+
+### Explainability
+
+Every decision-making stage emits structured explanations. The `mori explain` command is simply a **view** over this trace.
+
+## Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | Success |
+| `1` | Validation error |
+| `2` | Registry unavailable |
+| `3` | User abort |
+
+## Global Flags
+
+```
+--json       Output in JSON format
+--explain    Show resolution decisions
+--offline    Disable registry access
+--registry   Specify registry name
+```
+
+## Mental Model
+
+> The Mori CLI is a **compiler for project knowledge**:
+> - Dhall = source language
+> - Resolution = semantic analysis
+> - Plans = IR
+> - Rendering = backend

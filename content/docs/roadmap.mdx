@@ -1,0 +1,143 @@
+---
+title: Roadmap
+description: Mori implementation phases and milestones
+icon: Map
+---
+
+Mori is built in three phases:
+
+| Phase | Focus | Goal |
+|-------|-------|------|
+| **Phase 1** | Local-First | Fully functional on a single developer machine |
+| **Phase 2** | Global Registry | Organization-wide coordination and sync |
+| **Phase 3** | Advanced Features | Version pinning, trust policies, cross-repo workflows |
+
+## Phase 1: Local-First (Complete)
+
+A developer can use Mori entirely locally to initialize and validate projects, register dependencies, query agent context, ingest VCS events, and run automation.
+
+### 1.1 Foundation
+
+- PostgreSQL + MessageDB setup
+- Effect stack (`MoriEffects` type)
+- TypeID integration for repos, projects, packages
+
+### 1.2 Schema & Validation
+
+- Dhall parsing and evaluation
+- Type-checking against schema
+- `mori init`, `mori validate`, `mori show` commands
+
+### 1.3 Local Registry
+
+- Granular project events (11 event types)
+- PostgreSQL projection tables
+- `mori register --local`, `mori deps` commands
+
+### 1.4 Agent Context
+
+- Dependency resolution from registry
+- Documentation path resolution
+- Standards lookup and bundle expansion
+- `mori agent context`, `mori agent list` commands
+
+### 1.5 VCS Ingestion
+
+- Git adapter with cursor management
+- `ChangesetObserved` and `RefObserved` events
+- `mori automate ingest git` command
+
+### 1.6 Automation Engine
+
+- Automation config parsing (`mori.automation.dhall`)
+- Event selectors with glob matching
+- Reaction execution (RunCommand, EmitEvent, Notify, Schedule)
+- Long-running `mori automate run` with 4 concurrent subscriptions
+- Observability: `mori automate inspect`, `mori automate explain`
+
+### 1.7 Jujutsu Support (Stretch)
+
+- jj adapter (operation log parsing)
+- `ChangesetRewritten` event handling
+
+## Phase 2: Global Registry
+
+### 2.1 Global Registry Service
+
+- Separate registry service (API)
+- Authentication/authorization
+- Project namespace management
+
+### 2.2 Registry Sync
+
+- Push local registrations to global
+- Pull global metadata to local cache
+- Conflict resolution and offline operation
+
+### 2.3 Organization Features
+
+- Namespace creation and management
+- Team ownership
+- Project discovery and search
+- Dependency graph visualization
+
+### 2.4 CI Integration
+
+- Registry-gated execution
+- Policy enforcement
+- Trust levels
+
+## Phase 3: Advanced Features
+
+### 3.1 Version Pinning
+
+- Dependency version constraints
+- Lock file generation
+- Reproducible builds
+
+### 3.2 Trust & Policies
+
+- Signed policies
+- Trust level verification
+- Automation allow/deny lists
+
+### 3.3 Cross-Repo Workflows
+
+- EmitEvent across repositories
+- Workflow orchestration
+- Dependency update propagation
+
+### 3.4 Event Versioning
+
+- Automatic upcasting
+- Schema registry
+
+## Implementation Order (Phase 1)
+
+```
+1.1 Foundation
+ ├── PostgreSQL/MessageDB setup
+ ├── Effect stack
+ └── TypeID integration
+        │
+        ▼
+1.2 Schema & Validation
+ ├── Dhall integration
+ └── init/validate/show commands
+        │
+        ▼
+1.3 Local Registry
+ ├── Registry events & projection
+ └── register/deps commands
+        │
+        ▼
+1.4 Agent Context
+ └── agent context command
+        │
+        ├───────────────────┐
+        ▼                   ▼
+1.5 VCS Ingestion      1.6 Automation
+ └── git adapter        ├── automation config
+                        ├── subscriptions
+                        └── reaction execution
+```

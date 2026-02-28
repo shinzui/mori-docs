@@ -1,31 +1,26 @@
 {
+	"include": ["**/*.ts", "**/*.tsx"],
 	"compilerOptions": {
-		// Environment setup & latest features
-		"lib": ["ESNext"],
-		"target": "ESNext",
-		"module": "ESNext",
-		"moduleDetection": "force",
+		"strict": true,
+		"esModuleInterop": true,
 		"jsx": "react-jsx",
+		"module": "ESNext",
+		"moduleResolution": "Bundler",
+		"lib": ["DOM", "DOM.Iterable", "ES2022"],
+		"types": ["vite/client"],
+		"isolatedModules": true,
+		"resolveJsonModule": true,
+		"skipLibCheck": true,
+		"target": "ES2022",
 		"allowJs": true,
-		// Bundler mode
-		"moduleResolution": "bundler",
-		"allowImportingTsExtensions": true,
-		"verbatimModuleSyntax": true,
-		"noEmit": true,
-		// Path aliases
+		"forceConsistentCasingInFileNames": true,
 		"baseUrl": ".",
 		"paths": {
-			"@/*": ["src/*"],
-			"schema/*": ["src/schema/*"]
+			"@/*": ["./src/*"],
+			"fumadocs-mdx:collections/*": [".source/*"]
 		},
-		// Best practices
-		"strict": true,
-		"skipLibCheck": true,
+		"noEmit": true,
 		"noFallthroughCasesInSwitch": true,
-		"noUncheckedIndexedAccess": true,
-		// Some stricter flags (disabled by default)
-		"noUnusedLocals": false,
-		"noUnusedParameters": false,
-		"noPropertyAccessFromIndexSignature": false
+		"noUncheckedIndexedAccess": true
 	}
 }

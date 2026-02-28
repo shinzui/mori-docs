@@ -1,0 +1,145 @@
+---
+title: Event Sourcing
+description: Mori's event sourcing architecture built on MessageDB and PostgreSQL
+icon: Database
+---
+
+Mori uses event sourcing as its core persistence model:
+
+- **Events are the source of truth** — all state is derived by folding events
+- **MessageDB** provides the event store — a battle-tested PostgreSQL extension
+- **Projections** (read models) are stored in PostgreSQL tables for fast queries
+- **Subscriptions** process events and update projections
+
+## Infrastructure
+
+```
+PostgreSQL
+├── message_store schema (MessageDB)
+│   ├── messages              # Event log
+│   └── subscription_checkpoints
+├── pgmq schema (PGMQ)
+│   └── q_mori_scheduled_actions  # Scheduled reaction queue
+└── mori schema (Projections)
+    ├── projects
+    ├── packages
+    ├── dependencies
+    ├── bundles
+    ├── repository_configs
+    ├── reaction_history
+    └── checkpoints
+```
+
+## Identity: TypeIDs
+
+Mori uses **TypeIDs** for all entity identifiers:
+
+```
+repo_01h455vb4pex5vsknk084sn02q      # Repository
+proj_01h455vb4pex5vsknk084sn02q      # Project
+pkg_01h455vb4pex5vsknk084sn02q       # Package
+```
+
+Repository IDs are generated on `mori init` and are stable across renames and moves.
+
+## Stream Organization
+
+### Entity Streams
+
+Each aggregate has its own stream:
+
+```
+repository-{repo_typeid}
+  └── VCS events, config observations
+
+project-{namespace}:{name}
+  └── Registration, updates
+
+reaction-{event_typeid}:{reaction_name}
+  └── Reaction lifecycle
+```
+
+### Category Streams
+
+Subscriptions consume category streams:
+
+```
+repository    → All repository events
+project       → All project/registry events
+reaction      → All reaction events
+```
+
+## Event Types
+
+### Repository Events (5 types)
+
+- `ChangesetObserved` — a commit was ingested from VCS
+- `RefObserved` — a branch/tag pointer changed
+- `MoriAutomationObserved` — automation config loaded (idempotent by hash)
+- `MoriConfigObserved` — project config loaded
+- `RepositoryDayOpened` — daily stream partitioning marker
+
+### Project Events (11 types)
+
+Granular events for precise change tracking:
+
+- `ProjectRegistered` — first registration
+- `ProjectTypeChanged`, `ProjectPathChanged` — field-level changes
+- `ProjectPackageAdded`, `ProjectPackageRemoved`, `ProjectPackageUpdated`
+- `ProjectDependencyAdded`, `ProjectDependencyRemoved`
+- `ProjectBundleAdded`, `ProjectBundleRemoved`, `ProjectBundleUpdated`
+
+### Reaction Events (3 types)
+
+- `ReactionTriggered` — a selector matched an event
+- `ReactionCompleted` — action executed successfully
+- `ReactionFailed` — action failed
+
+## Subscriptions
+
+All four subscriptions run concurrently inside `mori automate run`:
+
+| Subscription | Category | Purpose |
+|---|---|---|
+| `mori-registry` | `project` | Updates registry projection tables |
+| `mori-config-observation` | `repository` | Updates config projection, enables hot-reload |
+| `mori-automation` | `repository` | Matches events against selectors, triggers reactions |
+| `mori-reaction-executor` | `reaction` | Executes triggered reaction actions |
+
+## Projections
+
+Projections are PostgreSQL tables updated by subscriptions. Key tables:
+
+- `mori.projects` — registered projects
+- `mori.packages` — packages within projects
+- `mori.dependencies` — dependency name to project path lookup
+- `mori.bundles` — package bundles
+- `mori.repository_configs` — observed automation configuration
+- `mori.reaction_history` — execution log for reactions
+
+### Projection Rebuild
+
+If projections need rebuilding:
+
+1. Truncate projection tables
+2. Reset subscription checkpoint to position 0
+3. Restart subscription — replays all events
+
+## Event Flow
+
+```
+VCS Event (git commit, jj operation)
+   ↓
+Normalize to canonical events
+   ↓
+Write to MessageDB (repository-{id} stream)
+   ↓
+Subscriptions process events:
+   ├── mori-automation: match events → trigger reactions
+   ├── mori-registry: update project/dependency projections
+   └── mori-reaction-executor: execute triggered reactions
+   ↓
+Update projections (PostgreSQL tables)
+   ↓
+Emit effects (run commands, notify, emit new events)
+```

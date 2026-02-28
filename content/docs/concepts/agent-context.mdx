@@ -1,0 +1,125 @@
+---
+title: Agent Context
+description: How mori provides structured, queryable context to AI coding agents
+icon: Brain
+---
+
+Agent context assembly is a **core requirement** of Mori, not an optional feature. It provides structured, queryable context to coding agents so they can find documentation, source code, standards, and examples on the local filesystem.
+
+## The Problem
+
+Coding agents need reliable answers to questions like:
+
+- Where is the documentation for this dependency?
+- Where is the source code I can read to understand this API?
+- What standards apply to this type of project?
+- Are there cookbooks or examples for common patterns?
+
+Today, this context is assembled manually via prompts, which is error-prone, time-consuming, and inconsistent.
+
+## Core Concept: Dependency Documentation Graph
+
+Mori models dependencies as **nodes with attached knowledge**:
+
+```
+Dependency
+  ├── identity (name, source, version)
+  ├── localPath (where the code lives)
+  └── docs (curated documentation references)
+        ├── official docs
+        ├── overlay docs (team-specific)
+        └── cookbooks / examples
+```
+
+## How Agent Context Works
+
+When you run:
+
+```bash
+mori agent context backend
+```
+
+Mori:
+
+1. Finds the agent hint matching `backend`
+2. Resolves each dependency from the registry
+3. Loads each dependency's `mori.dhall` to extract its docs
+4. Resolves standards as registered projects
+5. Extracts cookbooks from the project's docs
+
+The result is a self-contained JSON document:
+
+```json
+{
+  "role": "backend-refactor",
+  "project": "payment-service",
+  "includePaths": [ "src" ],
+  "excludePaths": [ "dist-newstyle" ],
+  "standards": [
+    { "name": "backend-architecture", "path": "/Users/dev/standards/backend-architecture/docs" }
+  ],
+  "dependencies": [
+    {
+      "name": "streamly",
+      "projectPath": "/Users/dev/oss/streamly-project",
+      "packages": [
+        { "name": "streamly", "path": "/Users/dev/oss/streamly-project/streamly" }
+      ],
+      "docs": [
+        { "key": "folds-guide", "path": "/Users/dev/oss/streamly-project/docs/folds-guide.md" }
+      ]
+    }
+  ],
+  "cookbooks": [
+    { "name": "db-patterns", "path": "/Users/dev/services/payment-service/docs/db-patterns.md" }
+  ]
+}
+```
+
+## Dependency Projects and the Local Registry
+
+Dependencies become **first-class Mori projects** registered with the local registry. Create wrapper projects for important dependencies:
+
+```
+streamly-project/
+├── streamly/           # git clone
+├── streamly-core/      # git clone
+├── mori.dhall          # project manifest
+└── docs/
+    ├── folds-guide.md
+    └── streaming-patterns.md
+```
+
+Register once:
+
+```bash
+cd streamly-project && mori register --local
+```
+
+Now every service that lists `"streamly"` in its dependencies resolves to this wrapper project automatically.
+
+## Package Bundles
+
+Bundles group related packages that are typically used together. When a dependency name matches a bundle, Mori resolves all packages in the bundle:
+
+```haskell
+, bundles =
+    [ { name = "streamly"
+      , description = Some "Streamly + streamly-core"
+      , packages = [ "streamly", "streamly-core" ]
+      , primary = "streamly"
+      }
+    ]
+```
+
+## Cookbooks
+
+Docs with `kind = Cookbook` receive special treatment. They're extracted into a dedicated `cookbooks` field in the agent context output so agents can discover practical recipes automatically.
+
+## Design Principles
+
+1. **Declarative, not imperative** — context derived from configuration
+2. **Local-first** — works offline with local checkouts
+3. **Overlay model** — machine-specific paths don't pollute shared config
+4. **Structured output** — JSON for agents, human-readable for developers
+5. **Queryable** — fine-grained queries, not monolithic dumps

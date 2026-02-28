@@ -1,0 +1,100 @@
+---
+title: Schema Architecture
+description: The mori.dhall type system and project identity layer
+icon: Braces
+---
+
+The `mori.dhall` schema defines the **identity layer** of Mori configuration. It is schema-first (Dhall), graph-oriented (repos, packages, APIs, consumers), and identity-focused (what a project *is*, not what *happens*).
+
+## Design Principles
+
+1. **Single source of truth** — Dhall files are authoritative; JSON is derived
+2. **Typed, composable metadata** — no stringly-typed conventions
+3. **CLI-first UX** — humans interact via `mori` commands, not raw Dhall
+4. **Agent-aware by default** — metadata designed to generate reliable agent context
+5. **Knowledge lives where it is owned** — shared knowledge in shared projects
+6. **Identity precedes behavior** — `mori.dhall` describes what a project *is*
+
+## Core Types
+
+```haskell
+-- Language.dhall
+< Haskell | TypeScript | JavaScript | Python | Go | Rust
+| Java | Kotlin | Swift | Ruby | Elixir | Clojure | Scala
+| Dhall | Nix | SQL | Shell | Other : Text >
+
+-- PackageType.dhall (used for both projects and packages)
+< Application | Library | Client | Worker | Tool | Other : Text >
+
+-- Dependency.dhall (Registry-First)
+< ByName : Text
+| WithAugmentation :
+    { name : Text
+    , extraDocs : List DocRef
+    , localPathOverride : Optional Text
+    }
+>
+```
+
+## Dependency Resolution Rules
+
+Mori defines deterministic, explicit rules for resolving dependencies:
+
+1. **Extract dependency name** from declaration
+2. **Query local registry** for name
+3. **If found**: return filesystem path, load project's `mori.dhall` as authoritative
+4. **Else query global registry** (if online)
+5. **Else check `localPathOverride`** (fallback for unregistered deps)
+6. **Else**: treat as unannotated, warn user
+
+### Key Principles
+
+- **Registry-first**: name lookup before path fallback
+- **Single authority**: exactly one `mori.dhall` per dependency
+- **No override**: consumers augment, never redefine
+- **Deterministic**: same name produces same resolution
+- **Offline-capable**: local registry works without network
+
+## API Update Graph
+
+APIs form a directed update graph:
+
+```
+API Owner → Client Library → Application Consumers
+```
+
+The `ApiUpdatePolicy` describes how changes propagate:
+
+| Field | Options |
+|-------|---------|
+| `strategy` | `ClientFirst`, `ManualApproval`, `NoAutomation` |
+| `allowBreaking` | `Bool` |
+| `requireTests` | `Bool` |
+| `consumerBatching` | `Sequential`, `Parallel` |
+
+## Configuration Specification
+
+Packages can declare runtime configuration requirements:
+
+```haskell
+-- ConfigItem.dhall
+{ key : Text
+, type : ConfigValueType
+, required : Bool
+, description : Optional Text
+, sourceHint : Optional ConfigSourceHint
+, example : Optional Text
+}
+```
+
+Source hints tell tooling where config values come from (`EnvVar`, `K8sSecret`, `K8sConfigMap`, `Vault`, `File`, `Default`).
+
+## Standards
+
+Standard projects are Mori projects whose primary purpose is to publish shared documentation and conventions. They do not define packages or APIs.
+
+Standards are declared, not inferred. Mori never assumes standards apply unless explicitly referenced.
+
+## Mental Model
+
+> `mori.dhall` is the **identity layer**. It declares what a project *is*, what it contains, and what agents should know. It does **not** declare what happens when events occur.
