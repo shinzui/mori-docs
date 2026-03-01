@@ -50,7 +50,9 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 				<HeadContent />
 			</head>
 			<body className="flex flex-col min-h-screen">
-				<RootProvider>{children}</RootProvider>
+				<RootProvider search={{ options: { type: "static" } }}>
+					{children}
+				</RootProvider>
 				<Scripts />
 			</body>
 		</html>
