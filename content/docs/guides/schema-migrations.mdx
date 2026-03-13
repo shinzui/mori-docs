@@ -1,0 +1,171 @@
+---
+title: Schema Migrations
+description: Detect and apply schema changes to your mori.dhall configuration
+---
+
+When the mori schema evolves — for example, adding a new required field to `mori.dhall` — existing config files need to be updated. The `mori schema migrate` command detects what changed and can apply updates automatically.
+
+## How It Works
+
+Migrations operate on the **raw text** of your `mori.dhall` before Dhall parsing. This is necessary because Dhall parsing is strict (all-or-nothing) — a file missing a required field won't parse at all, so the migration must fix it first.
+
+Each migration is **content-based**: it checks whether the expected fields are already present in your file. There is no version number to track. This makes migrations idempotent — running `migrate` twice is always safe.
+
+## Quick Start
+
+### Check for needed migrations
+
+```bash
+mori schema migrate
+```
+
+If your `mori.dhall` is missing fields introduced in newer schema versions, you will see:
+
+```
+Schema Migration Check
+━━━━━━━━━━━━━━━━━━━━━
+
+Checking mori.dhall...
+
+  ✗ project.origin — required field
+    Default: Schema.Origin.Own
+
+1 migration(s) needed.
+
+Run `mori schema migrate --apply` to apply.
+Run `mori schema migrate --dry-run` to preview.
+```
+
+If everything is up to date:
+
+```
+Schema Migration Check
+━━━━━━━━━━━━━━━━━━━━━
+
+Checking mori.dhall...
+
+  ✓ All migrations already applied.
+
+mori.dhall is up to date.
+```
+
+### Preview changes
+
+```bash
+mori schema migrate --dry-run
+```
+
+```
+Dry run — no files will be modified.
+
+Would apply to mori.dhall:
+  + project.origin = Schema.Origin.Own
+
+1 change(s) would be applied.
+```
+
+### Apply changes
+
+```bash
+mori schema migrate --apply
+```
+
+```
+Applying migrations to mori.dhall...
+
+  ✓ Added project.origin = Schema.Origin.Own
+
+1 change(s) applied.
+Run `mori validate` to verify.
+```
+
+After applying, run `mori validate` to confirm the file parses correctly against the current schema.
+
+## Options
+
+| Flag | Description |
+|------|-------------|
+| _(no flags)_ | Check-only mode — report what needs migrating |
+| `--apply` | Apply all needed migrations and write the file |
+| `--dry-run` | Show what `--apply` would do without writing |
+| `--file PATH` | Target a specific file (default: `mori.dhall`) |
+
+## Current Migrations
+
+### `add-project-origin`
+
+Adds the `origin` field to the `project` record. This field classifies project ownership for agent resolution — whether a project is your own (`Own`), a third-party wrapper (`ThirdParty`), a fork (`Fork`), or a vendored dependency (`Vendored`).
+
+**What it does:** inserts `, origin = Schema.Origin.Own` after the `owners` field in the `project` record.
+
+**Default value:** `Schema.Origin.Own` — appropriate for most projects you create and maintain yourself.
+
+**Before:**
+
+```haskell
+{ project =
+  { name = "my-project"
+  , namespace = "default"
+  , ...
+  , owners = [] : List Text
+  }
+, ...
+}
+```
+
+**After:**
+
+```haskell
+{ project =
+  { name = "my-project"
+  , namespace = "default"
+  , ...
+  , owners = [] : List Text
+  , origin = Schema.Origin.Own
+  }
+, ...
+}
+```
+
+## When to Run Migrations
+
+Run `mori schema migrate` after upgrading to a new version of the mori CLI. The recommended workflow:
+
+1. Upgrade the CLI (`cabal install` or `nix build`)
+2. Upgrade the schema import: `mori schema upgrade`
+3. Check for migrations: `mori schema migrate`
+4. Preview: `mori schema migrate --dry-run`
+5. Apply: `mori schema migrate --apply`
+6. Verify: `mori validate`
+
+Steps 2 and 3–5 are independent — schema upgrade updates the remote import URL and hash, while migrations add or modify fields in your config. Both may be needed after a CLI upgrade.
+
+## Migrating Multiple Projects
+
+Use `--file` to target a specific config file:
+
+```bash
+mori schema migrate --apply --file path/to/project/mori.dhall
+```
+
+For bulk migration across many projects, combine with standard shell tools:
+
+```bash
+find ~/projects -name "mori.dhall" -exec mori schema migrate --apply --file {} \;
+```
+
+## Troubleshooting
+
+### Migration reports "ApplyFailed"
+
+The migration could not locate the anchor field it uses to determine insertion position. This can happen if your `mori.dhall` has unusual formatting or is missing the expected surrounding fields.
+
+**Fix:** add the field manually following the guidance in the error message, then run `mori validate`.
+
+### File already has the field but in a different position
+
+The migration detects fields by name, not by position. If `origin` already exists anywhere in the file (with the pattern `, origin =` or `{ origin =`), the migration reports it as already applied regardless of where it appears.
+
+### Migration applied but `mori validate` fails
+
+The migration inserts fields with sensible defaults, but if your schema import is outdated, the new field's type may not exist yet. Run `mori schema upgrade` first to update the schema import, then re-validate.

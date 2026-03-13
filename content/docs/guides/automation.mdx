@@ -14,7 +14,73 @@ Mori's automation engine reacts to VCS events (commits, branch/tag changes) by m
 
 ## Configuration
 
-Create `mori.automation.dhall` in your project root with three sections: event selectors, reactions, and an execution policy.
+Mori supports two ways to organize automation configs:
+
+### Single file (default)
+
+Create `mori.automation.dhall` in your project root. The file has three
+top-level sections: event selectors, reactions, and an execution policy.
+
+```haskell
+let EventSelector = ./schema/automation/EventSelector.dhall
+let Reaction = ./schema/automation/Reaction.dhall
+
+in  { events = [] : List EventSelector
+    , reactions = [] : List Reaction
+    , execution =
+        { allowLocal = True
+        , allowCI = False
+        , maxConcurrency = None Integer
+        }
+    }
+```
+
+### Config directory (multiple files)
+
+For larger projects, you can split automation configs across multiple `.dhall`
+files in a directory. Point the `-c` flag at the directory:
+
+```bash
+mori automate run -c ./automation/
+```
+
+All `.dhall` files in the directory are loaded (sorted alphabetically) and
+merged into a single config:
+
+- **Events** and **reactions** are concatenated from all files
+- **Execution policy** is taken from the first file (alphabetically)
+- Validation (unique selector names, valid reaction references) runs on the
+  merged result
+
+This lets you organize configs by concern — e.g., one file per team or
+workflow:
+
+```
+automation/
+  01-testing.dhall        # test-on-change selectors + reactions
+  02-registry-sync.dhall  # registry sync reaction
+  03-notifications.dhall  # release notification hooks
+```
+
+### Config resolution order
+
+| Flag | Resolves to |
+|------|-------------|
+| (none) | `mori.automation.dhall` in the current directory |
+| `-c path/to/file.dhall` | Single file at the given path |
+| `-c path/to/directory/` | All `.dhall` files in the directory, merged |
+
+### Generated templates
+
+Use `mori automate generate` to create config templates:
+
+```bash
+mori automate generate registry-sync              # writes registry-sync.automation.dhall
+mori automate generate registry-sync -o custom.dhall  # custom output path
+```
+
+Generated configs are standalone files you can use directly or place in a
+config directory.
 
 ### Full example
 
@@ -70,6 +136,9 @@ in  { events =
 
 ## Event Selectors
 
+Selectors define which events to watch. Each selector has a unique `name` used
+to reference it from reactions.
+
 ### ChangesetSelector
 
 Matches `ChangesetObserved` events (commits ingested via `mori automate ingest git`).
@@ -88,7 +157,7 @@ Matches `RefObserved` events (branch/tag pointer changes).
 | Field | Type | Behavior |
 |-------|------|----------|
 | `name` | `Text` | Unique selector name |
-| `refPatterns` | `List Text` | Ref name patterns. Empty = match all. |
+| `refPatterns` | `List Text` | Ref name patterns (e.g., `"main"`, `"release/*"`). Empty = match all. |
 | `kinds` | `List Text` | `"branch"`, `"tag"`, or both. Empty = match all. |
 
 ### Glob Patterns
@@ -97,31 +166,54 @@ Matches `RefObserved` events (branch/tag pointer changes).
 - `**` matches any characters across path segments (crosses `/`)
 - Empty pattern lists act as wildcards — they match everything
 
+Examples:
+
 | Pattern | Matches | Does not match |
 |---------|---------|----------------|
 | `src/**` | `src/Foo.hs`, `src/a/b/c.hs` | `test/Foo.hs` |
 | `*.cabal` | `mori.cabal` | `src/mori.cabal` |
 | `src/*.hs` | `src/Main.hs` | `src/Mori/Core.hs` |
+| `release/*` | `release/v1.0` | `release/v1/patch` |
+
+## Reactions
+
+Reactions bind selectors to actions. When any selector listed in `on` matches an
+event, all `actions` execute.
+
+```haskell
+{ name = "test-on-change"
+, on = [ "core-changes", "api-changes" ]    -- triggers on either selector
+, actions = [ ... ]                          -- all actions run
+}
+```
 
 ## Action Types
 
 ### RunCommand
 
-Execute a shell command:
+Execute a shell command.
 
 ```haskell
 ReactionAction.RunCommand
   { command = "make"
   , args = [ "test" ]
   , workingDir = Some "./packages/core"
-  , timeout = Some +300
+  , timeout = Some +300              -- seconds
   , env = [ { mapKey = "CI", mapValue = "true" } ]
   }
 ```
 
+| Field | Type | Notes |
+|-------|------|-------|
+| `command` | `Text` | Executable name or path |
+| `args` | `List Text` | Command arguments |
+| `workingDir` | `Optional Text` | Working directory (default: project root) |
+| `timeout` | `Optional Integer` | Timeout in seconds |
+| `env` | `List { mapKey, mapValue }` | Extra environment variables |
+
 ### EmitEvent
 
-Write an event to a MessageDB stream:
+Write an event to a MessageDB stream.
 
 ```haskell
 ReactionAction.EmitEvent
@@ -133,7 +225,7 @@ ReactionAction.EmitEvent
 
 ### Notify
 
-Send an HTTP request (uses `curl` under the hood):
+Send an HTTP request (uses `curl` under the hood).
 
 ```haskell
 ReactionAction.Notify
@@ -146,7 +238,7 @@ ReactionAction.Notify
 
 ### Schedule
 
-Defer an action for later execution via pgmq + shibuya:
+Defer an action for later execution via pgmq + shibuya.
 
 ```haskell
 ReactionAction.Schedule
@@ -162,12 +254,38 @@ ReactionAction.Schedule
   }
 ```
 
+Scheduled actions can be `RunCommand`, `EmitEvent`, or `Notify` — but not
+another `Schedule` (no recursive scheduling).
+
+## Execution Policy
+
+Controls runtime behavior of the automation engine.
+
+```haskell
+{ allowLocal = True           -- run actions on this machine
+, allowCI = False             -- run actions in CI (Phase 2)
+, maxConcurrency = Some +4    -- max parallel action executions
+}
+```
+
 ## Workflow
 
 ### 1. Ingest VCS events
 
+Ingest git history into the event store:
+
 ```bash
 mori automate ingest git
+```
+
+This reads new commits since the last ingestion and writes `ChangesetObserved`
+and `RefObserved` events to the `repository-{repo_id}` stream. Ingestion is
+cursor-tracked — only new commits are processed on subsequent runs.
+
+To ingest from a different repository path:
+
+```bash
+mori automate ingest git --path /path/to/repo
 ```
 
 ### 2. Start the automation engine
@@ -176,19 +294,84 @@ mori automate ingest git
 mori automate run
 ```
 
-This starts a long-running process with concurrent subscriptions for automation, reaction execution, and registry updates.
+This starts a long-running process with three concurrent subscriptions:
 
-### 3. Inspect configuration
+| Subscription | Listens to | Purpose |
+|-------------|------------|---------|
+| `mori-automation` | `repository` events | Match selectors, trigger reactions |
+| `mori-reaction-executor` | `reaction` events | Execute triggered actions |
+| `mori-registry` | `project` events | Populate registry read model |
+
+Plus a shibuya worker that processes scheduled actions from the pgmq queue.
+
+On startup, `automate run` also:
+- Emits a `MoriAutomationObserved` event (idempotent by config hash)
+- Emits a `MoriConfigObserved` event if `mori.dhall` exists
+- Creates pgmq queues for scheduled actions
+
+Use `-c` to specify a custom config path:
+
+```bash
+mori automate run -c path/to/mori.automation.dhall
+```
+
+### 3. Hot-reload
+
+When the automation config changes, re-run `mori automate run` in a separate
+terminal (or restart). The new config hash triggers a `MoriAutomationObserved`
+event, and the running subscription detects the hash change and reloads the
+config from disk via its IORef.
+
+### 4. Inspect configuration
+
+View a summary of the current automation config and reaction statistics:
 
 ```bash
 mori automate inspect
 ```
 
-### 4. Explain event matching
+```
+Automation Configuration Summary
+================================
+
+Event Selectors (2):
+  core-changes (ChangesetSelector)
+  release-tags (RefSelector)
+
+Reactions (2):
+  test-on-core-change → [core-changes]
+  notify-release → [release-tags]
+
+Execution Policy:
+  allowLocal: True
+  allowCI: False
+  maxConcurrency: None
+```
+
+Add `--json` for machine-readable output.
+
+### 5. Explain event matching
+
+See which selectors match a specific event by its global position:
 
 ```bash
 mori automate explain 42
 ```
+
+```
+Event at global position 42:
+  Stream: repository-repo_01h455vb4pex5vsknk084sn02q
+  Type: ChangesetObserved
+
+Selector matches:
+  ✓ core-changes (ChangesetSelector) — path matched: payments-core/src/Main.hs
+  ✗ release-tags (RefSelector) — wrong event type
+
+Triggered reactions:
+  test-on-core-change
+```
+
+Add `--json` for machine-readable output.
 
 ## Event Flow
 
@@ -199,15 +382,24 @@ git commits
 mori automate ingest git
     │
     ▼  ChangesetObserved / RefObserved events
+    │  written to repository-{repo_id} stream
     │
     ▼
 mori automate run
     │
     ├─ mori-automation subscription
-    │  matches against selectors → triggers reactions
-    │
+    │  reads repository events
+    │  matches against selectors
+    │  triggers reactions
+    │      │
+    │      ▼  ReactionTriggered events
+    │      │  written to reaction-{id}:{name} stream
+    │      │
+    │      ▼
     ├─ mori-reaction-executor subscription
+    │  reads reaction events
     │  executes RunCommand / Notify / EmitEvent
+    │  writes ReactionCompleted / ReactionFailed
     │
     └─ shibuya worker
        processes delayed Schedule actions from pgmq

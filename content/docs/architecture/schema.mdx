@@ -4,7 +4,16 @@ description: The mori.dhall type system and project identity layer
 icon: Braces
 ---
 
-The `mori.dhall` schema defines the **identity layer** of Mori configuration. It is schema-first (Dhall), graph-oriented (repos, packages, APIs, consumers), and identity-focused (what a project *is*, not what *happens*).
+The `mori.dhall` schema defines the **identity layer** of Mori configuration.
+
+**Mori** is a typed project metadata system for repositories.
+It describes *what a project is*, *what it depends on*, and *what agents should know about it*.
+
+Mori is:
+
+* **Schema-first** (Dhall)
+* **Graph-oriented** (repos, packages, APIs, consumers)
+* **Identity-focused** (what a project *is*, not what *happens*)
 
 ## Design Principles
 
@@ -12,8 +21,19 @@ The `mori.dhall` schema defines the **identity layer** of Mori configuration. It
 2. **Typed, composable metadata** — no stringly-typed conventions
 3. **CLI-first UX** — humans interact via `mori` commands, not raw Dhall
 4. **Agent-aware by default** — metadata designed to generate reliable agent context
-5. **Knowledge lives where it is owned** — shared knowledge in shared projects
-6. **Identity precedes behavior** — `mori.dhall` describes what a project *is*
+5. **Knowledge lives where it is owned** — shared knowledge in shared projects, not duplicated per repo
+6. **Identity precedes behavior** — `mori.dhall` describes what a project *is*; `mori.automation.dhall` describes what *happens*
+
+## v0 Scope
+
+v0 defines the **identity layer**:
+
+* Project identity and ownership
+* Repositories and packages
+* APIs and dependencies
+* Agent context hints
+
+**Automation and reactive behavior are defined separately in `mori.automation.dhall`.**
 
 ## Schema Package Structure
 
@@ -21,7 +41,7 @@ The schema is organized into three directories:
 
 ```
 mori-schema/
-├── package.dhall              # Entry point — re-exports all types
+├── package.dhall              # Entry point -- re-exports all types
 ├── Project.dhall              # Root project manifest type
 ├── types/                     # 16 union types (enumerations)
 │   ├── Language.dhall
@@ -39,8 +59,9 @@ mori-schema/
 │   ├── ConsumerBatching.dhall
 │   ├── ConfigValueType.dhall
 │   ├── ConfigSourceHint.dhall
-│   └── StandardScope.dhall
-├── records/                   # 12 record types
+│   ├── StandardScope.dhall
+│   └── PermissionMode.dhall
+├── records/                   # 15 record types
 │   ├── Repo.dhall
 │   ├── Package.dhall
 │   ├── PackageBundle.dhall
@@ -52,6 +73,9 @@ mori-schema/
 │   ├── ApiDependency.dhall
 │   ├── ApiUpdatePolicy.dhall
 │   ├── AgentHint.dhall
+│   ├── Skill.dhall
+│   ├── SkillTool.dhall
+│   ├── Subagent.dhall
 │   └── StandardProject.dhall
 └── automation/                # 5 automation types
     ├── Automation.dhall
@@ -72,7 +96,7 @@ in  Schema.Project::{ ... }
 ## Type Hierarchy
 
 ```
-Project (root — mori.dhall)
+Project (root -- mori.dhall)
 ├── project metadata
 │   ├── type: PackageType
 │   ├── language: Language
@@ -84,7 +108,7 @@ Project (root — mori.dhall)
 │   ├── visibility: Visibility
 │   ├── runtime: Runtime
 │   ├── dependencies: List Dependency
-│   │   └── WithAugmentation → DocRef
+│   │   └── WithAugmentation -> DocRef
 │   ├── docs: List DocRef
 │   │   ├── kind: DocKind
 │   │   ├── audience: DocAudience
@@ -101,6 +125,11 @@ Project (root — mori.dhall)
 │       ├── strategy: ApiUpdateStrategy
 │       └── consumerBatching: ConsumerBatching
 ├── agents: List AgentHint
+├── skills: List Skill
+│   ├── tools: List SkillTool
+│   └── metadata: Map Text Text
+├── subagents: List Subagent
+│   └── permissionMode: PermissionMode
 ├── standards: List Text
 └── docs: List DocRef
 
@@ -113,149 +142,984 @@ Automation (mori.automation.dhall)
 │       ├── RunCommand
 │       ├── EmitEvent
 │       ├── Notify
-│       └── Schedule → ScheduledAction
+│       └── Schedule -> ScheduledAction
 └── execution: ExecutionPolicy
 ```
 
-## Root Type: Project
+## Dhall Schema (v0)
 
-The `Project` type defines the shape of every `mori.dhall` file:
+> **Canonical source**: The authoritative Dhall schema files live in `schema/`.
+> The types shown below are summaries. When in doubt, `schema/` is the source of truth.
 
-```haskell
-{ project :
-    { name : Text
-    , namespace : Text
-    , type : PackageType
-    , description : Optional Text
-    , language : Language
-    , lifecycle : Lifecycle
-    , domains : List Text
-    , owners : List Text
-    }
-, repos : List Repo
-, packages : List Package
-, bundles : List PackageBundle
-, dependencies : List Text
-, apis : List Api
-, agents : List AgentHint
-, standards : List Text
-, docs : List DocRef
-}
-```
-
-## Core Union Types
-
-Union types provide extensibility through an `Other : Text` escape hatch where appropriate.
+### Core Types
 
 ```haskell
 -- Language.dhall
 < Haskell | TypeScript | JavaScript | Python | Go | Rust
 | Java | Kotlin | Swift | Ruby | Elixir | Clojure | Scala
 | Dhall | Nix | SQL | Shell | Other : Text >
-
--- PackageType.dhall
-< Application | Library | Client | Worker | Tool | Other : Text >
-
--- Lifecycle.dhall
-< Active | Experimental | Deprecated | Archived >
-
--- Visibility.dhall
-< Public | Internal | Private >
 ```
 
-## Dependency Model
-
-Dependencies use a **registry-first** model with two forms:
+```haskell
+-- Repo.dhall
+{ name : Text
+, github : Optional Text     -- GitHub path (e.g., "owner/repo")
+, gitlab : Optional Text     -- GitLab path
+, git : Optional Text        -- Generic git URL
+, localPath : Optional Text  -- Path on local filesystem
+}
+```
 
 ```haskell
--- Dependency.dhall
-< ByName : Text
-| WithAugmentation :
-    { name : Text
-    , extraDocs : List DocRef
-    , localPathOverride : Optional Text
-    }
+-- PackageType.dhall (used for both projects and packages)
+< Application        -- deployable service or app
+| Library            -- reusable library
+| Client             -- generated API client
+| Worker             -- background processor / consumer
+| Tool               -- CLI, migration, admin tool
+| Other : Text
 >
 ```
 
-Additional types classify dependencies:
-
 ```haskell
 -- DependencyKind.dhall
-< Internal | ThirdParty >
+< Internal        -- another package in this project
+| ThirdParty      -- external dependency
+>
+```
 
+```haskell
 -- DependencySource.dhall
 < Hackage | Npm | PyPI | Crates | Maven
 | GitHub | GitLab | Git | Local | Other : Text >
 ```
 
-### Resolution Rules
+```haskell
+-- Dependency.dhall (Registry-First)
+--
+-- In a multi-repo microservices architecture, dependencies are resolved
+-- by name via the local registry. This avoids duplicating paths and
+-- metadata across dozens of services.
+--
+-- Simple form: just reference by name
+--   dependencies = [ "streamly", "effectful", "hasql" ]
+--
+-- Extended form: when you need to augment with local docs
+--   dependencies =
+--     [ "streamly"
+--     , { name = "hasql", extraDocs = [ ... ] }
+--     ]
+
+< ByName : Text
+| WithAugmentation :
+    { name : Text
+    , extraDocs : List ./DocRef.dhall
+      -- Additional docs specific to how THIS project uses the dependency
+    , localPathOverride : Optional Text
+      -- Fallback: explicit path for unregistered dependencies (rare)
+    }
+>
+```
+
+```haskell
+-- DocAudience.dhall
+< Module
+| User
+| API
+| Internal
+| Other : Text
+>
+```
+
+```haskell
+-- DocRef.dhall (extended)
+{ key : Text
+
+, audience : ./DocAudience.dhall
+
+, kind : ./DocKind.dhall
+
+, description : Optional Text
+
+, location : ./DocLocation.dhall
+}
+```
+
+```haskell
+-- Package.dhall
+{ name : Text
+
+, type : ./PackageType.dhall
+
+, language : ./Language.dhall
+
+, path : Optional Text
+  -- Path relative to project root (if different from root)
+
+, description : Optional Text
+
+, visibility :
+    < Public | Internal | Private >
+
+, runtime :
+    { deployable : Bool
+    , exposesApi : Bool
+    }
+
+, dependencies : List ./Dependency.dhall
+  -- Package-level dependencies (registry-first, supports augmentation)
+
+, docs : List ./DocRef.dhall
+
+, config : List ./ConfigItem.dhall
+}
+```
+
+```haskell
+-- PackageBundle.dhall
+-- Groups related packages that are typically used together
+{ name : Text
+, description : Optional Text
+, packages : List Text      -- package names included in bundle
+, primary : Text            -- the "main" package for imports
+}
+```
+
+When a project declares a dependency on a bundle name, Mori resolves all packages in the bundle. For fine-grained control, use `project:package` syntax to reference a specific package.
+
+```haskell
+-- ApiType.dhall
+< OpenAPI | GraphQL | GRPC | AsyncAPI | Smithy | Other : Text >
+```
+
+```haskell
+-- Api.dhall
+{ name : Text
+, type : ./ApiType.dhall
+, specPath : Text
+, owner : Text                          -- Package name that owns this API
+, dependencies : List ./ApiDependency.dhall  -- Packages that depend on this API
+, updatePolicy : Optional ./ApiUpdatePolicy.dhall
+}
+```
+
+```haskell
+-- AgentHint.dhall
+{ role : Text
+, description : Optional Text
+, includePaths : List Text
+, excludePaths : List Text
+, relatedPackages : List Text
+}
+```
+
+```haskell
+-- PermissionMode.dhall
+-- Permission mode for subagents
+< Default | AcceptEdits | DontAsk | BypassPermissions | Plan >
+```
+
+```haskell
+-- SkillTool.dhall
+-- A tool used by a skill, with language annotations
+{ name : Text
+, description : Optional Text
+, languages : List Language
+}
+```
+
+```haskell
+-- Skill.dhall
+-- An agent skill definition per the Agent Skills spec (agentskills.io)
+{ name : Text                                       -- Skill identifier (matches directory name)
+, description : Text                                -- What the skill does and when to use it
+, path : Optional Text                              -- Relative path to skill directory
+, tools : List SkillTool                            -- Tools with language annotations
+, compatibility : Optional Text                     -- Environment requirements
+, metadata : List { mapKey : Text, mapValue : Text } -- Arbitrary key-value pairs
+}
+```
+
+```haskell
+-- Subagent.dhall
+-- A subagent definition (specialized AI assistant)
+{ name : Text                                    -- Unique identifier (lowercase + hyphens)
+, description : Text                             -- When to delegate to this subagent
+, provider : Optional Text                       -- Agent platform (e.g., "claude-code", "chatgpt")
+, model : Optional Text                          -- Model name (e.g., "sonnet", "gpt-4o")
+, tools : List Text                              -- Tool allowlist
+, disallowedTools : List Text                    -- Tools to deny
+, permissionMode : Optional PermissionMode       -- Permission prompt handling
+, skills : List Text                             -- Skills to preload
+, background : Bool                              -- Always run in background
+, isolation : Optional Text                      -- Isolation mode (e.g., "worktree")
+}
+```
+
+## Shared Standards & Canonical Knowledge
+
+Many organizations maintain **standardization documents** that are:
+
+* shared across projects
+* not owned by any single service or library
+* essential when bootstrapping new projects or guiding agents
+
+Examples include:
+
+* architecture guidelines
+* API standards
+* coding conventions
+* event naming rules
+* operational runbooks
+
+Mori models these as **standard projects** that act as canonical knowledge sources.
+
+### Standard Project
+
+A *standard project* is a Mori project whose primary purpose is to publish shared documentation and conventions.
+
+```haskell
+-- StandardScope.dhall
+< Organization
+| Domain
+| Platform
+| Language
+| Team
+| Other : Text
+>
+```
+
+```haskell
+-- StandardProject.dhall
+{ name : Text
+
+, scope : ./StandardScope.dhall
+
+, description : Optional Text
+
+, repo : ./Repo.dhall
+
+, docs : List ./DocRef.dhall
+
+, appliesTo :
+    { types : List ./PackageType.dhall
+      -- Which project/package types this standard applies to
+    , languages : List ./Language.dhall
+    }
+}
+```
+
+Standard projects:
+
+* do **not** define packages or APIs
+* exist solely to publish shared knowledge
+
+### Referencing Standards from a Project
+
+Projects may explicitly declare which standards they follow:
+
+```haskell
+-- Project.dhall (extension)
+{ ...
+, standards : List Text
+  -- Names of StandardProjects this project adheres to
+}
+```
+
+This keeps adoption **explicit and auditable**.
+
+### Resolution Rules for Standards
+
+1. Standards are resolved by name
+2. If a local checkout exists, it is preferred
+3. Otherwise, standards may be fetched from the Mori registry
+4. Standards are **read-only** for consuming projects
+
+### Agent Usage
+
+When bootstrapping or modifying a project, agents may be instructed:
+
+> "This project adheres to the following standards:
+>
+> * backend-architecture
+> * api-guidelines
+> * event-naming
+>
+> Consult these documents before making changes."
+
+### CLI Support
+
+```bash
+mori standards list
+mori standards show <name>
+mori standards validate
+```
+
+These commands allow:
+
+* inspection of applicable standards
+* verification that required standards are declared
+
+### Example: Backend Architecture Standards
+
+```haskell
+{ name = "backend-architecture"
+, scope = < Platform >
+, description = Some "Shared backend architecture and DDD standards"
+
+, repo =
+    { name = "platform-standards"
+    , github = "org/platform-standards"
+    , localPath = Some "../platform-standards"
+    }
+
+, docs =
+  [ { key = "ddd"
+    , audience = < Internal >
+    , kind = < Guide >
+    , description = Some "Bounded contexts and aggregates"
+    , location = < LocalFile "docs/ddd.md" >
+    }
+  , { key = "events"
+    , audience = < Internal >
+    , kind = < Guide >
+    , description = Some "Event naming and versioning conventions"
+    , location = < LocalFile "docs/events.md" >
+    }
+  ]
+
+, appliesTo =
+    { types = [ < Application >, < Worker > ]
+    , languages = [ Language.Haskell, Language.TypeScript ]
+    }
+}
+```
+
+### Design Rule (Non-Negotiable)
+
+> **Standards are declared, not inferred.**
+>
+> Mori never assumes standards apply unless explicitly referenced.
+
+### Why Standards Are Separate from Dependencies
+
+* Standards are **guidance**, not runtime dependencies
+* They should never affect builds or deployments
+* They exist to guide humans and agents
+
+This separation prevents standards from polluting dependency graphs.
+
+## Root Type: Project
+
+> **Canonical source**: `schema/Project.dhall`
+
+At the top level, Mori models a **Project** as the unit of ownership and intent.
+A project may be a deployable service, a reusable library, or a generated client.
+
+Projects use the same `PackageType` enum as packages -- there's no separate `ProjectType`.
+This simplifies the model: one enum describes what something *is*, whether it's a project or package.
+
+```haskell
+-- Project.dhall (authoritative definition)
+{ project :
+    { name : Text
+      -- Project name (unique within namespace)
+
+    , namespace : Text
+      -- Organization namespace (e.g., "acme")
+      -- Used for registry identity: @namespace/name
+
+    , type : PackageType
+
+    , description : Optional Text
+
+    , language : Language
+
+    , lifecycle : Lifecycle
+      -- Active | Experimental | Deprecated | Archived
+
+    , domains : List Text
+      -- High-level domain tags (e.g., "Billing", "Platform")
+
+    , owners : List Text
+      -- Team names or handles
+
+    , origin : Origin
+      -- Ownership classification: Own | ThirdParty | Fork | Vendored
+    }
+
+, repos : List Repo
+
+, packages : List Package
+
+, bundles : List PackageBundle
+  -- Package bundles (for wrapper projects)
+
+, dependencies : List Text
+  -- Project-level dependencies, resolved by name via the local registry.
+  -- For fine-grained control (augmentation, path overrides), declare
+  -- dependencies at the Package level using the Dependency union type.
+
+, apis : List Api
+
+, agents : List AgentHint
+
+, skills : List Skill
+  -- Agent skills provided by this project
+
+, subagents : List Subagent
+  -- Subagent definitions
+
+, standards : List Text
+  -- Names of standard projects this project follows
+
+, docs : List DocRef
+  -- Project-level documentation
+}
+```
+
+## Example: Key Third-Party Dependencies (Registry-First)
+
+In a multi-repo microservices architecture, dependencies are referenced by name and resolved via the local registry.
+
+### Step 1: Create Wrapper Projects (Once)
+
+For important dependencies, create wrapper projects with curated documentation:
+
+```
+streamly-project/
+├── streamly/           # git clone
+├── streamly-core/      # git clone
+├── mori.dhall
+└── docs/
+    ├── folds-guide.md
+    └── streaming-patterns.md
+```
+
+```haskell
+-- streamly-project/mori.dhall
+{ project =
+    { name = "streamly-project"
+    , namespace = "acme"
+    , type = < Library >
+    , description = Some "Streamly ecosystem with curated docs"
+    , language = < Haskell >
+    , lifecycle = < Active >
+    , domains = [ "Streaming" ]
+    , owners = [ "platform-team" ]
+    , origin = < ThirdParty >
+    }
+, repos = []
+, packages =
+    [ { name = "streamly", path = Some "./streamly", language = < Haskell >
+      , type = < Library >, description = Some "Streaming library"
+      , visibility = < Public >, runtime = { deployable = False, exposesApi = False }
+      , dependencies = [], docs = [], config = []
+      }
+    , { name = "streamly-core", path = Some "./streamly-core", language = < Haskell >
+      , type = < Library >, description = Some "Core streaming primitives"
+      , visibility = < Public >, runtime = { deployable = False, exposesApi = False }
+      , dependencies = [], docs = [], config = []
+      }
+    ]
+, bundles =
+    [ { name = "streamly"
+      , description = Some "Streamly + streamly-core"
+      , packages = [ "streamly", "streamly-core" ]
+      , primary = "streamly"
+      }
+    ]
+, dependencies = []
+, apis = []
+, agents = []
+, standards = []
+, docs =
+    [ { key = "folds-guide", kind = < Guide >, audience = < User >
+      , description = Some "Deep dive into Streamly folds"
+      , location = < LocalFile "./docs/folds-guide.md" >
+      }
+    , { key = "upstream-docs", kind = < Reference >, audience = < User >
+      , description = Some "Streamly haddocks"
+      , location = < RepoPath "./streamly/docs" >
+      }
+    ]
+}
+```
+
+Register once:
+
+```bash
+cd streamly-project && mori register --local
+```
+
+### Step 2: Reference by Name in Services
+
+```haskell
+-- inside packages list in mori.dhall
+
+{ name = "agent-qualification"
+, type = < Application >
+, language = < Haskell >
+, path = Some "services/agent-qualification"
+, description = Some "Agent qualification service"
+, visibility = < Internal >
+
+, runtime =
+    { deployable = True
+    , exposesApi = False
+    }
+
+-- Registry-first: dependencies resolved by name
+, dependencies = [ < ByName = "streamly" >
+                 , < ByName = "effectful" >
+                 , < ByName = "hasql" >
+                 ]
+
+, config = []
+, docs = []
+}
+```
+
+### Step 3: Resolution at Query Time
+
+```bash
+mori deps locate streamly
+```
+
+```json
+{
+  "name": "streamly",
+  "resolvedFrom": "local-registry",
+  "project": "streamly-project",
+  "projectPath": "/Users/dev/oss/streamly-project",
+  "packagePath": "/Users/dev/oss/streamly-project/streamly",
+  "docs": [
+    { "key": "folds-guide", "path": "/Users/dev/oss/streamly-project/docs/folds-guide.md" }
+  ]
+}
+```
+
+This allows Mori (and agents) to:
+
+* know **which dependencies matter**
+* resolve to **filesystem paths** without hardcoding
+* open the **right documentation immediately**
+* read **local source code** when reasoning about behavior
+
+## Dependency Resolution Rules (Authoritative)
+
+Mori defines **deterministic, explicit rules** for resolving dependency metadata.
+These rules exist to prevent duplication, drift, and ambiguity when working across many repositories.
+
+### Design Context: Multi-Repo Microservices
+
+Mori is designed for organizations with **many services across many repositories**.
+
+Problems with per-service path declarations:
+
+* 50 services x 10 shared dependencies = 500 path declarations
+* Path drift when checkouts move
+* No single source of truth
+* Duplicated documentation references
+
+**Solution: Registry-first resolution.**
+
+Services reference dependencies by name. The local registry resolves names to filesystem paths. Dependency metadata lives in **wrapper projects** registered once.
+
+### Core Principles
+
+> **Registry-first resolution.**
+> Dependencies are resolved by name via the local registry. Consumers never hardcode paths.
+
+> **Metadata follows ownership.**
+> A dependency owns its own Mori metadata; consumers may only *augment* it.
+
+### Resolution Algorithm
+
+For each dependency declared in a project:
 
 1. **Extract dependency name** from declaration
 2. **Query local registry** for name
-3. **If found**: return filesystem path, load project's `mori.dhall` as authoritative
+3. **If found in local registry:**
+   * Return filesystem path to registered project
+   * Load that project's `mori.dhall` as **authoritative**
 4. **Else query global registry** (if online)
+   * Return cached metadata
 5. **Else check `localPathOverride`** (fallback for unregistered deps)
-6. **Else**: treat as unannotated, warn user
+   * Load that path's `mori.dhall` as authoritative
+6. **Else:**
+   * Treat dependency as **unannotated**
+   * Warn user to register the dependency
 
-Key principles: registry-first lookup, single authority per dependency, consumers augment but never redefine, deterministic resolution, offline-capable.
+```
+                  +-------------------+
+                  | "streamly"        |
+                  +--------+----------+
+                           |
+                  +--------v----------+
+                  | Local Registry    |
+                  | (SQLite)          |
+                  +--------+----------+
+                           | found?
+              +------------+------------+
+              | yes                     | no
+    +---------v---------+     +---------v---------+
+    | Return path:      |     | Global Registry   |
+    | /Users/dev/oss/   |     | (if online)       |
+    | streamly-project  |     +---------+---------+
+    +-------------------+               | found?
+                              +---------+---------+
+                              | yes               | no
+                    +---------v---------+   +-----v-----+
+                    | Return cached     |   | Fallback: |
+                    | metadata          |   | localPath |
+                    +-------------------+   | Override  |
+                                            +-----------+
+```
 
-## Documentation Model
+### Wrapper Projects
 
-Documentation references attach structured knowledge to projects, packages, and dependencies:
+Dependencies become first-class Mori projects:
+
+```
+streamly-project/
+├── streamly/           # git clone
+├── streamly-core/      # git clone
+├── mori.dhall          # project manifest
+└── docs/
+    ├── folds-guide.md
+    └── streaming-patterns.md
+```
+
+Register once:
+
+```bash
+cd streamly-project
+mori register --local
+```
+
+All services can now reference `"streamly"` without specifying paths.
+
+### Merge Semantics
+
+When authoritative dependency metadata is found:
+
+* Dependency Mori **cannot be overridden**
+* Consumer-declared metadata is **merged additively**
+
+Allowed consumer additions:
+
+* Additional `extraDocs`
+* Local usage notes
+
+Disallowed consumer overrides:
+
+* Package type
+* APIs owned
+* Domain model
+* Config requirements
+
+### Augmentation Example
+
+Most dependencies need no augmentation:
 
 ```haskell
--- DocRef
-{ key : Text
-, kind : DocKind
-, audience : DocAudience
-, description : Optional Text
-, location : DocLocation
+{ dependencies = [ "streamly", "effectful", "hasql" ] }
+```
+
+When you need to add project-specific documentation:
+
+```haskell
+{ dependencies =
+    [ "streamly"
+    , "effectful"
+    , < WithAugmentation =
+        { name = "hasql"
+        , extraDocs =
+            [ { key = "our-usage"
+              , audience = < Internal >
+              , kind = < Notes >
+              , description = Some "How payments uses hasql connection pooling"
+              , location = < LocalFile "docs/hasql-notes.md" >
+              }
+            ]
+        , localPathOverride = None Text
+        }
+      >
+    ]
 }
-
--- DocKind.dhall
-< Reference | Guide | Cookbook | Spec | Runbook | Notes | Other : Text >
-
--- DocAudience.dhall
-< Module | User | API | Internal | Other : Text >
-
--- DocLocation.dhall
-< LocalFile : Text | LocalDir : Text | RepoPath : Text | Url : Text >
 ```
 
-## API Update Graph
+### Fallback: Unregistered Dependencies
 
-APIs form a directed update graph:
-
-```
-API Owner → Client Library → Application Consumers
-```
+For dependencies not yet in the registry (experimental, one-off):
 
 ```haskell
--- ApiUpdatePolicy
+< WithAugmentation =
+    { name = "experimental-lib"
+    , extraDocs = []
+    , localPathOverride = Some "/Users/dev/scratch/experimental-lib"
+    }
+>
+```
+
+This is rare. The expectation is that frequently-used dependencies are registered.
+
+### CLI Introspection
+
+```bash
+# Locate a dependency
+mori deps locate streamly
+
+# Explain resolution
+mori deps explain streamly
+
+# Resolve all dependencies
+mori deps resolve
+```
+
+Output always shows:
+
+* Resolution source (local registry / global registry / fallback)
+* Filesystem path
+* Applied augmentations
+
+### Invariants
+
+* **Registry-first**: Name lookup before path fallback
+* **Single authority**: Exactly one `mori.dhall` per dependency
+* **No override**: Consumers augment, never redefine
+* **Deterministic**: Same name -> same resolution
+* **Offline-capable**: Local registry works without network
+
+## Example `mori.dhall`
+
+```haskell
+let Mori = ./schema/package.dhall
+
+in
+{ project =
+    { name = "mls-service-v2"
+    , namespace = "mycompany"
+    , type = Mori.PackageType.Application
+    , description = Some "MLS ingestion and normalization service"
+    , language = Mori.Language.Haskell
+    , lifecycle = Mori.Lifecycle.Active
+    , domains = [ "MLS", "Ingestion" ]
+    , owners = [ "data-platform" ]
+    , origin = < Own >
+    }
+
+, repos =
+  [ { name = "mls-service-v2"
+    , github = Some "mycompany/mls-service-v2"
+    , gitlab = None Text
+    , git = None Text
+    , localPath = Some "./"
+    }
+  , { name = "mls-client-ts"
+    , github = Some "mycompany/mls-client-ts"
+    , gitlab = None Text
+    , git = None Text
+    , localPath = Some "../mls-client-ts"
+    }
+  ]
+
+, packages =
+  [ { name = "mls-service"
+    , type = Mori.PackageType.Application
+    , language = Mori.Language.Haskell
+    , path = None Text
+    , description = Some "Core MLS domain service"
+    , visibility = Mori.Visibility.Internal
+    , runtime = { deployable = True, exposesApi = True }
+    , dependencies =
+        [ Mori.Dependency.ByName "streamly"
+        , Mori.Dependency.ByName "effectful"
+        , Mori.Dependency.ByName "hasql"
+        ]
+    , docs = []
+    , config = []
+    }
+  , { name = "mls-client"
+    , type = Mori.PackageType.Client
+    , language = Mori.Language.TypeScript
+    , path = None Text
+    , description = Some "Generated API client"
+    , visibility = Mori.Visibility.Internal
+    , runtime = { deployable = False, exposesApi = False }
+    , dependencies = []
+    , docs = []
+    , config = []
+    }
+  ]
+
+, bundles = []
+
+, dependencies = [ "streamly", "effectful", "hasql" ]
+
+, apis =
+  [ { name = "MLS Public API"
+    , type = Mori.ApiType.OpenAPI
+    , specPath = "openapi.yaml"
+    , owner = "mls-service"
+    , dependencies =
+        [ { package = "mls-client", role = Mori.ApiDependencyRole.Client } ]
+    , updatePolicy = Some
+        { strategy = Mori.ApiUpdateStrategy.ClientFirst
+        , allowBreaking = False
+        , requireTests = True
+        , consumerBatching = Mori.ConsumerBatching.Sequential
+        , notes = None Text
+        }
+    }
+  ]
+
+, agents =
+  [ { role = "backend-refactor"
+    , description = Some "Refactor Haskell service safely"
+    , includePaths = [ "src" ]
+    , excludePaths = [ "dist-newstyle" ]
+    , relatedPackages = [ "mls-service" ]
+    }
+  ]
+
+, standards = [ "backend-architecture", "haskell-conventions" ]
+
+, docs = []
+}
+```
+
+## API Clients, Consumers, and Update Graph
+
+APIs evolve, and Mori must capture **who is affected and how updates propagate**.
+
+Mori models APIs as a **directed update graph**:
+
+```
+API Owner -> Client Library -> Application Consumers
+```
+
+This enables tools and agents to:
+
+* update client libraries first
+* then update all downstream consumers
+* in a controlled, policy-driven way
+
+### API Dependency Roles
+
+```haskell
+-- ApiDependencyRole.dhall
+< Client
+| Consumer
+>
+```
+
+### API Dependency Edge
+
+```haskell
+-- ApiDependency.dhall
+{ package : Text        -- package name
+, role : ./ApiDependencyRole.dhall
+}
+```
+
+### Api Schema
+
+The Api.dhall type (shown in Core Types above) uses `owner` as a package name and `dependencies` as a list of `ApiDependency` edges, replacing the earlier `consumers` list.
+
+### API Update Policy (Agent-Consumable)
+
+> **Note:** This type defines behavioral automation policy and conceptually belongs to the automation layer (`mori.automation.dhall`). It is documented here for schema completeness and to show how identity and behavior types relate.
+
+Policies describe **what agents are allowed or expected to do**, not how they do it.
+
+```haskell
+-- ApiUpdatePolicy.dhall
 { strategy : ApiUpdateStrategy
+  -- ClientFirst | ManualApproval | NoAutomation
+
 , allowBreaking : Bool
+
 , requireTests : Bool
+
 , consumerBatching : ConsumerBatching
+  -- Sequential | Parallel
+
 , notes : Optional Text
 }
+```
 
--- ApiUpdateStrategy.dhall
-< ClientFirst | ManualApproval | NoAutomation >
+### Example
 
--- ApiDependencyRole.dhall
-< Client | Consumer >
+```haskell
+{ name = "MLS Public API"
+, type = < OpenAPI >
+, specPath = "openapi.yaml"
 
--- ConsumerBatching.dhall
-< Sequential | Parallel >
+, owner = "mls-service"
+
+, dependencies =
+  [ { package = "mls-client"
+    , role = < Client >
+    }
+  , { package = "reporting-service"
+    , role = < Consumer >
+    }
+  , { package = "analytics-service"
+    , role = < Consumer >
+    }
+  ]
+
+, updatePolicy = Some
+  { strategy = < ClientFirst >
+  , allowBreaking = False
+  , requireTests = True
+  , consumerBatching = < Sequential >
+  , notes = Some "Client must be regenerated before consumers are touched"
+  }
+}
 ```
 
 ## Configuration Specification
 
-Packages declare runtime configuration requirements with source hints for tooling:
+Many applications require **runtime configuration** (environment variables, secrets, feature flags, endpoints).
+Mori can describe *what configuration is required* without prescribing *how it is provided*.
+
+This enables:
+
+* Infrastructure validation (e.g. Kubernetes ConfigMaps / Secrets)
+* CI checks for missing or unused config
+* Agent context about runtime assumptions
+
+### Design Principles for Config
+
+* **Declarative, not executable**
+* **Typed** (strings vs numbers vs URLs)
+* **Environment-agnostic** (dev/staging/prod are overlays)
+* **Separation of concerns**: Mori describes requirements, infra supplies values
+
+### Core Types
 
 ```haskell
--- ConfigItem
+-- ConfigValueType.dhall
+< String | Integer | Boolean | Secret | Url
+| FilePath | Duration | Json | Other : Text >
+```
+
+```haskell
+-- ConfigSourceHint.dhall
+< EnvVar : Text        -- Environment variable name
+| K8sSecret : Text     -- Kubernetes secret name
+| K8sConfigMap : Text  -- Kubernetes ConfigMap name
+| Vault : Text         -- HashiCorp Vault path
+| File : Text          -- File path
+| Default : Text       -- Default value
+>
+```
+
+```haskell
+-- ConfigItem.dhall
 { key : Text
 , type : ConfigValueType
 , required : Bool
@@ -263,39 +1127,87 @@ Packages declare runtime configuration requirements with source hints for toolin
 , sourceHint : Optional ConfigSourceHint
 , example : Optional Text
 }
-
--- ConfigValueType.dhall
-< String | Integer | Boolean | Secret | Url
-| FilePath | Duration | Json | Other : Text >
-
--- ConfigSourceHint.dhall
-< EnvVar : Text | K8sSecret : Text | K8sConfigMap : Text
-| Vault : Text | File : Text | Default : Text >
 ```
 
-## Standards
+Configuration is specified **per package** (in `Package.dhall`), since different packages/apps have different runtime needs.
 
-Standard projects publish shared documentation and conventions. They have a scope and declare which project types and languages they apply to:
+### Example
 
 ```haskell
--- StandardProject
-{ name : Text
-, scope : StandardScope
-, description : Optional Text
-, repo : Repo
-, docs : List DocRef
-, appliesTo :
-    { types : List PackageType
-    , languages : List Language
-    }
-}
-
--- StandardScope.dhall
-< Organization | Domain | Platform | Language | Team | Other : Text >
+config =
+[ { key = "DATABASE_URL"
+  , type = < Url >
+  , required = True
+  , description = Some "PostgreSQL connection string"
+  , sourceHint = Some < K8sSecret = "payments-db" >
+  , example = None Text
+  }
+, { key = "LOG_LEVEL"
+  , type = < String >
+  , required = False
+  , description = Some "Logging verbosity"
+  , sourceHint = Some < EnvVar = "LOG_LEVEL" >
+  , example = Some "info"
+  }
+]
 ```
 
-Standards are declared, not inferred. Mori never assumes standards apply unless explicitly referenced.
+### Environment Overlays (Future-Friendly)
+
+Local or environment-specific overrides can live in:
+
+```text
+mori.config.local.dhall
+mori.config.prod.dhall
+```
+
+These files may supply *values* or *disable* optional config keys, but **cannot change required keys**.
+
+### CLI Extensions
+
+```bash
+mori config list <package>
+mori config validate
+mori config validate --k8s ./k8s
+```
+
+Examples:
+
+* Compare Mori config spec against Kubernetes ConfigMaps / Secrets
+* Detect missing required keys
+* Warn about unused config entries
+
+### CI / Infrastructure Integration
+
+Possible checks:
+
+* Required config missing in deployment manifests
+* Secrets referenced but not declared
+* Config drift between environments
+
+Mori acts as the **contract**, infrastructure as the **implementation**.
+
+## Future Directions
+
+See the following architectural documents for the complete vision:
+
+* `mori-high-level-architecture.md` -- Data Plane + Control Plane
+* `mori-automation-configuration.md` -- Reactive automation
+* `mori-repository-interrogation.md` -- Event-sourced activation
 
 ## Mental Model
 
-> `mori.dhall` is the **identity layer**. It declares what a project *is*, what it contains, and what agents should know. It does **not** declare what happens when events occur — that belongs in `mori.automation.dhall`.
+`mori.dhall` is the **identity layer** of Mori.
+
+It declares:
+
+* **What** a project is (type, ownership, lifecycle)
+* **What** it contains (packages, APIs, dependencies)
+* **What** agents should know (context hints)
+
+It does **not** declare:
+
+* What happens when events occur (see `mori.automation.dhall`)
+* Execution policies or reactions
+
+> **Identity is the foundation; automation builds on top.**

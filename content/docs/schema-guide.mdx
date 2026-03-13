@@ -21,9 +21,27 @@ Mori uses this file as the single source of truth for:
 
 The companion file `mori.automation.dhall` describes what _happens_ (reactions to VCS events). This guide focuses exclusively on the identity layer.
 
+## Getting Started
+
+### Scaffold a new manifest
+
+```bash
+mori init --name my-project
+```
+
+This creates a `mori.dhall` with sensible defaults. If a `schema/` directory exists in the project, the scaffold uses typed imports from `schema/package.dhall`. Otherwise it inlines the full type definitions.
+
+### Validate at any time
+
+```bash
+mori validate
+```
+
+Dhall's type checker catches structural errors immediately — missing fields, wrong types, and typos are caught before anything reaches the event store.
+
 ## Project Identity
 
-The `project` record is the core of your manifest:
+The `project` record is the core of your manifest. It answers: _What is this project, who owns it, and where does it live in the organization?_
 
 ```haskell
 let Schema = ./schema/package.dhall
@@ -37,6 +55,7 @@ in  { project =
       , lifecycle = Schema.Lifecycle.Active
       , domains = [ "Billing", "Platform" ]
       , owners = [ "team-payments" ]
+      , origin = Schema.Origin.Own
       }
     -- ...
     }
@@ -44,7 +63,7 @@ in  { project =
 
 ### Choosing a namespace and name
 
-The `(namespace, name)` pair forms the project's unique identity in the registry:
+The `(namespace, name)` pair forms the project's unique identity in the registry. Think of it like a package scope:
 
 ```
 @acme/payment-service
@@ -54,8 +73,11 @@ The `(namespace, name)` pair forms the project's unique identity in the registry
 
 - **namespace** is typically your organization or team name
 - **name** is the project name, unique within the namespace
+- These cannot be changed after registration without re-registering
 
 ### Project type
+
+`type` uses the `PackageType` enum:
 
 | Type | Use when |
 |------|----------|
@@ -64,7 +86,9 @@ The `(namespace, name)` pair forms the project's unique identity in the registry
 | `Client` | Generated API client |
 | `Worker` | Background job processor, queue consumer |
 | `Tool` | CLI, migration script, admin utility |
-| `Other "..."` | Anything else |
+| `Other "..."` | Anything else (provide a descriptive name) |
+
+The same enum is used for both projects and packages. This keeps the model simple — one type describes what something _is_ at any level.
 
 ### Lifecycle
 
@@ -75,9 +99,46 @@ The `(namespace, name)` pair forms the project's unique identity in the registry
 | `Deprecated` | Still functional but no longer recommended |
 | `Archived` | Frozen, read-only, kept for reference |
 
+Agents and tooling can use lifecycle to adjust behavior — for example, an agent might warn before modifying a deprecated project.
+
+## Repositories
+
+The `repos` list describes where the project's source code lives. Most projects have a single entry, but multi-repo setups are supported.
+
+```haskell
+, repos =
+  [ { name = "main"
+    , github = Some "acme/payment-service"
+    , gitlab = None Text
+    , git = None Text
+    , localPath = None Text
+    }
+  ]
+```
+
+Each field is optional except `name`:
+
+| Field | When to use |
+|-------|-------------|
+| `github` | Project is hosted on GitHub (`"owner/repo"` format) |
+| `gitlab` | Project is hosted on GitLab |
+| `git` | Generic git URL for other hosts |
+| `localPath` | Explicit local filesystem path |
+
+You can combine fields — for example, a GitHub-hosted repo with a known local checkout:
+
+```haskell
+{ name = "main"
+, github = Some "acme/payment-service"
+, gitlab = None Text
+, git = None Text
+, localPath = Some "/Users/dev/projects/payment-service"
+}
+```
+
 ## Packages
 
-Packages are the buildable units within a project:
+Packages are the buildable units within a project. A Haskell project might have a core library, a service executable, and a migration tool — each is a separate package.
 
 ```haskell
 , packages =
@@ -95,22 +156,67 @@ Packages are the buildable units within a project:
     , docs = [] : List Schema.DocRef
     , config = [] : List Schema.ConfigItem
     }
+  , { name = "payments-service"
+    , type = Schema.PackageType.Application
+    , language = Schema.Language.Haskell
+    , path = Some "payments-service"
+    , description = Some "HTTP API server"
+    , visibility = Schema.Visibility.Internal
+    , runtime = { deployable = True, exposesApi = True }
+    , dependencies =
+      [ Schema.Dependency.ByName "payments-core" ]
+    , docs = [] : List Schema.DocRef
+    , config =
+      [ { key = "DATABASE_URL"
+        , type = Schema.ConfigValueType.Url
+        , required = True
+        , description = Some "PostgreSQL connection string"
+        , sourceHint = Some (Schema.ConfigSourceHint.EnvVar "DATABASE_URL")
+        , example = Some "postgres://localhost:5432/payments"
+        }
+      ]
+    }
   ]
+```
+
+### Visibility
+
+| Level | Meaning |
+|-------|---------|
+| `Public` | Published externally (e.g., open-source library) |
+| `Internal` | Shared within the organization |
+| `Private` | Used only within this project |
+
+### Runtime
+
+The `runtime` record tells tools and agents about a package's deployment characteristics:
+
+- `deployable = True` — produces an artifact that gets deployed (service, worker, CLI)
+- `exposesApi = True` — exposes a network API that other services consume
+
+A library has both set to `False`. A service typically has both `True`. A CLI tool is deployable but does not expose an API.
+
+### path
+
+The `path` field is relative to the project root. If the package lives at the root (single-package project), use `None Text`. If it lives in a subdirectory:
+
+```haskell
+, path = Some "packages/payments-core"
 ```
 
 ## Dependencies
 
-Mori uses a **registry-first** model. Instead of hardcoding filesystem paths, you declare dependencies by name and let the local registry resolve them.
+Mori uses a **registry-first** model for dependencies. Instead of hardcoding filesystem paths, you declare dependencies by name and let the local registry resolve them.
 
 ### Two levels of dependencies
 
-**Project-level** — simple name list:
+**Project-level** — simple name list, good for declaring the overall dependency footprint:
 
 ```haskell
 , dependencies = [ "effectful", "aeson", "hasql" ]
 ```
 
-**Package-level** — uses the `Dependency` union type:
+**Package-level** — uses the `Dependency` union type, supports augmentation:
 
 ```haskell
 , dependencies =
@@ -119,9 +225,132 @@ Mori uses a **registry-first** model. Instead of hardcoding filesystem paths, yo
   ]
 ```
 
+Project-level dependencies are `List Text` (just names). Package-level dependencies use `List Dependency` which offers more control.
+
+### The registry-first resolution model
+
+When you or an agent query a dependency:
+
+```bash
+mori deps locate effectful
+```
+
+Mori looks it up by name in the local registry — a PostgreSQL table populated by event-sourced projections. The registry knows the dependency's filesystem path, packages, and documentation.
+
+This avoids the N x M problem where every service hardcodes paths to every shared dependency. Register once, reference everywhere.
+
+### Augmenting a dependency
+
+Most dependencies need nothing beyond a name. When you need to attach project-specific documentation or override a path, use the augmented form:
+
+```haskell
+Schema.Dependency.WithAugmentation
+  { name = "hasql"
+  , extraDocs =
+    [ { key = "hasql-patterns"
+      , kind = Schema.DocKind.Cookbook
+      , audience = Schema.DocAudience.Internal
+      , description = Some "Our hasql usage patterns"
+      , location = Schema.DocLocation.LocalFile "docs/hasql-patterns.md"
+      }
+    ]
+  , localPathOverride = None Text
+  }
+```
+
+Key rules:
+
+- **Consumers augment, never override.** You can add extra docs, but you cannot change a dependency's type, APIs, or domain model.
+- **`localPathOverride` is a fallback.** Use it only for dependencies not yet in the registry. The expectation is that frequently-used dependencies are registered as wrapper projects.
+
+### Creating wrapper projects for third-party dependencies
+
+For important third-party dependencies, create a wrapper project with curated documentation:
+
+```
+streamly-project/
+├── streamly/           # git clone of streamly
+├── streamly-core/      # git clone of streamly-core
+├── mori.dhall          # wrapper project manifest
+└── docs/
+    ├── folds-guide.md
+    └── streaming-patterns.md
+```
+
+The wrapper's `mori.dhall`:
+
+```haskell
+let Schema = ./schema/package.dhall
+
+in  { project =
+      { name = "streamly-project"
+      , namespace = "acme"
+      , type = Schema.PackageType.Library
+      , description = Some "Streamly ecosystem with curated docs"
+      , language = Schema.Language.Haskell
+      , lifecycle = Schema.Lifecycle.Active
+      , domains = [ "Streaming" ]
+      , owners = [ "platform-team" ]
+      , origin = Schema.Origin.ThirdParty
+      }
+    , repos = [] : List Schema.Repo
+    , packages =
+      [ { name = "streamly"
+        , type = Schema.PackageType.Library
+        , language = Schema.Language.Haskell
+        , path = Some "./streamly"
+        , description = Some "Streaming library"
+        , visibility = Schema.Visibility.Public
+        , runtime = { deployable = False, exposesApi = False }
+        , dependencies = [] : List Schema.Dependency
+        , docs = [] : List Schema.DocRef
+        , config = [] : List Schema.ConfigItem
+        }
+      , { name = "streamly-core"
+        , type = Schema.PackageType.Library
+        , language = Schema.Language.Haskell
+        , path = Some "./streamly-core"
+        , description = Some "Core streaming primitives"
+        , visibility = Schema.Visibility.Public
+        , runtime = { deployable = False, exposesApi = False }
+        , dependencies = [] : List Schema.Dependency
+        , docs = [] : List Schema.DocRef
+        , config = [] : List Schema.ConfigItem
+        }
+      ]
+    , bundles =
+      [ { name = "streamly"
+        , description = Some "Streamly + streamly-core"
+        , packages = [ "streamly", "streamly-core" ]
+        , primary = "streamly"
+        }
+      ]
+    , dependencies = [] : List Text
+    , apis = [] : List Schema.Api
+    , agents = [] : List Schema.AgentHint
+    , standards = [] : List Text
+    , docs =
+      [ { key = "folds-guide"
+        , kind = Schema.DocKind.Guide
+        , audience = Schema.DocAudience.User
+        , description = Some "Deep dive into Streamly folds"
+        , location = Schema.DocLocation.LocalFile "./docs/folds-guide.md"
+        }
+      ]
+    }
+```
+
+Register once:
+
+```bash
+cd streamly-project && mori register --local
+```
+
+Now every service that lists `"streamly"` in its dependencies will resolve to this wrapper project automatically.
+
 ## Package Bundles
 
-Bundles group related packages that are typically used together:
+Bundles group related packages that are typically used together. When a dependency name matches a bundle, Mori resolves all packages in the bundle rather than searching for a single package.
 
 ```haskell
 , bundles =
@@ -133,9 +362,25 @@ Bundles group related packages that are typically used together:
   ]
 ```
 
+| Field | Purpose |
+|-------|---------|
+| `name` | The name other projects use to reference this bundle |
+| `packages` | All package names included in the bundle |
+| `primary` | The "main" package for imports (must be listed in `packages`) |
+
+When a consuming project declares:
+
+```haskell
+dependencies = [ "streamly" ]
+```
+
+Mori resolves both `streamly` and `streamly-core` from the wrapper project.
+
+For fine-grained control, use `project:package` syntax to reference a specific package within a bundle.
+
 ## APIs
 
-If your project exposes APIs, the `apis` list describes them:
+If your project exposes APIs, the `apis` list describes them. This enables Mori to model the **update graph** — who owns an API, who consumes it, and how changes propagate.
 
 ```haskell
 , apis =
@@ -146,6 +391,9 @@ If your project exposes APIs, the `apis` list describes them:
     , dependencies =
       [ { package = "payments-client"
         , role = Schema.ApiDependencyRole.Client
+        }
+      , { package = "billing-service"
+        , role = Schema.ApiDependencyRole.Consumer
         }
       ]
     , updatePolicy = Some
@@ -159,34 +407,320 @@ If your project exposes APIs, the `apis` list describes them:
   ]
 ```
 
+### API type
+
+| Type | Spec format |
+|------|-------------|
+| `OpenAPI` | OpenAPI / Swagger |
+| `GraphQL` | GraphQL SDL |
+| `GRPC` | Protocol Buffers |
+| `AsyncAPI` | AsyncAPI for event-driven APIs |
+| `Smithy` | Smithy IDL |
+| `Other "..."` | Anything else |
+
+### Dependency roles
+
+APIs form a directed graph: **Owner -> Client -> Consumers**.
+
+- `Client` — a generated client library for the API
+- `Consumer` — an application that depends on the API (often via the client)
+
+### Update policy
+
+The update policy tells agents and tooling how API changes should propagate:
+
+| Field | Options | Meaning |
+|-------|---------|---------|
+| `strategy` | `ClientFirst`, `ManualApproval`, `NoAutomation` | Who gets updated first |
+| `allowBreaking` | `Bool` | Are breaking changes permitted |
+| `requireTests` | `Bool` | Must tests pass before propagation |
+| `consumerBatching` | `Sequential`, `Parallel` | Update consumers one at a time or all at once |
+
+**`ClientFirst`** (most common): regenerate the client library, then update each consumer. This ensures the client always reflects the latest spec before downstream services consume it.
+
+If you don't need an update policy:
+
+```haskell
+, updatePolicy = None Schema.ApiUpdatePolicy
+```
+
+## Configuration Requirements
+
+Packages can declare their runtime configuration requirements. This enables infrastructure validation and gives agents awareness of runtime assumptions.
+
+```haskell
+, config =
+  [ { key = "DATABASE_URL"
+    , type = Schema.ConfigValueType.Url
+    , required = True
+    , description = Some "PostgreSQL connection string"
+    , sourceHint = Some (Schema.ConfigSourceHint.EnvVar "DATABASE_URL")
+    , example = Some "postgres://localhost:5432/payments"
+    }
+  , { key = "LOG_LEVEL"
+    , type = Schema.ConfigValueType.String
+    , required = False
+    , description = Some "Logging verbosity"
+    , sourceHint = Some (Schema.ConfigSourceHint.Default "info")
+    , example = Some "debug"
+    }
+  , { key = "STRIPE_API_KEY"
+    , type = Schema.ConfigValueType.Secret
+    , required = True
+    , description = Some "Stripe API key for payment processing"
+    , sourceHint = Some (Schema.ConfigSourceHint.K8sSecret "stripe-credentials")
+    , example = None Text
+    }
+  ]
+```
+
+### Value types
+
+| Type | When to use |
+|------|-------------|
+| `String` | Generic text values |
+| `Integer` | Numeric config (port numbers, pool sizes) |
+| `Boolean` | Feature flags, on/off switches |
+| `Secret` | Credentials, API keys (treated specially by tooling) |
+| `Url` | Connection strings, endpoint URLs |
+| `FilePath` | Paths to files (certs, config files) |
+| `Duration` | Time values (timeouts, intervals) |
+| `Json` | Structured configuration blobs |
+| `Other "..."` | Custom types |
+
+### Source hints
+
+Source hints tell tooling _where_ a config value is expected to come from:
+
+| Hint | Example |
+|------|---------|
+| `EnvVar "DATABASE_URL"` | Environment variable |
+| `K8sSecret "stripe-credentials"` | Kubernetes Secret |
+| `K8sConfigMap "app-config"` | Kubernetes ConfigMap |
+| `Vault "secret/data/payments"` | HashiCorp Vault path |
+| `File "/etc/app/config.yaml"` | Filesystem path |
+| `Default "info"` | Default value if not provided |
+
+These are hints, not enforcement. Mori describes requirements; infrastructure supplies values.
+
+### Validation
+
+Check your config declarations:
+
+```bash
+mori config list payments-service
+mori config validate
+```
+
+## Documentation
+
+The `docs` list attaches documentation references to your project or individual packages. Docs can point to local files, directories, repository paths, or URLs.
+
+```haskell
+, docs =
+  [ { key = "architecture"
+    , kind = Schema.DocKind.Guide
+    , audience = Schema.DocAudience.Internal
+    , description = Some "System architecture overview"
+    , location = Schema.DocLocation.LocalFile "docs/architecture.md"
+    }
+  , { key = "db-patterns"
+    , kind = Schema.DocKind.Cookbook
+    , audience = Schema.DocAudience.Module
+    , description = Some "Database access patterns and recipes"
+    , location = Schema.DocLocation.LocalDir "docs/cookbooks/"
+    }
+  , { key = "api-docs"
+    , kind = Schema.DocKind.Reference
+    , audience = Schema.DocAudience.API
+    , description = Some "Generated API reference"
+    , location = Schema.DocLocation.Url "https://docs.acme.com/payments/api"
+    }
+  ]
+```
+
+### Doc kind
+
+| Kind | Use for |
+|------|---------|
+| `Reference` | API docs, haddocks, generated reference material |
+| `Guide` | Conceptual explanations, architecture overviews |
+| `Cookbook` | Practical recipes and patterns (included in agent context) |
+| `Spec` | Formal specifications, RFCs |
+| `Runbook` | Operational procedures |
+| `Notes` | Informal notes, decision records |
+| `Other "..."` | Anything else |
+
+### Doc location
+
+| Variant | Points to |
+|---------|-----------|
+| `LocalFile "path"` | Single file relative to project root |
+| `LocalDir "path"` | Directory of files relative to project root |
+| `RepoPath "path"` | Path within a git-cloned repo |
+| `Url "https://..."` | External URL |
+
+### Doc audience
+
+| Audience | Intended reader |
+|----------|----------------|
+| `Module` | Developers working on this module/package |
+| `User` | End users of the project |
+| `API` | API consumers |
+| `Internal` | Internal team members |
+| `Other "..."` | Custom audience |
+
+### Cookbooks and agent context
+
+Docs with `kind = Cookbook` receive special treatment. When `mori agent context` generates JSON for an agent, cookbooks are extracted into a dedicated `cookbooks` field so agents can discover practical recipes automatically:
+
+```json
+{
+  "cookbooks": [
+    { "name": "db-patterns", "path": "/home/dev/payments/docs/cookbooks/" }
+  ]
+}
+```
+
 ## Agent Hints
 
-Agent hints tell AI coding assistants which parts of your codebase are relevant to specific roles:
+Agent hints tell AI coding assistants which parts of your codebase are relevant to specific roles. This is how Mori provides targeted context instead of dumping the entire project on an agent.
 
 ```haskell
 , agents =
   [ { role = "backend"
     , description = Some "Backend development and bug fixes"
     , includePaths = [ "src/", "lib/" ]
-    , excludePaths = [ "dist-newstyle/", "node_modules/" ]
+    , excludePaths = [ "dist-newstyle/", "node_modules/", ".stack-work/" ]
     , relatedPackages = [ "payments-core", "payments-service" ]
+    }
+  , { role = "ops"
+    , description = Some "Deployment and infrastructure"
+    , includePaths = [ "deploy/", "infra/", "k8s/" ]
+    , excludePaths = [] : List Text
+    , relatedPackages = [ "payments-service" ]
+    }
+  , { role = "api-design"
+    , description = Some "API design and review"
+    , includePaths = [ "api/", "openapi.yaml" ]
+    , excludePaths = [] : List Text
+    , relatedPackages = [ "payments-service" ]
     }
   ]
 ```
 
+### How agent context works
+
+When you run:
+
+```bash
+mori agent context backend
+```
+
+Mori:
+
+1. Finds the agent hint matching `backend`
+2. Resolves each dependency from the registry
+3. Loads each dependency's `mori.dhall` to extract its docs
+4. Resolves standards as registered projects
+5. Extracts cookbooks from the project's docs
+
+The result is a self-contained JSON document that gives the agent everything it needs — paths to focus on, paths to ignore, dependency source code locations, and relevant documentation.
+
+### Tips for effective agent configuration
+
+- **Be specific with `includePaths`** — narrow paths produce better agent focus
+- **Always add `excludePaths`** for build output, generated code, and `node_modules`-style directories
+- **Use `relatedPackages`** to connect roles to the packages they work on — this drives dependency resolution in the agent context
+- **Define roles by activity**, not by team — `"backend"`, `"frontend"`, `"ops"` work better than `"team-alpha"`
+
 ## Standards
 
-Standards are shared knowledge projects that your project explicitly follows:
+Standards are shared knowledge projects — architecture guidelines, coding conventions, API standards — that your project explicitly follows.
 
 ```haskell
 , standards = [ "backend-architecture", "haskell-conventions", "api-guidelines" ]
 ```
 
-Each name is resolved as a registered project in the local registry.
+Each name is resolved as a registered project in the local registry. Standard projects:
+
+- Exist solely to publish shared documentation
+- Do not define packages or APIs
+- Are declared explicitly — Mori never infers that a standard applies
+
+### Standard projects
+
+A standard project is a Mori project whose primary purpose is to publish shared knowledge:
+
+```haskell
+{ project =
+    { name = "backend-architecture"
+    , namespace = "platform"
+    , type = Schema.PackageType.Library
+    , description = Some "Backend architecture and DDD standards"
+    , language = Schema.Language.Haskell
+    , lifecycle = Schema.Lifecycle.Active
+    , domains = [ "Platform" ]
+    , owners = [ "architecture-team" ]
+    , origin = Schema.Origin.Own
+    }
+, repos =
+    [ { name = "main"
+      , github = Some "acme/platform-standards"
+      , gitlab = None Text
+      , git = None Text
+      , localPath = Some "../platform-standards"
+      }
+    ]
+, packages = [] : List Schema.Package
+, bundles = [] : List Schema.PackageBundle
+, dependencies = [] : List Text
+, apis = [] : List Schema.Api
+, agents = [] : List Schema.AgentHint
+, standards = [] : List Text
+, docs =
+    [ { key = "ddd"
+      , kind = Schema.DocKind.Guide
+      , audience = Schema.DocAudience.Internal
+      , description = Some "Bounded contexts and aggregate design"
+      , location = Schema.DocLocation.LocalFile "docs/ddd.md"
+      }
+    , { key = "event-naming"
+      , kind = Schema.DocKind.Guide
+      , audience = Schema.DocAudience.Internal
+      , description = Some "Event naming and versioning conventions"
+      , location = Schema.DocLocation.LocalFile "docs/events.md"
+      }
+    ]
+}
+```
+
+Register the standard project, then any project referencing `"backend-architecture"` in its `standards` list gains access to that documentation through the agent context.
+
+### Why standards are separate from dependencies
+
+- Standards are **guidance**, not runtime dependencies
+- They never affect builds or deployments
+- They exist to guide humans and agents
+- Keeping them separate prevents standards from polluting dependency graphs
 
 ## Dhall Tips
 
+### Importing the schema
+
+The idiomatic way to use Mori types:
+
+```haskell
+let Schema = ./schema/package.dhall
+
+in  { project = { ... }, ... }
+```
+
+`Schema` gives you access to all types via dot notation: `Schema.PackageType.Application`, `Schema.Language.Haskell`, etc.
+
 ### Optional values
+
+Dhall uses `Some` for present values and `None <Type>` for absent ones:
 
 ```haskell
 , description = Some "Core payment logic"   -- present
@@ -195,18 +729,293 @@ Each name is resolved as a registered project in the local registry.
 
 ### Empty lists
 
+Empty lists require an explicit type annotation:
+
 ```haskell
 , packages = [] : List Schema.Package
 , standards = [] : List Text
+, docs = [] : List Schema.DocRef
 ```
 
 ### Integer literals
 
-Dhall requires a `+` prefix for positive integers:
+Dhall requires a `+` prefix for positive integers (used in automation config):
 
 ```haskell
 , timeout = Some +300
 , delaySeconds = +60
+```
+
+### Key-value maps
+
+Dhall represents maps as lists of `{ mapKey, mapValue }` records:
+
+```haskell
+, env = [ { mapKey = "CI", mapValue = "true" }
+        , { mapKey = "LOG_LEVEL", mapValue = "debug" }
+        ]
+```
+
+An empty map:
+
+```haskell
+, env = [] : List { mapKey : Text, mapValue : Text }
+```
+
+## Validation Rules
+
+Beyond Dhall type-checking, `mori validate` applies semantic validation:
+
+1. **Namespace** — must be non-empty and contain no whitespace
+2. **No duplicate package names** — package names must be unique within a project
+3. **Non-empty dependencies** — all dependency names must be non-empty strings
+4. **Bundle integrity** — `primary` must appear in `packages`; all package references must be non-empty
+
+### Common errors
+
+| Error | Fix |
+|-------|-----|
+| `Expression doesn't match annotated type` | Field type mismatch — check the enum variant spelling |
+| `Unbound variable` | Typo in a `Schema.` reference or missing import |
+| `List elements should all have the same type` | Mixing `Dependency.ByName` (Text) with bare strings — use the union type consistently |
+| `duplicate package name` | Two packages share the same `name` in the packages list |
+| `bundle primary not in packages` | The `primary` field references a package not listed in the bundle's `packages` |
+
+## Recipes
+
+### Single-package Haskell library
+
+```haskell
+let Schema = ./schema/package.dhall
+
+in  { project =
+      { name = "aeson-utils"
+      , namespace = "acme"
+      , type = Schema.PackageType.Library
+      , description = Some "Aeson helpers and orphan instances"
+      , language = Schema.Language.Haskell
+      , lifecycle = Schema.Lifecycle.Active
+      , domains = [ "Platform" ]
+      , owners = [ "platform-team" ]
+      , origin = Schema.Origin.Own
+      }
+    , repos =
+      [ { name = "main"
+        , github = Some "acme/aeson-utils"
+        , gitlab = None Text
+        , git = None Text
+        , localPath = None Text
+        }
+      ]
+    , packages =
+      [ { name = "aeson-utils"
+        , type = Schema.PackageType.Library
+        , language = Schema.Language.Haskell
+        , path = None Text
+        , description = Some "Aeson helpers"
+        , visibility = Schema.Visibility.Internal
+        , runtime = { deployable = False, exposesApi = False }
+        , dependencies = [ Schema.Dependency.ByName "aeson" ]
+        , docs = [] : List Schema.DocRef
+        , config = [] : List Schema.ConfigItem
+        }
+      ]
+    , bundles = [] : List Schema.PackageBundle
+    , dependencies = [ "aeson" ]
+    , apis = [] : List Schema.Api
+    , agents = [] : List Schema.AgentHint
+    , standards = [] : List Text
+    , docs = [] : List Schema.DocRef
+    }
+```
+
+### Multi-package service with API
+
+```haskell
+let Schema = ./schema/package.dhall
+
+in  { project =
+      { name = "order-service"
+      , namespace = "acme"
+      , type = Schema.PackageType.Application
+      , description = Some "Order management service"
+      , language = Schema.Language.Haskell
+      , lifecycle = Schema.Lifecycle.Active
+      , domains = [ "Orders", "Fulfillment" ]
+      , owners = [ "commerce-team" ]
+      , origin = Schema.Origin.Own
+      }
+    , repos =
+      [ { name = "main"
+        , github = Some "acme/order-service"
+        , gitlab = None Text
+        , git = None Text
+        , localPath = None Text
+        }
+      ]
+    , packages =
+      [ { name = "order-domain"
+        , type = Schema.PackageType.Library
+        , language = Schema.Language.Haskell
+        , path = Some "order-domain"
+        , description = Some "Order aggregate and domain events"
+        , visibility = Schema.Visibility.Internal
+        , runtime = { deployable = False, exposesApi = False }
+        , dependencies =
+          [ Schema.Dependency.ByName "effectful"
+          , Schema.Dependency.ByName "aeson"
+          ]
+        , docs = [] : List Schema.DocRef
+        , config = [] : List Schema.ConfigItem
+        }
+      , { name = "order-service"
+        , type = Schema.PackageType.Application
+        , language = Schema.Language.Haskell
+        , path = Some "order-service"
+        , description = Some "HTTP API and workers"
+        , visibility = Schema.Visibility.Internal
+        , runtime = { deployable = True, exposesApi = True }
+        , dependencies =
+          [ Schema.Dependency.ByName "order-domain"
+          , Schema.Dependency.ByName "hasql"
+          , Schema.Dependency.ByName "warp"
+          ]
+        , docs = [] : List Schema.DocRef
+        , config =
+          [ { key = "DATABASE_URL"
+            , type = Schema.ConfigValueType.Url
+            , required = True
+            , description = Some "PostgreSQL connection"
+            , sourceHint = Some (Schema.ConfigSourceHint.EnvVar "DATABASE_URL")
+            , example = Some "postgres://localhost:5432/orders"
+            }
+          , { key = "PORT"
+            , type = Schema.ConfigValueType.Integer
+            , required = False
+            , description = Some "HTTP listen port"
+            , sourceHint = Some (Schema.ConfigSourceHint.Default "8080")
+            , example = Some "8080"
+            }
+          ]
+        }
+      , { name = "order-client"
+        , type = Schema.PackageType.Client
+        , language = Schema.Language.TypeScript
+        , path = Some "order-client"
+        , description = Some "Generated TypeScript client"
+        , visibility = Schema.Visibility.Internal
+        , runtime = { deployable = False, exposesApi = False }
+        , dependencies = [] : List Schema.Dependency
+        , docs = [] : List Schema.DocRef
+        , config = [] : List Schema.ConfigItem
+        }
+      ]
+    , bundles = [] : List Schema.PackageBundle
+    , dependencies = [ "effectful", "aeson", "hasql", "warp" ]
+    , apis =
+      [ { name = "orders-api"
+        , type = Schema.ApiType.OpenAPI
+        , specPath = "api/openapi.yaml"
+        , owner = "order-service"
+        , dependencies =
+          [ { package = "order-client"
+            , role = Schema.ApiDependencyRole.Client
+            }
+          ]
+        , updatePolicy = Some
+          { strategy = Schema.ApiUpdateStrategy.ClientFirst
+          , allowBreaking = False
+          , requireTests = True
+          , consumerBatching = Schema.ConsumerBatching.Sequential
+          , notes = None Text
+          }
+        }
+      ]
+    , agents =
+      [ { role = "backend"
+        , description = Some "Backend development"
+        , includePaths = [ "order-domain/", "order-service/" ]
+        , excludePaths = [ "dist-newstyle/" ]
+        , relatedPackages = [ "order-domain", "order-service" ]
+        }
+      ]
+    , standards = [ "backend-architecture" ]
+    , docs =
+      [ { key = "order-flow"
+        , kind = Schema.DocKind.Guide
+        , audience = Schema.DocAudience.Internal
+        , description = Some "Order lifecycle and state machine"
+        , location = Schema.DocLocation.LocalFile "docs/order-flow.md"
+        }
+      , { key = "hasql-recipes"
+        , kind = Schema.DocKind.Cookbook
+        , audience = Schema.DocAudience.Module
+        , description = Some "Database query patterns for orders"
+        , location = Schema.DocLocation.LocalFile "docs/hasql-recipes.md"
+        }
+      ]
+    }
+```
+
+### TypeScript CLI tool
+
+```haskell
+let Schema = ./schema/package.dhall
+
+in  { project =
+      { name = "data-migrator"
+      , namespace = "acme"
+      , type = Schema.PackageType.Tool
+      , description = Some "Data migration CLI"
+      , language = Schema.Language.TypeScript
+      , lifecycle = Schema.Lifecycle.Active
+      , domains = [ "Platform" ]
+      , owners = [ "data-team" ]
+      , origin = Schema.Origin.Own
+      }
+    , repos =
+      [ { name = "main"
+        , github = Some "acme/data-migrator"
+        , gitlab = None Text
+        , git = None Text
+        , localPath = None Text
+        }
+      ]
+    , packages =
+      [ { name = "data-migrator"
+        , type = Schema.PackageType.Tool
+        , language = Schema.Language.TypeScript
+        , path = None Text
+        , description = Some "Migration CLI"
+        , visibility = Schema.Visibility.Internal
+        , runtime = { deployable = True, exposesApi = False }
+        , dependencies = [] : List Schema.Dependency
+        , docs = [] : List Schema.DocRef
+        , config =
+          [ { key = "SOURCE_DB_URL"
+            , type = Schema.ConfigValueType.Url
+            , required = True
+            , description = Some "Source database connection"
+            , sourceHint = Some (Schema.ConfigSourceHint.EnvVar "SOURCE_DB_URL")
+            , example = None Text
+            }
+          , { key = "TARGET_DB_URL"
+            , type = Schema.ConfigValueType.Url
+            , required = True
+            , description = Some "Target database connection"
+            , sourceHint = Some (Schema.ConfigSourceHint.EnvVar "TARGET_DB_URL")
+            , example = None Text
+            }
+          ]
+        }
+      ]
+    , bundles = [] : List Schema.PackageBundle
+    , dependencies = [] : List Text
+    , apis = [] : List Schema.Api
+    , agents = [] : List Schema.AgentHint
+    , standards = [] : List Text
+    , docs = [] : List Schema.DocRef
+    }
 ```
 
 ## What Belongs in `mori.dhall` vs `mori.automation.dhall`
@@ -218,8 +1027,12 @@ Dhall requires a `+` prefix for positive integers:
 | Dependencies | `mori.dhall` |
 | APIs and update policies | `mori.dhall` |
 | Agent roles and context hints | `mori.dhall` |
+| Configuration requirements | `mori.dhall` |
+| Documentation references | `mori.dhall` |
+| Standards adherence | `mori.dhall` |
 | Event selectors (what to watch) | `mori.automation.dhall` |
 | Reactions (what to do) | `mori.automation.dhall` |
 | Execution policy | `mori.automation.dhall` |
+| Scheduled actions | `mori.automation.dhall` |
 
 **Rule of thumb:** `mori.dhall` describes what a project _is_; `mori.automation.dhall` describes what _happens_.

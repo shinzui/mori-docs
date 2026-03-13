@@ -33,6 +33,10 @@ MessageDB installation... [OK]
 All checks passed.
 ```
 
+If either check shows `[FAIL]`, fix the indicated issue before continuing.
+
+---
+
 ## 1. Initialize a Project
 
 Navigate to your project's git repository and run:
@@ -52,9 +56,16 @@ The project name defaults to the current directory name. To override:
 mori init --name payments
 ```
 
+Output:
+
+```
+Created mori.dhall for project 'payments'
+Created mori/ directory
+```
+
 ### The generated `mori.dhall`
 
-If your repository has a `schema/` directory, the scaffold uses typed imports:
+If your repository has a `schema/` directory (e.g., you've cloned the mori schema), the scaffold uses typed imports:
 
 ```haskell
 let Schema = ./schema/package.dhall
@@ -68,6 +79,7 @@ in  { project =
       , lifecycle = Schema.Lifecycle.Active
       , domains = [] : List Text
       , owners = [] : List Text
+      , origin = Schema.Origin.Own
       }
     , repos = [] : List Schema.Repo
     , packages = [] : List Schema.Package
@@ -80,7 +92,80 @@ in  { project =
     }
 ```
 
+Otherwise, the scaffold inlines the full Dhall type definitions.
+
 ### Key fields to customize
+
+Edit `mori.dhall` to describe your project:
+
+```haskell
+let Schema = ./schema/package.dhall
+
+in  { project =
+      { name = "payments"
+      , namespace = "acme"
+      , type = Schema.PackageType.Application
+      , description = Some "Core payments service"
+      , language = Schema.Language.Haskell
+      , lifecycle = Schema.Lifecycle.Active
+      , domains = [ "Payments", "Billing" ]
+      , owners = [ "fintech-platform" ]
+      , origin = Schema.Origin.Own
+      }
+    , repos =
+      [ { name = "main"
+        , github = Some "acme/payments"
+        , gitlab = None Text
+        , git = None Text
+        , localPath = None Text
+        }
+      ]
+    , packages =
+      [ { name = "payments-core"
+        , type = Schema.PackageType.Library
+        , language = Schema.Language.Haskell
+        , path = Some "payments-core"
+        , description = Some "Core domain logic"
+        , visibility = Schema.Visibility.Internal
+        , runtime = { deployable = False, exposesApi = False }
+        , dependencies =
+          [ Schema.Dependency.ByName "effectful"
+          , Schema.Dependency.ByName "aeson"
+          ]
+        , docs = [] : List Schema.DocRef
+        , config = [] : List Schema.ConfigItem
+        }
+      , { name = "payments-service"
+        , type = Schema.PackageType.Application
+        , language = Schema.Language.Haskell
+        , path = Some "payments-service"
+        , description = Some "HTTP API server"
+        , visibility = Schema.Visibility.Internal
+        , runtime = { deployable = True, exposesApi = True }
+        , dependencies =
+          [ Schema.Dependency.ByName "payments-core" ]
+        , docs = [] : List Schema.DocRef
+        , config =
+          [ { key = "DATABASE_URL"
+            , type = Schema.ConfigValueType.Url
+            , required = True
+            , description = Some "PostgreSQL connection string"
+            , sourceHint = Some (Schema.ConfigSourceHint.EnvVar "DATABASE_URL")
+            , example = Some "postgres://localhost:5432/payments"
+            }
+          ]
+        }
+      ]
+    , bundles = [] : List Schema.PackageBundle
+    , dependencies = [ "effectful", "aeson", "hasql" ]
+    , apis = [] : List Schema.Api
+    , agents = [] : List Schema.AgentHint
+    , standards = [] : List Text
+    , docs = [] : List Schema.DocRef
+    }
+```
+
+**Available types for key fields:**
 
 | Field | Options |
 |---|---|
@@ -88,6 +173,8 @@ in  { project =
 | `language` | `Haskell`, `TypeScript`, `JavaScript`, `Python`, `Go`, `Rust`, `Java`, `Kotlin`, `Swift`, `Ruby`, `Elixir`, `Clojure`, `Scala`, `Dhall`, `Nix`, `SQL`, `Shell`, `Other` |
 | `lifecycle` | `Active`, `Experimental`, `Deprecated`, `Archived` |
 | `visibility` | `Public`, `Internal`, `Private` |
+
+---
 
 ## 2. Validate and Show
 
@@ -103,7 +190,11 @@ If the Dhall type-checks correctly:
 Configuration is valid.
 ```
 
+If there's an error (e.g., a typo or missing field), Dhall's type checker will report the exact issue.
+
 ### Show the project summary
+
+Human-readable view:
 
 ```bash
 mori show
@@ -116,16 +207,26 @@ Project: payments
   Language: Haskell
   Lifecycle: Active
   Description: Core payments service
+  Domains: Payments, Billing
+  Owners: fintech-platform
 
 Repos: 1
 Packages: 2
+Bundles: 0
+Dependencies: 3
+APIs: 0
+Agents: 0
+Standards: 0
+Docs: 0
 ```
 
-JSON output:
+JSON output (useful for piping to other tools):
 
 ```bash
 mori show --json
 ```
+
+---
 
 ## 3. Register in the Local Registry
 
@@ -135,7 +236,27 @@ Register your project in the event-sourced local registry:
 mori register --local
 ```
 
-Registration is idempotent — running it multiple times with the same config produces no duplicate events. If you change `mori.dhall` and re-register, mori computes a granular diff and emits only the specific change events.
+First registration:
+
+```
+Project registered: acme/payments
+```
+
+If you change `mori.dhall` and re-register, mori computes a granular diff and emits only the specific change events (e.g., type changed, dependency added, dependency removed):
+
+```
+Project updated: acme/payments
+```
+
+If nothing changed:
+
+```
+Project up to date: acme/payments
+```
+
+Registration is idempotent — running it multiple times with the same config produces no duplicate events.
+
+---
 
 ## 4. Dependency Management
 
@@ -147,7 +268,18 @@ Project-level dependencies are listed by name in `mori.dhall`:
 , dependencies = [ "effectful", "aeson", "hasql" ]
 ```
 
+Package-level dependencies use the `Dependency` type:
+
+```haskell
+, dependencies =
+  [ Schema.Dependency.ByName "effectful"
+  , Schema.Dependency.ByName "aeson"
+  ]
+```
+
 ### Resolve dependencies
+
+Check which declared dependencies are registered in the local registry:
 
 ```bash
 mori deps resolve
@@ -159,25 +291,62 @@ mori deps resolve
   [not found] hasql
 ```
 
+JSON output:
+
+```bash
+mori deps resolve --json
+```
+
+```json
+[
+  {"name": "effectful", "found": true, "projectId": "...", "packagePath": "..."},
+  {"name": "aeson", "found": true, "projectId": "...", "packagePath": "..."},
+  {"name": "hasql", "found": false, "projectId": null, "packagePath": null}
+]
+```
+
 ### Locate a specific dependency
 
 ```bash
 mori deps locate effectful
 ```
 
-### Explain resolution
+```
+Dependency: effectful
+  Project ID: <projectId>
+  Path: <packagePath>
+```
+
+### Explain a dependency's resolution
+
+Get the full resolution trace including the owning project:
 
 ```bash
 mori deps explain effectful
 ```
 
+```
+Dependency: effectful
+  Resolution: found in local registry
+  Project: acme/shared-libs
+  Project ID: <projectId>
+  Project Path: <path>
+  Package Path: <packagePath>
+  Registered: 2026-01-15T10:30:00Z
+  Packages: shared-core (Library, Haskell), shared-service (Application, Haskell)
+```
+
 All `deps` subcommands accept `--json` for structured output.
+
+---
 
 ## 5. Agent Context
 
 Agent hints tell AI coding assistants which parts of your project are relevant to specific roles.
 
 ### Declare agent hints
+
+Add agents to your `mori.dhall`:
 
 ```haskell
     , agents =
@@ -187,10 +356,29 @@ Agent hints tell AI coding assistants which parts of your project are relevant t
         , excludePaths = [ "node_modules/", ".stack-work/" ]
         , relatedPackages = [ "payments-core", "payments-service" ]
         }
+      , { role = "ops"
+        , description = Some "Operations and deployment"
+        , includePaths = [ "deploy/", "infra/" ]
+        , excludePaths = [] : List Text
+        , relatedPackages = [ "payments-service" ]
+        }
       ]
 ```
 
+### List configured roles
+
+```bash
+mori agent list
+```
+
+```
+backend - Backend development agent
+ops - Operations and deployment
+```
+
 ### Generate agent context
+
+Build a structured context JSON for a specific role (resolves dependencies from the registry):
 
 ```bash
 mori agent context backend
@@ -198,9 +386,13 @@ mori agent context backend
 
 This outputs a JSON object with the role's include/exclude paths, related packages, and resolved dependency information — ready to feed into an AI coding agent.
 
-## 6. Automation
+---
 
-Create `mori.automation.dhall` in your project root to declare which repository events to watch and how to react:
+## 6. Automation: Configuration
+
+Create `mori.automation.dhall` in your project root. This file declares which repository events to watch and how to react.
+
+### Minimal working example
 
 ```haskell
 let EventSelector = ./schema/automation/EventSelector.dhall
@@ -236,33 +428,495 @@ in  { events =
     }
 ```
 
-### Ingest and run
+### EventSelector types
+
+**ChangesetSelector** — matches commits by file paths, branch, and commit message:
+
+```haskell
+EventSelector.ChangesetSelector
+  { name = "api-changes"
+  , paths = [ "src/api/**", "openapi.yaml" ]
+  , branches = [ "main", "release/*" ]
+  , messagePatterns = [ "feat:*", "fix:*" ]
+  }
+```
+
+- `paths`: glob patterns matched against touched files (empty = match all)
+- `branches`: branch name patterns (empty = match all)
+- `messagePatterns`: commit message patterns (empty = match all)
+
+**RefSelector** — matches branch/tag pointer changes:
+
+```haskell
+EventSelector.RefSelector
+  { name = "release-tags"
+  , refPatterns = [ "v*", "release/*" ]
+  , kinds = [ "tag" ]
+  }
+```
+
+- `refPatterns`: ref name patterns
+- `kinds`: `"branch"`, `"tag"`, or empty for all
+
+### ReactionAction types
+
+**RunCommand** — execute a shell command:
+
+```haskell
+ReactionAction.RunCommand
+  { command = "cargo"
+  , args = [ "test", "--workspace" ]
+  , workingDir = Some "./backend"
+  , timeout = Some +300
+  , env = [ { mapKey = "RUST_LOG", mapValue = "info" } ]
+  }
+```
+
+**EmitEvent** — write a custom event to the event store:
+
+```haskell
+ReactionAction.EmitEvent
+  { eventType = "DeploymentRequested"
+  , streamName = "deployment-payments"
+  , eventData = [ { mapKey = "environment", mapValue = "staging" } ]
+  }
+```
+
+**Notify** — send an HTTP notification (webhook):
+
+```haskell
+ReactionAction.Notify
+  { url = "https://hooks.slack.com/services/T00/B00/xxxx"
+  , method = Some "POST"
+  , headers = [ { mapKey = "Content-Type", mapValue = "application/json" } ]
+  , bodyTemplate = Some "{\"text\": \"Source changed in payments\"}"
+  }
+```
+
+**Schedule** — delay an action by a number of seconds:
+
+```haskell
+ReactionAction.Schedule
+  { delaySeconds = +60
+  , action =
+      (./schema/automation/ReactionAction.dhall).RunCommand
+        { command = "make"
+        , args = [ "deploy" ]
+        , workingDir = None Text
+        , timeout = None Integer
+        , env = [] : List { mapKey : Text, mapValue : Text }
+        }
+  }
+```
+
+> **Dhall note:** Integer literals require a `+` prefix for positive values (e.g., `+60`, `+300`). Use `None Integer` for optional integers.
+
+Scheduled actions use the `ScheduledAction` type internally, which supports `RunCommand`, `EmitEvent`, and `Notify` but not nested `Schedule` (no recursive scheduling).
+
+### ExecutionPolicy
+
+Controls where and how actions run:
+
+```haskell
+, execution =
+  { allowLocal = True      -- run on the local machine
+  , allowCI = False         -- block execution in CI
+  , maxConcurrency = Some +4  -- at most 4 concurrent actions
+  }
+```
+
+---
+
+## 7. Automation: Ingest and Run
+
+### Ingest VCS history
+
+Normalize your git history into the event store:
 
 ```bash
-# Ingest git history
 mori automate ingest git
+```
 
-# Start the reactive engine
+```
+Ingested 42 changesets, 5 refs (47 events written)
+```
+
+On subsequent runs, only new commits since the last ingestion are processed:
+
+```bash
+mori automate ingest git
+```
+
+```
+Ingested 3 changesets, 0 refs (3 events written)
+```
+
+Ingestion is idempotent — running it multiple times without new commits produces no events.
+
+To ingest from a different repository path:
+
+```bash
+mori automate ingest git --path /path/to/repo
+```
+
+### Run the reactive engine
+
+Start the long-running automation engine:
+
+```bash
 mori automate run
 ```
 
-See the [Automation Guide](/docs/guides/automation) for full details.
+```
+Starting automation engine...
+  Config: mori.automation.dhall
+  Config hash: a1b2c3d4...
+  Queues initialized.
+  Subscriptions initialized. Listening for events...
+  Schedule worker started.
+```
+
+The engine:
+
+1. Loads and observes the automation config (emitting a `MoriAutomationObserved` event with a content hash)
+2. Creates pgmq queues for scheduled actions
+3. Starts three concurrent subscriptions:
+   - **Automation subscription** — matches repository events against selectors and triggers reactions
+   - **Executor subscription** — executes the triggered reaction actions
+   - **Registry subscription** — projects project events into the read model
+4. Starts a shibuya worker for processing scheduled actions
+
+To use a custom config path:
+
+```bash
+mori automate run --config my-automation.dhall
+```
+
+Stop the engine with `Ctrl+C` (SIGINT) or SIGTERM — it shuts down gracefully.
+
+---
+
+## 8. Automation: Observability
+
+### Inspect automation state
+
+View a summary of your automation config and reaction statistics:
+
+```bash
+mori automate inspect
+```
+
+```
+Automation Config Summary
+  Selectors: 2
+  Reactions: 1
+
+Reaction Statistics:
+  lint-on-change: 12
+
+Recent Reactions (last 10):
+  [completed] lint-on-change (trigger: ChangesetObserved @ repository-abc:15) 1200ms
+  [completed] lint-on-change (trigger: ChangesetObserved @ repository-abc:12) 980ms
+  [failed] lint-on-change (trigger: ChangesetObserved @ repository-abc:8) 3200ms [error: command exited with code 1]
+```
+
+JSON output (reaction statistics only):
+
+```bash
+mori automate inspect --json
+```
+
+### Explain a specific event
+
+Understand why an event at a given global position matched (or didn't match) your selectors:
+
+```bash
+mori automate explain 42
+```
+
+```
+Event at global position 42
+  Stream: repository-abc123
+  Type: ChangesetObserved
+
+Selector Matches:
+  [MATCH] src-changes (ChangesetSelector)
+    path matched: src/api/handler.hs
+  [SKIP] release-tags (RefSelector)
+    event type ChangesetObserved does not match RefSelector
+
+Triggered Reactions:
+  - lint-on-change
+```
+
+If no selectors matched:
+
+```
+Triggered Reactions: none
+```
+
+JSON output:
+
+```bash
+mori automate explain 42 --json
+```
+
+```json
+{
+  "globalPosition": 42,
+  "streamName": "repository-abc123",
+  "messageType": "ChangesetObserved",
+  "selectorMatches": [
+    {
+      "selectorName": "src-changes",
+      "selectorType": "ChangesetSelector",
+      "matched": true,
+      "reason": "path matched: src/api/handler.hs"
+    },
+    {
+      "selectorName": "release-tags",
+      "selectorType": "RefSelector",
+      "matched": false,
+      "reason": "event type ChangesetObserved does not match RefSelector"
+    }
+  ],
+  "triggeredReactions": ["lint-on-change"]
+}
+```
+
+---
+
+## 9. Advanced: Scheduled Actions
+
+Schedule a reaction action to run after a delay using `ReactionAction.Schedule`:
+
+```haskell
+let EventSelector = ./schema/automation/EventSelector.dhall
+let ReactionAction = ./schema/automation/ReactionAction.dhall
+let ScheduledAction = (./schema/automation/ReactionAction.dhall).RunCommand
+
+in  { events =
+      [ EventSelector.ChangesetSelector
+          { name = "deploy-trigger"
+          , paths = [ "deploy/**" ]
+          , branches = [ "main" ]
+          , messagePatterns = [] : List Text
+          }
+      ]
+    , reactions =
+      [ { name = "delayed-deploy"
+        , on = [ "deploy-trigger" ]
+        , actions =
+          [ ReactionAction.Schedule
+              { delaySeconds = +300
+              , action =
+                  ScheduledAction
+                    { command = "make"
+                    , args = [ "deploy", "staging" ]
+                    , workingDir = None Text
+                    , timeout = Some +600
+                    , env = [] : List { mapKey : Text, mapValue : Text }
+                    }
+              }
+          ]
+        }
+      ]
+    , execution =
+      { allowLocal = True
+      , allowCI = False
+      , maxConcurrency = None Integer
+      }
+    }
+```
+
+**How it works:**
+
+1. When a matching event is detected, the reaction enqueues the action onto a pgmq queue with the specified delay
+2. A shibuya worker polls the queue and executes the action once the delay has elapsed
+3. The worker runs alongside the automation subscriptions inside `mori automate run`
+
+---
+
+## 10. Advanced: Hot-Reload
+
+When `mori automate run` is active, you can modify `mori.automation.dhall` (add selectors, change reactions, etc.). On the next restart of `mori automate run`, mori:
+
+1. Loads the updated config
+2. Computes a new content hash
+3. Emits a `MoriAutomationObserved` event if the hash changed
+4. The automation subscription picks up the new config and starts matching with the updated selectors
+
+This means you can iterate on your automation rules without losing event history — only future events are matched against the new config.
+
+---
+
+## 11. Complete Example
+
+This walkthrough takes you from zero to a working automation setup.
+
+### Set up the project
+
+```bash
+# Start in your project directory
+cd ~/projects/payments
+
+# Initialize mori (assumes schema/ directory exists)
+mori init --name payments
+
+# Verify setup
+mori doctor
+```
+
+### Configure project identity
+
+Edit `mori.dhall`:
+
+```haskell
+let Schema = ./schema/package.dhall
+
+in  { project =
+      { name = "payments"
+      , namespace = "acme"
+      , type = Schema.PackageType.Application
+      , description = Some "Core payments service"
+      , language = Schema.Language.Haskell
+      , lifecycle = Schema.Lifecycle.Active
+      , domains = [ "Payments" ]
+      , owners = [ "fintech-platform" ]
+      , origin = Schema.Origin.Own
+      }
+    , repos =
+      [ { name = "main"
+        , github = Some "acme/payments"
+        , gitlab = None Text
+        , git = None Text
+        , localPath = None Text
+        }
+      ]
+    , packages =
+      [ { name = "payments-core"
+        , type = Schema.PackageType.Library
+        , language = Schema.Language.Haskell
+        , path = Some "payments-core"
+        , description = Some "Core domain logic"
+        , visibility = Schema.Visibility.Internal
+        , runtime = { deployable = False, exposesApi = False }
+        , dependencies = [ Schema.Dependency.ByName "aeson" ]
+        , docs = [] : List Schema.DocRef
+        , config = [] : List Schema.ConfigItem
+        }
+      ]
+    , bundles = [] : List Schema.PackageBundle
+    , dependencies = [ "aeson" ]
+    , apis = [] : List Schema.Api
+    , agents =
+      [ { role = "backend"
+        , description = Some "Backend development"
+        , includePaths = [ "payments-core/" ]
+        , excludePaths = [] : List Text
+        , relatedPackages = [ "payments-core" ]
+        }
+      ]
+    , standards = [] : List Text
+    , docs = [] : List Schema.DocRef
+    }
+```
+
+### Validate and register
+
+```bash
+# Type-check the config
+mori validate
+
+# View the summary
+mori show
+
+# Register in the local registry
+mori register --local
+```
+
+### Set up automation
+
+Create `mori.automation.dhall`:
+
+```haskell
+let EventSelector = ./schema/automation/EventSelector.dhall
+let ReactionAction = ./schema/automation/ReactionAction.dhall
+
+in  { events =
+      [ EventSelector.ChangesetSelector
+          { name = "core-changes"
+          , paths = [ "payments-core/**" ]
+          , branches = [ "main" ]
+          , messagePatterns = [] : List Text
+          }
+      ]
+    , reactions =
+      [ { name = "test-on-core-change"
+        , on = [ "core-changes" ]
+        , actions =
+          [ ReactionAction.RunCommand
+              { command = "cabal"
+              , args = [ "test", "payments-core" ]
+              , workingDir = None Text
+              , timeout = Some +120
+              , env = [] : List { mapKey : Text, mapValue : Text }
+              }
+          ]
+        }
+      ]
+    , execution =
+      { allowLocal = True
+      , allowCI = False
+      , maxConcurrency = None Integer
+      }
+    }
+```
+
+### Ingest, run, and observe
+
+```bash
+# Ingest existing git history
+mori automate ingest git
+
+# Start the reactive engine (runs in foreground)
+mori automate run
+
+# --- In another terminal ---
+
+# Make a change and commit
+echo "-- update" >> payments-core/src/Lib.hs
+git add -A && git commit -m "Update core logic"
+
+# Ingest the new commit
+mori automate ingest git
+
+# The running engine will match the event and trigger the test reaction.
+# Check what happened:
+mori automate inspect
+
+# Explain a specific event (use the global position from inspect output)
+mori automate explain 15
+```
+
+---
 
 ## Quick Reference
 
-| Command | Description |
-|---|---|
-| `mori doctor` | Check PostgreSQL and MessageDB |
-| `mori init [--name NAME]` | Create `mori.dhall` scaffold |
-| `mori validate` | Type-check `mori.dhall` |
-| `mori show [--json]` | Display project summary |
-| `mori register [--local]` | Register in local registry |
-| `mori deps resolve [--json]` | Check dependency resolution |
-| `mori deps locate NAME [--json]` | Find a dependency |
-| `mori deps explain NAME [--json]` | Full resolution trace |
-| `mori agent list [--json]` | List agent roles |
-| `mori agent context ROLE` | Generate agent context JSON |
-| `mori automate ingest git` | Ingest git history |
-| `mori automate run` | Start reactive engine |
-| `mori automate inspect [--json]` | Config summary + stats |
-| `mori automate explain POS [--json]` | Explain event matching |
+| Command | Description | Requires DB |
+|---|---|---|
+| `mori doctor` | Check PostgreSQL and MessageDB | Yes |
+| `mori init [--name NAME]` | Create `mori.dhall` scaffold | No |
+| `mori validate` | Type-check `mori.dhall` | No |
+| `mori show [--json]` | Display project summary | No |
+| `mori register [--local]` | Register in local registry | Yes |
+| `mori deps resolve [--json]` | Check dependency resolution | Yes |
+| `mori deps locate NAME [--json]` | Find a dependency | Yes |
+| `mori deps explain NAME [--json]` | Full resolution trace | Yes |
+| `mori agent list [--json]` | List agent roles | No |
+| `mori agent context ROLE` | Generate agent context JSON | Yes |
+| `mori automate ingest git [--path PATH]` | Ingest git history | Yes |
+| `mori automate run [-c PATH] [--path PATH]` | Start reactive engine | Yes |
+| `mori automate inspect [-c PATH] [--json]` | Config summary + stats | Yes |
+| `mori automate explain POS [-c PATH] [--json]` | Explain event matching | Yes |
+| `mori schema migrate [--apply] [--dry-run]` | Check or apply schema migrations | No |

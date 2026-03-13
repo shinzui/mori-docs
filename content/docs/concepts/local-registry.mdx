@@ -11,50 +11,185 @@ The local registry is mori's event-sourced store for project metadata. It record
 1. **Event store** — events written to MessageDB streams (`project-{namespace}:{name}`)
 2. **Read model** — projection tables in the `mori` schema, populated by a subscription
 
-Commands like `deps resolve`, `deps locate`, `deps explain`, and `agent context` query the read model.
+Commands like `deps resolve`, `deps locate`, `deps explain`, and `agent context` query the read model. Without running the subscription that populates it, these tables stay empty even after registration.
 
 ## Database Setup
 
 Mori requires PostgreSQL with [MessageDB](https://github.com/message-db/message-db) installed.
 
+Set the connection string:
+
 ```bash
 export MORI_PG_CONNECTION_STRING="host=localhost port=5432 dbname=mori_dev"
+```
+
+Verify connectivity and MessageDB installation:
+
+```bash
 mori doctor
 ```
 
+```
+✓ Database connection successful
+✓ MessageDB installed
+✓ Required tables exist
+```
+
 ### Running Migrations
+
+Migrations create all required schemas and tables:
 
 ```bash
 cabal run mori-migrations
 ```
 
+Four phases run in order:
+
+| Phase | What it creates |
+|-------|----------------|
+| TypeID functions | UUIDv7 generation, base32 encoding for type-safe IDs |
+| MessageDB schema | `message_store` schema and event store tables |
+| PGMQ schema | Queue infrastructure for scheduled actions |
+| Application tables | `mori` schema with 10 SQL migration scripts |
+
+A final migration sets the PostgreSQL `search_path` to `public, message_store, mori` so queries can reference tables without schema prefixes.
+
 Migrations are idempotent — safe to re-run at any time.
 
 ## Registry Tables
 
-All tables live in the `mori` schema:
+All application tables live in the `mori` schema.
 
-| Table | Purpose |
-|-------|---------|
-| `projects` | Project identity and metadata |
-| `packages` | Per-package metadata |
-| `dependencies` | Dependency name to project path mapping |
-| `bundles` | Package groupings |
-| `repository_configs` | Observed automation configuration |
-| `reaction_history` | Reaction execution log |
-| `checkpoints` | Subscription progress tracking |
+### projects
+
+Project identity and metadata. One row per registered project.
+
+```sql
+CREATE TABLE mori.projects (
+  id TEXT PRIMARY KEY,
+  namespace TEXT NOT NULL,
+  name TEXT NOT NULL,
+  project_type TEXT NOT NULL,
+  path TEXT NOT NULL,
+  config_hash TEXT,
+  registered_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  message_position BIGINT NOT NULL DEFAULT 0,
+  UNIQUE (namespace, name)
+);
+```
+
+### packages
+
+Per-package metadata. The `id` format is `{project_id}:{package_name}`.
+
+```sql
+CREATE TABLE mori.packages (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES mori.projects(id),
+  name TEXT NOT NULL,
+  package_type TEXT NOT NULL,
+  language TEXT NOT NULL,
+  path TEXT,
+  message_position BIGINT NOT NULL DEFAULT 0
+);
+```
+
+### dependencies
+
+Maps dependency names to the projects that provide them.
+
+```sql
+CREATE TABLE mori.dependencies (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  project_id TEXT NOT NULL REFERENCES mori.projects(id),
+  package_path TEXT,
+  message_position BIGINT NOT NULL DEFAULT 0
+);
+```
+
+### bundles
+
+Package groupings with a designated primary package.
+
+```sql
+CREATE TABLE mori.bundles (
+  name TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES mori.projects(id),
+  packages TEXT[] NOT NULL,
+  primary_package TEXT NOT NULL,
+  message_position BIGINT NOT NULL DEFAULT 0
+);
+```
+
+### repository_configs
+
+Tracks observed automation configuration (used by config hot-reload).
+
+```sql
+CREATE TABLE mori.repository_configs (
+  repo_id TEXT PRIMARY KEY,
+  config_hash TEXT,
+  automation_hash TEXT,
+  selector_count INTEGER,
+  reaction_count INTEGER,
+  observed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  message_position BIGINT NOT NULL DEFAULT 0
+);
+```
+
+### reaction_history
+
+Execution log for automation reactions.
+
+```sql
+CREATE TABLE mori.reaction_history (
+  id TEXT PRIMARY KEY,
+  triggering_stream TEXT NOT NULL,
+  triggering_position BIGINT NOT NULL,
+  triggering_message_type TEXT NOT NULL,
+  reaction_name TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'triggered',
+  started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  completed_at TIMESTAMPTZ,
+  duration_ms BIGINT,
+  error_message TEXT,
+  message_position BIGINT NOT NULL DEFAULT 0
+);
+```
+
+### checkpoints
+
+Tracks subscription progress. Each named subscription stores the last global position it processed.
+
+```sql
+CREATE TABLE checkpoints (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  stream TEXT NOT NULL,
+  last_processed_global_position BIGINT,
+  last_processed_at TIMESTAMPTZ
+);
+```
+
+Every table with a `message_position` column uses it for idempotent upserts — a write only takes effect if its position is newer than the stored one.
 
 ## How Registration Works
 
-When you run `mori register --local`:
+When you run `mori register --local`, the following happens:
 
 1. **Load config** — reads `mori.dhall` from the current directory
 2. **Check existence** — queries the read model for `(namespace, name)`
-3. **New project** — generates a `proj_*` TypeID and emits `ProjectRegistered`
-4. **Existing project** — computes a granular diff, emits only specific change events
-5. **Write events** — appends to `project-{namespace}:{name}` stream
+3. **New project** — generates a `proj_*` TypeID and emits a `ProjectRegistered` event containing all project metadata
+4. **Existing project** — computes a granular diff against the current state and emits only the specific change events needed (type changed, package added, etc.)
+5. **Write events** — appends events to the stream `project-{namespace}:{name}`
+
+If nothing changed, mori prints "Project up to date" and emits no events.
 
 ## Event Types
+
+All events are written to streams named `project-{namespace}:{name}` under the `project` category.
 
 | Event | When emitted |
 |-------|-------------|
@@ -62,13 +197,32 @@ When you run `mori register --local`:
 | `ProjectTypeChanged` | Project type differs from stored value |
 | `ProjectPathChanged` | Project path differs from stored value |
 | `ProjectPackageAdded` | New package not in current state |
-| `ProjectPackageRemoved` | Package removed from config |
+| `ProjectPackageRemoved` | Package in current state not in new config |
 | `ProjectPackageUpdated` | Package exists but fields changed |
-| `ProjectDependencyAdded` | New dependency added |
-| `ProjectDependencyRemoved` | Dependency removed from config |
-| `ProjectBundleAdded` | New bundle added |
-| `ProjectBundleRemoved` | Bundle removed from config |
+| `ProjectDependencyAdded` | New dependency not in current state |
+| `ProjectDependencyRemoved` | Dependency in current state not in new config |
+| `ProjectBundleAdded` | New bundle not in current state |
+| `ProjectBundleRemoved` | Bundle in current state not in new config |
 | `ProjectBundleUpdated` | Bundle exists but fields changed |
+
+## Subscriptions and Projections
+
+The registry subscription runs as part of `mori automate run`. Three subscriptions start concurrently:
+
+| Subscription | Category | Purpose |
+|-------------|----------|---------|
+| `mori-registry` | `project` | Projects events into read model tables |
+| `mori-automation` | `repository` | Matches events against selectors, triggers reactions |
+| `mori-reaction-executor` | `reaction` | Executes triggered reaction actions |
+
+The registry handler parses each event and performs the corresponding database operation:
+
+- **Registered** → upsert project + all packages, dependencies, bundles
+- **Changed/Updated** → targeted `UPDATE` of the specific column
+- **Added** → `INSERT` into the relevant table
+- **Removed** → `DELETE` from the relevant table
+
+All operations are idempotent — the handler checks `message_position` ordering before applying changes. The subscription checkpoint tracks the last processed `global_position` so it resumes where it left off after restarts.
 
 ## Populating the Read Model
 
@@ -82,13 +236,67 @@ mori register --local
 mori automate run
 ```
 
-Without step 2, the read model tables stay empty. Once `mori automate run` is running, it continuously processes new events.
+Without step 2, the read model tables stay empty. Commands that query the read model (`deps resolve`, `deps locate`, `deps explain`, `agent context`) require both steps to return results.
+
+Once `mori automate run` is running, it continuously processes new events. You can register additional projects in another terminal and the read model updates automatically.
+
+## Verifying the Registry
+
+### Check registered projects
+
+```sql
+SELECT id, namespace, name, project_type, path
+FROM mori.projects;
+```
+
+### Check packages
+
+```sql
+SELECT id, project_id, name, package_type, language, path
+FROM mori.packages;
+```
+
+### Check dependencies
+
+```sql
+SELECT name, project_id, package_path
+FROM mori.dependencies;
+```
+
+### Check bundles
+
+```sql
+SELECT name, project_id, packages, primary_package
+FROM mori.bundles;
+```
+
+### Check events in the store
+
+```sql
+SELECT stream_name, type, position, global_position, time
+FROM message_store.messages
+WHERE stream_name LIKE 'project-%'
+ORDER BY global_position;
+```
+
+### Check subscription progress
+
+```sql
+SELECT name, stream, last_processed_global_position, last_processed_at
+FROM checkpoints;
+```
+
+Compare `last_processed_global_position` against the highest `global_position` in `message_store.messages` to see if the subscription is caught up.
 
 ## Troubleshooting
 
+### Tables don't exist
+
+Migrations haven't been run. Run `cabal run mori-migrations` and verify with `mori doctor`.
+
 ### Read model empty despite events existing
 
-The subscription hasn't been started. Run `mori automate run`.
+The subscription hasn't been started. Run `mori automate run` to start processing events into the read model tables.
 
 ### Stale projections
 
@@ -100,10 +308,18 @@ FROM checkpoints
 WHERE name = 'mori-registry';
 ```
 
-### Replaying from scratch
+If the position is behind the latest event, the subscription may have stopped. Restart `mori automate run`.
+
+### Replaying the subscription from scratch
+
+Delete the checkpoint row and restart:
 
 ```sql
 DELETE FROM checkpoints WHERE name = 'mori-registry';
 ```
 
-Then restart `mori automate run`. The subscription reprocesses all events from the beginning. All operations are idempotent.
+```bash
+mori automate run
+```
+
+The subscription reprocesses all events from the beginning. Because all operations are idempotent, the final read model state is the same.

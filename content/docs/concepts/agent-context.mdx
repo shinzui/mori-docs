@@ -31,6 +31,60 @@ Dependency
         └── cookbooks / examples
 ```
 
+## Prerequisites
+
+- A `mori.dhall` config with `agents` entries
+- Dependencies registered in the local registry (see [Local Registry](/docs/concepts/local-registry))
+- Registry subscription running (`mori automate run`) to populate read model tables
+
+## Configuring Agent Roles
+
+Agent roles are declared in the `agents` section of `mori.dhall`:
+
+```haskell
+let Schema = ./schema/package.dhall
+
+in  { -- ...other fields...
+      agents =
+      [ { role = "backend"
+        , description = Some "Backend development agent"
+        , includePaths = [ "src/", "lib/" ]
+        , excludePaths = [ "dist-newstyle/", "node_modules/" ]
+        , relatedPackages = [ "mori-core", "mori-cli" ]
+        }
+      , { role = "api-design"
+        , description = Some "API design and review agent"
+        , includePaths = [ "api/", "schema/" ]
+        , excludePaths = [] : List Text
+        , relatedPackages = [ "mori-core" ]
+        }
+      ]
+    }
+```
+
+### AgentHint Fields
+
+| Field | Type | Purpose |
+|-------|------|---------|
+| `role` | `Text` | Unique role identifier passed to `mori agent context` |
+| `description` | `Optional Text` | Human-readable description shown by `mori agent list` |
+| `includePaths` | `List Text` | Paths the agent should focus on |
+| `excludePaths` | `List Text` | Paths the agent should ignore |
+| `relatedPackages` | `List Text` | Package names relevant to this role |
+
+## Listing Roles
+
+```bash
+mori agent list
+```
+
+```
+backend - Backend development agent
+api-design - API design and review agent
+```
+
+If no agents are configured, prints "No agent roles configured."
+
 ## How Agent Context Works
 
 When you run:
@@ -41,40 +95,103 @@ mori agent context backend
 
 Mori:
 
-1. Finds the agent hint matching `backend`
-2. Resolves each dependency from the registry
-3. Loads each dependency's `mori.dhall` to extract its docs
-4. Resolves standards as registered projects
-5. Extracts cookbooks from the project's docs
+1. Loads `mori.dhall` from the current directory
+2. Finds the agent hint matching the requested role
+3. Resolves each project-level dependency by name from the registry
+4. For each dependency, loads its `mori.dhall` to extract its docs
+5. Resolves standards as registered projects
+6. Extracts cookbooks from project-level docs (where `kind = Cookbook`)
+
+### JSON Output Format
 
 The result is a self-contained JSON document:
 
 ```json
 {
-  "role": "backend-refactor",
+  "role": "backend",
   "project": "payment-service",
-  "includePaths": [ "src" ],
-  "excludePaths": [ "dist-newstyle" ],
+  "includePaths": [
+    "src/",
+    "lib/"
+  ],
+  "excludePaths": [
+    "dist-newstyle/"
+  ],
   "standards": [
-    { "name": "backend-architecture", "path": "/Users/dev/standards/backend-architecture/docs" }
+    {
+      "name": "backend-architecture",
+      "path": "/home/dev/standards/backend-architecture"
+    }
   ],
   "dependencies": [
     {
       "name": "streamly",
-      "projectPath": "/Users/dev/oss/streamly-project",
+      "projectPath": "/home/dev/oss/streamly-project",
       "packages": [
-        { "name": "streamly", "path": "/Users/dev/oss/streamly-project/streamly" }
+        {
+          "name": "streamly",
+          "path": "/home/dev/oss/streamly-project/streamly"
+        },
+        {
+          "name": "streamly-core",
+          "path": "/home/dev/oss/streamly-project/streamly-core"
+        }
       ],
       "docs": [
-        { "key": "folds-guide", "path": "/Users/dev/oss/streamly-project/docs/folds-guide.md" }
+        {
+          "name": "folds-guide",
+          "path": "/home/dev/oss/streamly-project/docs/folds-guide.md"
+        }
       ]
     }
   ],
   "cookbooks": [
-    { "name": "db-patterns", "path": "/Users/dev/services/payment-service/docs/db-patterns.md" }
+    {
+      "name": "db-patterns",
+      "path": "/home/dev/services/payment-service/docs/db-patterns.md"
+    }
   ]
 }
 ```
+
+### Output Fields
+
+| Field | Source |
+|-------|--------|
+| `role` | The requested role name |
+| `project` | `project.name` from `mori.dhall` |
+| `includePaths` | Agent hint `includePaths` |
+| `excludePaths` | Agent hint `excludePaths` |
+| `standards` | Resolved from `standards` list — each name looked up as a registered project |
+| `dependencies` | Resolved from `dependencies` list — each name looked up in the registry, packages and docs included |
+| `cookbooks` | Filtered from `docs` where `kind = Cookbook` |
+
+## How Resolution Works
+
+### Dependencies
+
+Each name in the top-level `dependencies` list is looked up in the registry's
+`mori.projects` table. For each found project:
+
+1. Check if a bundle with the same name exists — if so, include only the
+   bundle's packages
+2. Otherwise, include all packages registered under that project
+3. Load the dependency's own `mori.dhall` to extract its documentation entries
+
+Missing dependencies produce a warning on stderr and are skipped:
+
+```
+Warning: dependency 'missing-lib' not found in registry
+```
+
+### Standards
+
+Each name in the `standards` list is looked up as a registered project. The
+resolved path points to the standard project's root directory.
+
+### Cookbooks
+
+Docs with `kind = Cookbook` receive special treatment. They're extracted from the project's own `docs` list into a dedicated `cookbooks` field in the agent context output so agents can discover practical recipes automatically. Paths are resolved relative to the project root.
 
 ## Dependency Projects and the Local Registry
 
@@ -112,9 +229,33 @@ Bundles group related packages that are typically used together. When a dependen
     ]
 ```
 
-## Cookbooks
+## Integration with AI Agents
 
-Docs with `kind = Cookbook` receive special treatment. They're extracted into a dedicated `cookbooks` field in the agent context output so agents can discover practical recipes automatically.
+The JSON output is designed to be piped into agent tooling:
+
+```bash
+# Pipe directly to an agent
+mori agent context backend | my-agent --context -
+
+# Save for later use
+mori agent context backend > .agent-context.json
+
+# Use in a script
+CONTEXT=$(mori agent context backend)
+```
+
+The `includePaths` and `excludePaths` fields tell the agent which parts of the
+codebase are relevant to its role. The `dependencies` field provides resolved
+paths to source code and documentation for each dependency, enabling the agent
+to understand the project's dependency graph without manual configuration.
+
+## Errors
+
+| Error | Cause |
+|-------|-------|
+| `role 'X' not found in agent configuration` | The requested role doesn't exist in `mori.dhall` `agents` |
+| `dependency 'X' not registered` | A dependency name couldn't be found in the registry |
+| `failed to build agent context` | Database or effect stack error |
 
 ## Design Principles
 

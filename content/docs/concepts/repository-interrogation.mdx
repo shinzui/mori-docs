@@ -1,0 +1,235 @@
+---
+title: Repository Interrogation
+description: How Mori interrogates a repository after receiving a VCS event, loads configuration, and activates reactions
+icon: SearchCode
+---
+
+Mori interrogates repositories to determine participation and activate reactions in a replay-safe, event-sourced way:
+
+- **Observation, not assumption** — Mori observes facts about a repo rather than checking it
+- **Configuration as domain data** — discovery, loading, validation, and activation are modeled as events
+- **Deterministic** — interrogation always happens at a specific changeset, never implicitly at HEAD
+- **Compatible** with Git, Jujutsu (jj), local-first workflows, CI/ephemeral checkouts, and incremental replay
+
+## Problem Statement
+
+Given a VCS event (e.g. `ChangesetObserved`), Mori must answer:
+
+1. Does this repository participate in Mori?
+2. If yes, **which configuration version applies**?
+3. What actions should be taken **as a result of this event under that configuration**?
+
+Constraints:
+
+- No implicit assumptions
+- No reliance on mutable filesystem state during replay
+- Configuration changes must be observable and auditable
+
+## Repository Context Resolution
+
+Before interrogating configuration, Mori must resolve a *repository context*.
+
+```haskell
+data RepoContext
+  = LocalRepo
+      { root :: FilePath }
+  | CheckedOutRepo
+      { root     :: FilePath
+      , revision :: ObjectId
+      }
+```
+
+Rules:
+
+- Local ingestion uses `LocalRepo`
+- CI / hosted ingestion uses `CheckedOutRepo`
+- Interrogation always happens **at a specific changeset**, never implicitly at `HEAD`
+
+## Configuration Discovery
+
+Mori configuration is discovered at **exactly one location**:
+
+```
+<repo-root>/mori.dhall
+```
+
+No directory walking. No heuristics.
+
+Benefits:
+
+- Deterministic behavior
+- Cheap interrogation
+- Easy caching
+
+## Interrogation Result Model
+
+The result of checking a repository for Mori participation is explicit:
+
+```haskell
+data MoriInterrogationResult
+  = MoriAbsent
+  | MoriPresent MoriConfigRef
+```
+
+```haskell
+data MoriConfigRef = MoriConfigRef
+  { path       :: FilePath
+  , hash       :: ContentHash
+  , observedAt :: UTCTime
+  }
+```
+
+The `hash` is a **content hash**, not mtime. This enables change detection, replay, and caching.
+
+## Configuration Loading Pipeline
+
+Configuration loading is a **pure, staged pipeline**:
+
+1. **Read** `mori.dhall`
+2. **Parse** (Dhall syntax)
+3. **Normalize** (defaults, imports resolved)
+4. **Validate** (semantic rules)
+
+```haskell
+loadMoriConfig
+  :: RepoContext
+  -> MoriConfigRef
+  -> Either MoriConfigError MoriConfig
+```
+
+Only validated configurations may activate reactions.
+
+## MoriConfigObserved Event
+
+Successful configuration loading emits a first-class domain event:
+
+```haskell
+data MoriConfigObservedV1 = MoriConfigObservedV1
+  { repo       :: RepoId
+  , configHash :: ContentHash
+  , config     :: MoriConfig
+  }
+```
+
+Why this matters:
+
+- Configuration becomes **versioned domain data**
+- Replay behavior is deterministic
+- Config-driven reactions are auditable
+
+## Invalid or Missing Configuration
+
+### Missing config
+
+- Emit nothing
+- Repo remains inactive
+
+### Invalid config
+
+Emit:
+
+```haskell
+data MoriConfigInvalidV1 = MoriConfigInvalidV1
+  { repo   :: RepoId
+  , errors :: [MoriConfigError]
+  }
+```
+
+Invalid config:
+
+- Blocks reactions
+- Surfaces actionable diagnostics
+- Does not poison future valid configs
+
+## Active Configuration Projection
+
+Mori maintains a derived projection:
+
+```haskell
+ActiveMoriConfig :: RepoId -> Maybe ContentHash
+```
+
+Rules:
+
+- Updated only by `MoriConfigObserved`
+- Cleared by config removal or invalidation (optional policy)
+
+Reactor logic becomes:
+
+```haskell
+onEvent event =
+  case lookupActiveMoriConfig event.repo of
+    Nothing  -> noop
+    Just cfg -> runMoriReactions cfg event
+```
+
+## Caching Strategy
+
+### Config Content Cache (performance)
+
+- Key: `(repoUuid, configHash)`
+- Value: parsed + validated `MoriConfig`
+- Safe to evict at any time
+
+### Active Config Projection (correctness)
+
+- Key: `repoUuid`
+- Value: current `configHash`
+- Rebuilt by replaying events
+
+Never conflate these two.
+
+## When Interrogation Occurs
+
+Interrogation is triggered **only when configuration may have changed**:
+
+1. First time seeing a repository
+2. A changeset modifies `mori.dhall` or `mori.automation.dhall`
+3. A config import dependency changes (future)
+4. Explicit user action: `mori refresh`
+
+All other events reuse cached state.
+
+## Reactor Integration Model
+
+Full pipeline:
+
+```
+VCS Event
+  |
+Resolve RepoContext
+  |
+Interrogate Config (if needed)
+  |
+Emit MoriConfigObserved / Invalid
+  |
+Project Active Config
+  |
+Run Config-Driven Reactions
+```
+
+Configuration is **not read dynamically** during reaction execution.
+
+## Failure Modes and Guarantees
+
+| Scenario | Outcome |
+|---|---|
+| No mori.dhall | Safe noop |
+| Invalid config | Explicit error event |
+| Config removed | Active config cleared |
+| Replay months later | Identical behavior |
+
+This design guarantees:
+
+- Determinism
+- Idempotency
+- Local/CI parity
+
+## Relationship to Mori Philosophy
+
+- Metadata is explicit
+- State is derived
+- Configuration is domain data
+- Behavior is explainable
+
+> **Mori activates repositories by observation, not assumption.**

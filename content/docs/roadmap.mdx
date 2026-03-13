@@ -12,105 +12,231 @@ Mori is built in three phases:
 | **Phase 2** | Global Registry | Organization-wide coordination and sync |
 | **Phase 3** | Advanced Features | Version pinning, trust policies, cross-repo workflows |
 
-## Phase 1: Local-First (Complete)
+## Phase 1: Local-First
 
-A developer can use Mori entirely locally to initialize and validate projects, register dependencies, query agent context, ingest VCS events, and run automation.
+**Goal**: A developer can use Mori entirely locally to:
+- Initialize and validate projects
+- Register dependencies (wrapper projects)
+- Query agent context
+- Ingest VCS events and run automation
 
 ### 1.1 Foundation
 
-- PostgreSQL + MessageDB setup
-- Effect stack (`MoriEffects` type)
-- TypeID integration for repos, projects, packages
+**Objective**: Core infrastructure that everything else builds on.
+
+#### 1.1.1 PostgreSQL + MessageDB Setup
+- [x] Nix flake with PostgreSQL and MessageDB extension
+- [x] Database migrations infrastructure (using existing migration package)
+- [x] MessageDB schema setup
+- [x] Connection pool configuration
+
+#### 1.1.2 Effect Stack
+- [x] Define `MoriEffects` type
+- [x] Wire up MessageDB, Hasql, Trace effects
+- [x] Error handling types
+- [x] Testing infrastructure (`ephemeral-pg` for real PostgreSQL in tests)
+
+#### 1.1.3 TypeID Integration
+- [x] TypeID generation for repos, projects, packages
+- [x] Serialization/deserialization
+
+**Deliverable**: `mori doctor` command that verifies database connectivity.
 
 ### 1.2 Schema & Validation
 
-- Dhall parsing and evaluation
-- Type-checking against schema
-- `mori init`, `mori validate`, `mori show` commands
+**Objective**: Parse and validate `mori.dhall` files.
+
+#### 1.2.1 Dhall Integration
+- [x] Dhall parsing and evaluation
+- [x] Type-checking against schema
+- [x] Error messages for invalid configs
+
+#### 1.2.2 Core Commands
+- [x] `mori init` — scaffold `mori.dhall` and generate repo TypeID
+- [x] `mori validate` — parse and type-check config
+- [x] `mori show` — render evaluated config (human and JSON)
+
+**Deliverable**: Can initialize a project and validate its config.
 
 ### 1.3 Local Registry
 
-- Granular project events (11 event types)
-- PostgreSQL projection tables
-- `mori register --local`, `mori deps` commands
+**Objective**: Register projects and resolve dependencies by name.
+
+#### 1.3.1 Registry Events
+- [x] `ProjectRegistered` event type
+- [x] Granular update events (`ProjectPackageAdded/Removed/Updated`, `ProjectDependencyAdded/Removed`, `ProjectBundleAdded/Removed/Updated`, `ProjectTypeChanged`, `ProjectPathChanged`)
+- [x] Stream: `project-{project_typeid}` (TypeID-based)
+
+#### 1.3.2 Registry Projection
+- [x] `mori.projects` table
+- [x] `mori.packages` table
+- [x] `mori.dependencies` table
+- [x] `mori.bundles` table
+- [x] `mori-registry` subscription (runs inside `mori automate run`)
+
+#### 1.3.3 Registry Commands
+- [x] `mori register --local` — emit ProjectRegistered event
+- [x] `mori deps locate <name>` — query dependency projection
+- [x] `mori deps resolve` — resolve all dependencies
+- [x] `mori deps explain <name>` — show resolution trace (text + JSON output)
+
+**Deliverable**: Can register wrapper projects and resolve dependencies by name.
 
 ### 1.4 Agent Context
 
-- Dependency resolution from registry
-- Documentation path resolution
-- Standards lookup and bundle expansion
-- `mori agent context`, `mori agent list` commands
+**Objective**: Assemble structured context for AI coding agents.
+
+#### 1.4.1 Context Assembly
+- [x] Dependency resolution (from registry projection)
+- [x] Documentation path resolution
+- [x] Standards lookup
+- [x] Bundle expansion
+
+#### 1.4.2 Agent Commands
+- [x] `mori agent context <role>` — output JSON context
+- [x] `mori agent list` — list configured agent roles
+
+**Deliverable**: Agent can query Mori for project context.
 
 ### 1.5 VCS Ingestion
 
-- Git adapter with cursor management
-- `ChangesetObserved` and `RefObserved` events
-- `mori automate ingest git` command
+**Objective**: Observe and normalize VCS events.
 
-### 1.6 Automation Engine
+#### 1.5.1 Git Adapter
+- [x] Parse git log for commits
+- [x] Detect branch/tag changes
+- [x] Normalize to canonical events
+- [x] Cursor management (last processed commit)
 
-- Automation config parsing (`mori.automation.dhall`)
-- Event selectors with glob matching
-- Reaction execution (RunCommand, EmitEvent, Notify, Schedule)
-- Long-running `mori automate run` with 4 concurrent subscriptions
-- Observability: `mori automate inspect`, `mori automate explain`
+#### 1.5.2 VCS Events
+- [x] `ChangesetObserved` event type
+- [x] `RefObserved` event type
+- [x] Stream: `repository-{repo_typeid}`
+
+#### 1.5.3 Ingestion Commands
+- [x] `mori automate ingest git` — ingest new commits
+- [x] `mori automate ingest --repo <path>` — specify repo
+
+**Deliverable**: Can ingest git history into event store.
+
+### 1.6 Automation Engine (1.6a / 1.6b)
+
+**Objective**: React to VCS events based on automation config.
+
+#### 1.6.1 Automation Config
+- [x] Parse `mori.automation.dhall`
+- [x] Event selectors (path, branch, VCS filters)
+- [x] Reaction definitions
+- [x] Dhall schema files (`schema/automation/`)
+- [x] Config validation (unique selectors, valid references)
+
+#### 1.6.2 Config Events (1.6b)
+- [x] `MoriConfigObserved` event type (mori.dhall observation, emitted on `automate run` startup)
+- [x] `MoriAutomationObserved` event type (emitted on `automate run` startup, idempotent by hash)
+- [x] Config projection table (`mori.repository_configs`) + IORef-based hot-reload
+
+#### 1.6.3 Automation Subscription
+- [x] `mori-automation` subscription
+- [x] Event matching logic (glob patterns: `*`, `**`)
+- [x] Trigger reaction events
+
+#### 1.6.4 Reaction Execution
+- [x] `ReactionTriggered` event type
+- [x] `ReactionCompleted` / `ReactionFailed` events
+- [x] `mori-reaction-executor` subscription
+- [x] RunCommand action (shell execution)
+- [x] Notify action (HTTP webhook via curl)
+- [x] EmitEvent action
+- [x] Schedule action (shibuya + pgmq delayed execution)
+
+#### 1.6.5 Automation Commands
+- [x] `mori automate run` — long-running dual-subscription worker (emits config observation on startup)
+- [x] `mori automate inspect` — show config summary + reaction statistics
+- [x] `mori automate explain <pos>` — explain which selectors match a specific event
+
+#### 1.6.6 Reaction Aggregate
+- [x] Reaction domain types (`ReactionId`, `ReactionResult`)
+- [x] Reaction decider (Initial → Pending → Done)
+- [x] Reaction infrastructure (stream building, state reconstruction)
+- [x] Reaction application handler (trigger/complete/fail)
+- [x] Reaction projection table (`mori.reaction_history`) with inline projection in ExecutorHandler
+
+**Deliverable**: Automation reacts to commits matching configured rules.
 
 ### 1.7 Jujutsu Support (Stretch)
 
-- jj adapter (operation log parsing)
-- `ChangesetRewritten` event handling
+**Objective**: Support jj as alternative VCS.
+
+- [ ] jj adapter (operation log parsing)
+- [ ] `ChangesetRewritten` event handling
+- [ ] `mori automate ingest jj`
+
+### Phase 1 Milestone
+
+**"Local Mori"**: A developer can:
+1. Initialize a Mori project
+2. Register dependency wrapper projects
+3. Query agent context for their service
+4. Ingest git commits
+5. Run automation reactions locally
 
 ## Phase 2: Global Registry
 
+**Goal**: Organization-wide project discovery, dependency resolution, and policy.
+
 ### 2.1 Global Registry Service
 
-- Separate registry service (API)
-- Authentication/authorization
-- Project namespace management
+- [ ] Separate registry service (API)
+- [ ] Authentication/authorization
+- [ ] Project namespace management
+- [ ] Global event store instance
 
 ### 2.2 Registry Sync
 
-- Push local registrations to global
-- Pull global metadata to local cache
-- Conflict resolution and offline operation
+- [ ] Sync protocol design
+- [ ] Push local registrations to global
+- [ ] Pull global metadata to local cache
+- [ ] Conflict resolution
+- [ ] Offline operation
 
 ### 2.3 Organization Features
 
-- Namespace creation and management
-- Team ownership
-- Project discovery and search
-- Dependency graph visualization
+- [ ] Namespace creation and management
+- [ ] Team ownership
+- [ ] Project discovery and search
+- [ ] Dependency graph visualization
 
 ### 2.4 CI Integration
 
-- Registry-gated execution
-- Policy enforcement
-- Trust levels
+- [ ] `mori automate ci run` — registry-gated execution
+- [ ] Policy enforcement
+- [ ] Trust levels
 
 ## Phase 3: Advanced Features
 
 ### 3.1 Version Pinning
 
-- Dependency version constraints
-- Lock file generation
-- Reproducible builds
+- [ ] Dependency version constraints
+- [ ] Lock file generation
+- [ ] Reproducible builds
 
 ### 3.2 Trust & Policies
 
-- Signed policies
-- Trust level verification
-- Automation allow/deny lists
+- [ ] Signed policies
+- [ ] Trust level verification
+- [ ] Automation allow/deny lists
 
 ### 3.3 Cross-Repo Workflows
 
-- EmitEvent across repositories
-- Workflow orchestration
-- Dependency update propagation
+- [ ] EmitEvent across repositories
+- [ ] Workflow orchestration
+- [ ] Dependency update propagation
 
 ### 3.4 Event Versioning
 
-- Automatic upcasting
-- Schema registry
+- [ ] Elegant versioning solution (in progress)
+- [ ] Automatic upcasting
+- [ ] Schema registry
 
 ## Implementation Order (Phase 1)
 
@@ -141,3 +267,51 @@ A developer can use Mori entirely locally to initialize and validate projects, r
                         ├── subscriptions
                         └── reaction execution
 ```
+
+## Open Design Questions
+
+### Resolved
+
+| Question | Decision |
+|----------|----------|
+| Event store | MessageDB on PostgreSQL |
+| Local registry storage | PostgreSQL projections (not SQLite) |
+| Dependency model | Registry-first resolution |
+| ProjectType vs PackageType | Merged into PackageType |
+| Repository identity | TypeID generated on `mori init` |
+| Project namespace | Required `namespace` field in Project.dhall |
+| touchedPaths in ChangesetObserved | Included in payload for path-based matching |
+| Project-level dependencies | `List Text` at project root; `List Dependency` (union) at Package level |
+| Cookbooks | Modeled as `docs` entries with `kind = Cookbook` |
+| ApiUpdatePolicy location | Stays in identity schema (SCHEMA.md) with behavioral note |
+| Worker process model | Long-running `mori automate run` with 4 concurrent subscriptions (registry, config-observation, automation, reaction-executor) |
+
+### Still Open
+
+| Question | Notes |
+|----------|-------|
+| VCS Adapter mechanism | Git hooks? Polling? fswatch? (Phase 1: CLI-driven `mori automate ingest`) |
+| Event versioning | Elegant solution in progress |
+| Standards distribution | How are org-wide standards versioned and resolved? |
+
+## Success Criteria
+
+### Phase 1 Complete When
+
+- [x] `mori init` creates valid project
+- [x] `mori register --local` registers project in local registry
+- [x] `mori deps locate` resolves dependencies by name
+- [x] `mori agent context` returns structured JSON
+- [x] `mori automate ingest git` populates event store
+- [x] `mori automate run` executes matching reactions
+- [ ] All commands work offline (no network required)
+- [ ] Test coverage > 80%
+- [ ] Documentation complete
+
+### Phase 2 Complete When
+
+- [ ] Global registry service deployed
+- [ ] `mori register` pushes to global registry
+- [ ] `mori registry sync` pulls updates
+- [ ] CI can enforce registry policies
+- [ ] Cross-team dependency resolution works

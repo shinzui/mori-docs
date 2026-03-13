@@ -4,40 +4,593 @@ description: Command specification and internal architecture of the mori CLI
 icon: SquareTerminal
 ---
 
-The mori CLI is designed as a **single binary** that is local-first, registry-enhanced, with explicit side effects and explainable behavior.
+This document is the **authoritative CLI specification** for Mori. It enumerates all supported CLI commands, defines their intent and behavior, and locks in naming and semantics.
+
+## CLI Design Principles
+
+1. **Single binary** -- `mori`
+2. **Local-first** -- works without a registry
+3. **Registry-enhanced** -- global discovery when available
+4. **Explicit side effects** -- no background mutation
+5. **Explainable behavior** -- every decision can be inspected
 
 ## Command Groups
+
+The CLI is organized into clear domains. Each command must be deterministic and scriptable.
 
 | Group | Commands |
 |-------|---------|
 | Core | `init`, `validate`, `show` |
 | Registry | `register`, `search`, `registry status`, `registry sync` |
-| Navigation | `cd`, `open` |
-| Dependencies | `deps resolve`, `deps explain`, `deps locate`, `introspect` |
+| Navigation | `cd`, `path`, `open` |
+| Authoring | `add project`, `add package`, `add dependency`, `add api`, `add standard` |
+| Dependencies | `deps resolve`, `deps explain`, `deps locate`, `deps tree`, `introspect` |
+| Schema | `schema print`, `schema upgrade` |
 | APIs | `api graph`, `api impact`, `api update-plan` |
-| Agents | `agent list`, `agent context` |
+| Agents | `agent assist`, `agent bootstrap`, `agent context`, `agent list` |
 | Standards | `standards list`, `standards show` |
 | Config | `config list`, `config validate` |
-| Automation | `automate ingest`, `automate run`, `automate inspect`, `automate explain` |
+| Automation | `automate ingest`, `automate run`, `automate generate`, `automate watch`, `automate inspect`, `automate explain` |
+| Shell | `alias list`, `completions`, `help` |
 | Diagnostics | `explain`, `doctor` |
 
 ## Core Commands
 
 ### `mori init`
 
-Initialize Mori in a repository. Creates `mori.dhall` and `mori/` directory. Never overwrites existing files without confirmation.
+Initialize Mori in a repository.
+
+```bash
+mori init
+```
+
+Behavior:
+
+- creates `mori.dhall`
+- creates directory layout (`mori/`)
+- optionally prompts for standards
+- never overwrites existing files without confirmation
 
 ### `mori validate`
 
-Validate the current Mori configuration: Dhall type-checking, schema compatibility, and internal reference integrity.
+Validate the current Mori configuration.
+
+```bash
+mori validate
+```
+
+Checks:
+
+- Dhall type-checking
+- schema compatibility
+- internal reference integrity
+
+Exit codes:
+
+- `0` valid
+- `1` invalid
 
 ### `mori show`
 
-Render evaluated Mori metadata in human-readable or JSON format.
+Render evaluated Mori metadata.
 
-## Internal Architecture
+```bash
+mori show
+mori show --json
+```
 
-Every CLI command follows the same pipeline:
+## Registry Commands
+
+### `mori register`
+
+Register the current project in the Mori registry.
+
+```bash
+mori register
+```
+
+Behavior:
+
+- validates Mori
+- evaluates Dhall to canonical JSON
+- uploads metadata
+- records registration receipt
+
+Flags:
+
+- `--dry-run`
+- `--explain`
+- `--force`
+- `--local` -- register in local registry only (no global upload)
+
+### `mori search`
+
+Search the Mori registry.
+
+```bash
+mori search <query>
+mori search --type library
+mori search --language haskell
+```
+
+### `mori registry status`
+
+Check registry connectivity and authentication.
+
+```bash
+mori registry status
+```
+
+### `mori registry sync`
+
+Sync local registry cache from global registry.
+
+```bash
+mori registry sync
+mori registry sync --full
+```
+
+Behavior:
+
+- pulls updated metadata from global registry
+- updates local SQLite cache
+- does not modify project files
+
+Flags:
+
+- `--full` -- full resync (not incremental)
+- `--dry-run` -- show what would be synced
+
+## Navigation Commands
+
+### `mori cd`
+
+Navigate to a registered project.
+
+```bash
+mori cd <project>
+```
+
+Rules:
+
+- prefers existing local checkout
+- prompts before cloning
+
+### `mori path`
+
+Print the filesystem path of a project, package, or documentation reference with existence validation.
+
+```bash
+mori path <project>                    # project root path
+mori path <project> --package [NAME]   # package path (interactive if no name)
+mori path <project> --doc [KEY]        # doc location (interactive if no key)
+```
+
+Features:
+
+- resolves project by name or `namespace/name`
+- validates path exists on disk before printing
+- uses FZF for interactive selection when name/key omitted
+- prints path to stdout, errors to stderr (pipeline-friendly)
+
+### `mori open`
+
+Open documentation or source.
+
+```bash
+mori open streamly:folds
+mori open api:MLS\ Public\ API
+```
+
+## Authoring Commands
+
+### `mori add project`
+
+Add project metadata fields interactively.
+
+```bash
+mori add project
+```
+
+### `mori add package`
+
+Add a package definition.
+
+```bash
+mori add package <name>
+```
+
+### `mori add dependency`
+
+Add a dependency using registry metadata.
+
+```bash
+mori add dependency <name>
+```
+
+### `mori add api`
+
+Add an API definition.
+
+```bash
+mori add api <name>
+```
+
+### `mori add standard`
+
+Declare adherence to a standard project.
+
+```bash
+mori add standard backend-architecture
+```
+
+## Dependency Commands
+
+### `mori deps resolve`
+
+Resolve dependency metadata.
+
+```bash
+mori deps resolve
+mori deps resolve --explain
+```
+
+### `mori deps explain`
+
+Explain how a dependency was resolved.
+
+```bash
+mori deps explain streamly
+```
+
+### `mori deps locate`
+
+Locate a dependency on the local filesystem.
+
+```bash
+mori deps locate streamly
+mori deps locate streamly --json
+```
+
+Output:
+
+- filesystem path to registered project
+- documentation paths
+- package bundle info (if applicable)
+
+Resolution order:
+
+1. Local registry
+2. Global registry (if online)
+3. Not found
+
+### `mori deps tree`
+
+Display dependency tree.
+
+```bash
+mori deps tree
+mori deps tree --max-depth 3
+mori deps tree --json
+```
+
+### `mori introspect`
+
+Inspect build files for dependencies.
+
+```bash
+mori introspect
+mori introspect cabal
+```
+
+## API Commands
+
+### `mori api graph`
+
+Render API dependency graph.
+
+```bash
+mori api graph
+```
+
+### `mori api impact`
+
+Show impact of API changes.
+
+```bash
+mori api impact <api>
+```
+
+### `mori api update-plan`
+
+Generate an update plan.
+
+```bash
+mori api update-plan <api>
+```
+
+## Schema Commands
+
+### `mori schema print`
+
+Print the embedded Dhall schema definitions.
+
+```bash
+mori schema print              # print all schema types
+mori schema print types        # print type definitions only
+mori schema print records      # print record definitions only
+mori schema print automation   # print automation types only
+```
+
+### `mori schema upgrade`
+
+Upgrade to a newer schema version.
+
+```bash
+mori schema upgrade            # upgrade to next version
+mori schema upgrade --latest   # upgrade to latest (resolved from GitHub)
+```
+
+## Agent Commands
+
+### `mori agent assist`
+
+Generate a system prompt for AI assistants with full project context.
+
+```bash
+mori agent assist
+mori agent assist --debug
+```
+
+### `mori agent bootstrap`
+
+Bootstrap an agent with project context, optionally including corpus data.
+
+```bash
+mori agent bootstrap
+mori agent bootstrap --corpus
+mori agent bootstrap --namespace acme --name my-project
+mori agent bootstrap --upstream https://github.com/org/repo
+```
+
+### `mori agent context`
+
+Generate context for a specific agent role.
+
+```bash
+mori agent context <role>
+```
+
+### `mori agent list`
+
+List agent roles.
+
+```bash
+mori agent list
+mori agent list --json
+```
+
+## Standards Commands
+
+### `mori standards list`
+
+List applicable standards.
+
+```bash
+mori standards list
+```
+
+### `mori standards show`
+
+Show standard details.
+
+```bash
+mori standards show backend-architecture
+```
+
+## Config Commands
+
+### `mori config list`
+
+List required config.
+
+```bash
+mori config list <package>
+```
+
+### `mori config validate`
+
+Validate infra config.
+
+```bash
+mori config validate
+mori config validate --k8s ./k8s
+```
+
+## Automation Commands
+
+Commands for VCS event ingestion and reactive automation.
+
+### `mori automate ingest`
+
+Ingest VCS events into the local event store.
+
+```bash
+mori automate ingest git
+mori automate ingest jj
+mori automate ingest --repo /path/to/repo --vcs git
+```
+
+Behavior:
+
+- scans VCS history for new events
+- normalizes to canonical event format
+- appends to local event store
+- updates cursor position
+
+### `mori automate run`
+
+Execute pending reactions.
+
+```bash
+mori automate run
+mori automate run --once
+mori automate run --dry-run
+```
+
+Behavior:
+
+- evaluates event selectors against pending events
+- checks policy resolution
+- executes allowed reactions
+- records execution for idempotency
+
+Flags:
+
+- `--once` -- process one batch, then exit
+- `--dry-run` -- show what would run without executing
+- `--explain` -- show matching logic
+
+### `mori automate generate`
+
+Generate automation config templates.
+
+```bash
+mori automate generate registry-sync
+mori automate generate registry-sync -o custom.dhall
+```
+
+### `mori automate watch`
+
+Watch repositories for VCS events continuously.
+
+```bash
+mori automate watch
+mori automate watch --repos /path/a,/path/b
+```
+
+Behavior:
+
+- monitors repositories for new events
+- ingests automatically
+- runs reactions when allowed
+
+### `mori automate inspect`
+
+Inspect automation configuration.
+
+```bash
+mori automate inspect
+mori automate inspect --json
+```
+
+Output:
+
+- automation config status
+- config hash
+- execution policy (local/CI)
+- registered event selectors
+
+### `mori automate explain`
+
+Explain why a reaction did or did not run.
+
+```bash
+mori automate explain event <event-id>
+mori automate explain reaction <reaction-name>
+```
+
+Output:
+
+- event matching details
+- policy resolution trace
+- idempotency status
+
+## Shell Integration Commands
+
+### `mori alias list`
+
+List configured command aliases.
+
+```bash
+mori alias list
+```
+
+### `mori completions`
+
+Generate shell completions.
+
+```bash
+mori completions bash
+mori completions fish
+mori completions zsh
+```
+
+### `mori help`
+
+Show help for a topic.
+
+```bash
+mori help <topic>
+```
+
+## Diagnostics & Explainability
+
+### `mori explain`
+
+Explain Mori decisions.
+
+```bash
+mori explain dependency streamly
+mori explain api MLS\ Public\ API
+```
+
+### `mori doctor`
+
+Run consistency checks.
+
+```bash
+mori doctor
+```
+
+## Global Flags
+
+```
+--json       Output in JSON format
+--explain    Show resolution decisions
+--offline    Disable registry access
+--registry   Specify registry name
+```
+
+## Exit Code Policy
+
+| Code | Meaning |
+|------|---------|
+| `0` | Success |
+| `1` | Validation error |
+| `2` | Registry unavailable |
+| `3` | User abort |
+
+## Non-Goals
+
+- Mori will not run builds
+- Mori will not deploy services
+- Mori will not mutate code without explicit request
+
+## CLI Architecture (Implementation)
+
+This section defines the **internal architecture** of the Mori CLI. It is written to directly guide implementation (especially in Haskell), not as a conceptual overview.
+
+The architecture is designed to ensure:
+
+- deterministic behavior
+- explainability
+- clear separation of concerns
+- testability
+
+### High-Level Pipeline
+
+Every Mori CLI command follows the same conceptual pipeline:
 
 ```
 Command
@@ -55,37 +608,177 @@ Decision / Planning
 Rendering (human / json)
 ```
 
+No command is allowed to skip stages implicitly.
+
 ### Core Modules
 
-1. **CLI Frontend** — parse arguments, select command, collect flags. No business logic.
-2. **Execution Context** — locate `mori.dhall` root, load user config, determine registry mode.
-3. **Mori Loader** — load and type-check Dhall files, evaluate to canonical representation.
-4. **Resolution Engine** — pure dependency/standard resolution. Produces both results and an explanation trace.
-5. **Registry Client** — optional remote registry access. Never mutates local state.
-6. **Planning Layer** — interpret resolved model for a command. Plans are data, not actions.
-7. **Rendering Layer** — render output in human-readable or JSON format.
+#### 1. CLI Frontend
 
-### Explainability
+**Responsibility:**
 
-Every decision-making stage emits structured explanations. The `mori explain` command is simply a **view** over this trace.
+- parse arguments
+- select command
+- collect flags
 
-## Exit Codes
+**Constraints:**
 
-| Code | Meaning |
-|------|---------|
-| `0` | Success |
-| `1` | Validation error |
-| `2` | Registry unavailable |
-| `3` | User abort |
+- no business logic
+- no IO beyond argument parsing
 
-## Global Flags
+#### 2. Execution Context
 
+**Responsibility:**
+
+- locate `mori.dhall` root
+- load user config (`~/.config/mori`)
+- determine registry configuration
+- determine offline/online mode
+
+This produces a single immutable value:
+
+```haskell
+ExecutionContext
+  { cwd :: FilePath
+  , moriRoot :: FilePath
+  , registryMode :: RegistryMode
+  , outputFormat :: OutputFormat
+  }
 ```
---json       Output in JSON format
---explain    Show resolution decisions
---offline    Disable registry access
---registry   Specify registry name
+
+#### 3. Mori Loader
+
+**Responsibility:**
+
+- load Dhall files
+- type-check
+- evaluate to canonical internal representation
+
+**Important rules:**
+
+- Dhall is evaluated exactly once per command
+- all errors are surfaced here
+
+Example modules:
+
+- `Mori.Loader`
+- `Mori.Schema`
+
+#### 4. Resolution Engine
+
+**Responsibility:**
+
+- dependency resolution
+- standard resolution
+- registry lookup
+- merge semantics
+
+This is where **all deterministic logic lives**.
+
+Key properties:
+
+- pure (no IO)
+- produces both results *and* an explanation trace
+
+```haskell
+resolve :: ResolveInput -> (ResolvedModel, ResolveTrace)
 ```
+
+Example modules:
+
+- `Mori.Resolve.Dependencies`
+- `Mori.Resolve.Standards`
+
+#### 5. Registry Client
+
+**Responsibility:**
+
+- talk to remote registry (optional)
+- fetch / push metadata
+
+**Rules:**
+
+- never mutates local state
+- all failures are explicit
+- disabled entirely in `--offline` mode
+
+Example modules:
+
+- `Mori.Registry.Client`
+
+#### 6. Planning Layer
+
+**Responsibility:**
+
+- interpret resolved model for a command
+- produce a plan or report
+
+Examples:
+
+- API update plan
+- dependency impact report
+- agent context plan
+
+Plans are **data**, not actions.
+
+```haskell
+plan :: ResolvedModel -> Plan
+```
+
+#### 7. Rendering Layer
+
+**Responsibility:**
+
+- render output
+- human-readable or JSON
+
+**Rules:**
+
+- rendering never affects decisions
+- all rendering uses plan + trace
+
+Example modules:
+
+- `Mori.Render.Text`
+- `Mori.Render.JSON`
+
+### Explainability (First-Class)
+
+Every decision-making stage must emit structured explanations.
+
+```haskell
+ResolveTrace
+  { dependencyTraces :: [DependencyTrace]
+  , standardTraces :: [StandardTrace]
+  }
+```
+
+The `mori explain` command is simply a **view** over this trace.
+
+## Error Model
+
+Errors are categorized and surfaced consistently:
+
+- Schema errors (Dhall / typing)
+- Resolution errors (conflicts, ambiguity)
+- Registry errors (network, auth)
+- User aborts
+
+Errors must never be stringly-typed.
+
+## Testing Strategy
+
+- Resolution engine: pure unit tests
+- Loader: golden tests
+- CLI: snapshot tests
+
+Registry client is always mockable.
+
+## Architectural Invariants
+
+- No hidden IO in resolution
+- No registry access without explicit enablement
+- No mutation without explicit command
+- All decisions explainable
 
 ## Mental Model
 
@@ -94,3 +787,5 @@ Every decision-making stage emits structured explanations. The `mori explain` co
 > - Resolution = semantic analysis
 > - Plans = IR
 > - Rendering = backend
+
+This framing should guide all implementation decisions.

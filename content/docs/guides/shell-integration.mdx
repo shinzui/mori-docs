@@ -23,7 +23,7 @@ A subprocess cannot change the working directory of its parent shell. The `mori`
 
 Add the following to `~/.zshrc`:
 
-```zsh
+```text
 mori() {
   if [[ "$1" == "cd" ]]; then
     shift
@@ -57,7 +57,7 @@ mori() {
 
 Add the following to `~/.config/fish/functions/mori.fish`:
 
-```fish
+```text
 function mori
     if test (count $argv) -ge 1; and test "$argv[1]" = "cd"
         set -l target (command mori cd $argv[2..])

@@ -11,7 +11,30 @@ Mori uses event sourcing as its core persistence model:
 - **Projections** (read models) are stored in PostgreSQL tables for fast queries
 - **Subscriptions** process events and update projections
 
+This architecture enables:
+
+- Full audit trail of all changes
+- Deterministic replay
+- Horizontal scaling via consumer groups
+- Same infrastructure for local and global registry (Phase 2)
+
+## Why MessageDB Over SQLite
+
+The original design considered SQLite for simplicity. MessageDB was chosen because:
+
+| Concern | SQLite | MessageDB |
+|---------|--------|-----------|
+| Event storage | Custom schema | Purpose-built |
+| Subscriptions | Manual implementation | Built-in |
+| Idempotency | Manual implementation | Checkpoints |
+| Horizontal scaling | Not supported | Consumer groups |
+| Observability | Manual | OpenTelemetry integration |
+| Code reuse | New code | Existing `message-db-hs` ecosystem |
+| Global registry | Different implementation | Same infrastructure |
+
 ## Infrastructure
+
+### PostgreSQL with MessageDB
 
 ```
 PostgreSQL
@@ -27,7 +50,30 @@ PostgreSQL
     ├── bundles
     ├── repository_configs
     ├── reaction_history
+    ├── repository_stream_day
     └── checkpoints
+```
+
+### Local Development
+
+PostgreSQL runs locally via Nix (already standard in projects). The `flake.nix` provides:
+
+```text
+services.postgres = {
+  enable = true;
+  extensions = [ "message-db" ];
+};
+```
+
+### Migrations
+
+Migrations use the existing migration package pattern:
+
+```
+migrations/
+├── 001_message_db_setup.sql
+├── 002_mori_projections.sql
+└── ...
 ```
 
 ## Identity: TypeIDs
@@ -40,7 +86,24 @@ proj_01h455vb4pex5vsknk084sn02q      # Project
 pkg_01h455vb4pex5vsknk084sn02q       # Package
 ```
 
-Repository IDs are generated on `mori init` and are stable across renames and moves.
+### Repository ID
+
+- Generated on `mori init`
+- Stored in `mori.dhall` (or a local metadata file)
+- Stable across renames and moves
+
+### Project Namespace
+
+Projects have a required namespace (organization):
+
+```
+@acme/payments-service
+@acme/streamly-project
+```
+
+- Namespace does NOT have to match GitHub org
+- Enables registry-style naming (`@org/project`)
+- Required for all projects
 
 ## Stream Organization
 
@@ -69,35 +132,234 @@ project       → All project/registry events
 reaction      → All reaction events
 ```
 
+### Stream Naming Convention
+
+```
+{category}-{entity_id}
+
+Examples:
+  repository-repo_01h455vb4pex5vsknk084sn02q
+  project-@acme:payments-service
+  reaction-evt_01h455vb4pex5vsknk084sn02q:notify-slack
+```
+
 ## Event Types
 
 ### Repository Events (5 types)
 
-- `ChangesetObserved` — a commit was ingested from VCS
-- `RefObserved` — a branch/tag pointer changed
-- `MoriAutomationObserved` — automation config loaded (idempotent by hash)
-- `MoriConfigObserved` — project config loaded
-- `RepositoryDayOpened` — daily stream partitioning marker
+Defined in `Mori.Modules.Repository.Domain.Event`. Top-level uses TaggedObject `"type"`/`"data"` encoding via `eventAesonOptions`; nested data types use `defaultOptions` (camelCase).
+
+```haskell
+data RepositoryEvent
+  = ChangesetObserved !ChangesetObservedData
+  | RefObserved !RefObservedData
+  | MoriAutomationObserved !MoriAutomationObservedData
+  | MoriConfigObserved !MoriConfigObservedData
+  | RepositoryDayOpened !RepositoryDayOpenedData
+
+data ChangesetObservedData = ChangesetObservedData
+  { repoId      :: !RepoId
+  , changesetId :: !ObjectId
+  , treeId      :: !ObjectId
+  , parents     :: ![ObjectId]
+  , author      :: !PersonStamp
+  , committer   :: !PersonStamp
+  , message     :: !CommitMessage
+  , refs        :: ![Text]
+  , touchedPaths :: ![Text]        -- Files changed; used for automation matching
+  , metadata    :: !(Map Text Text)
+  }
+
+data RefObservedData = RefObservedData
+  { repoId  :: !RepoId
+  , refName :: !Text
+  , refKind :: !RefKind
+  , target  :: !(Maybe ObjectId)   -- Nothing = deleted
+  }
+
+data MoriConfigObservedData = MoriConfigObservedData
+  { repoId     :: !RepoId
+  , configHash :: !Text
+  }
+
+data MoriAutomationObservedData = MoriAutomationObservedData
+  { repoId         :: !RepoId
+  , automationHash :: !Text
+  , selectorCount  :: !Int
+  , reactionCount  :: !Int
+  }
+
+data RepositoryDayOpenedData = RepositoryDayOpenedData
+  { repoId        :: !RepoId
+  , day           :: !Day
+  , vcsType       :: !VcsType
+  , repoPath      :: !Text
+  , activatedAt   :: !UTCTime
+  , lastChangeset :: !(Maybe ObjectId)
+  , automationHash :: !(Maybe Text)
+  , configHash    :: !(Maybe Text)
+  }
+```
 
 ### Project Events (11 types)
 
-Granular events for precise change tracking:
+Defined in `Mori.Modules.Project.Domain.Event`. Uses granular events (no monolithic `ProjectUpdated`):
 
-- `ProjectRegistered` — first registration
-- `ProjectTypeChanged`, `ProjectPathChanged` — field-level changes
-- `ProjectPackageAdded`, `ProjectPackageRemoved`, `ProjectPackageUpdated`
-- `ProjectDependencyAdded`, `ProjectDependencyRemoved`
-- `ProjectBundleAdded`, `ProjectBundleRemoved`, `ProjectBundleUpdated`
+```haskell
+data ProjectEvent
+  = ProjectRegistered !ProjectRegisteredData
+  | ProjectTypeChanged !ProjectTypeChangedData
+  | ProjectPathChanged !ProjectPathChangedData
+  | ProjectPackageAdded !ProjectPackageAddedData
+  | ProjectPackageRemoved !ProjectPackageRemovedData
+  | ProjectPackageUpdated !ProjectPackageUpdatedData
+  | ProjectDependencyAdded !ProjectDependencyAddedData
+  | ProjectDependencyRemoved !ProjectDependencyRemovedData
+  | ProjectBundleAdded !ProjectBundleAddedData
+  | ProjectBundleRemoved !ProjectBundleRemovedData
+  | ProjectBundleUpdated !ProjectBundleUpdatedData
+
+data ProjectRegisteredData = ProjectRegisteredData
+  { projectId    :: !ProjectId
+  , namespace    :: !Namespace
+  , name         :: !ProjectName
+  , projectType  :: !PackageType
+  , path         :: !Text
+  , packages     :: ![PackageInfo]
+  , bundles      :: ![BundleInfo]
+  , dependencies :: ![Text]
+  , registeredAt :: !UTCTime
+  }
+```
 
 ### Reaction Events (3 types)
 
-- `ReactionTriggered` — a selector matched an event
-- `ReactionCompleted` — action executed successfully
-- `ReactionFailed` — action failed
+Defined in `Mori.Modules.Reaction.Domain.Event`:
+
+```haskell
+data ReactionEvent
+  = ReactionTriggered !ReactionTriggeredData
+  | ReactionCompleted !ReactionCompletedData
+  | ReactionFailed !ReactionFailedData
+```
+
+### Event Versioning
+
+> **Note**: A more elegant versioning approach is planned. Events currently use unversioned message types (e.g., `ChangesetObserved`, `ProjectRegistered`). Versioning and upcasting are deferred to Phase 3.
+
+## Event Metadata
+
+Every message includes standard metadata:
+
+```haskell
+data MessageMetadata = MessageMetadata
+  { causationId  :: EventId      -- Event that caused this event
+  , correlationId :: CorrelationId -- Request/workflow correlation
+  , traceContext :: TraceContext  -- OpenTelemetry trace/span
+  , actor        :: Actor         -- User or system that triggered
+  }
+
+data Actor
+  = UserActor UserId
+  | SystemActor Text  -- e.g., "mori-automation", "mori-cli"
+```
+
+## Projections
+
+Projections are PostgreSQL tables updated by subscriptions.
+
+### Registry Projection
+
+```sql
+-- mori.projects
+CREATE TABLE mori.projects (
+  id TEXT PRIMARY KEY,           -- TypeID
+  namespace TEXT NOT NULL,
+  name TEXT NOT NULL,
+  project_type TEXT NOT NULL,
+  path TEXT NOT NULL,
+  config_hash TEXT,
+  registered_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL,
+  message_global_position BIGINT NOT NULL,
+
+  UNIQUE (namespace, name)
+);
+
+-- mori.packages
+CREATE TABLE mori.packages (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES mori.projects(id),
+  name TEXT NOT NULL,
+  package_type TEXT NOT NULL,
+  language TEXT NOT NULL,
+  path TEXT,
+  message_global_position BIGINT NOT NULL
+);
+
+-- mori.dependencies (lookup table for resolution)
+CREATE TABLE mori.dependencies (
+  name TEXT PRIMARY KEY,         -- Dependency name (e.g., "streamly")
+  project_id TEXT NOT NULL REFERENCES mori.projects(id),
+  package_path TEXT NOT NULL,    -- Resolved filesystem path
+  message_global_position BIGINT NOT NULL
+);
+
+-- mori.bundles
+CREATE TABLE mori.bundles (
+  name TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES mori.projects(id),
+  packages TEXT[] NOT NULL,      -- Package names in bundle
+  primary_package TEXT NOT NULL,
+  message_global_position BIGINT NOT NULL
+);
+```
+
+### Repository Config Projection
+
+```sql
+-- mori.repository_configs
+CREATE TABLE mori.repository_configs (
+  repo_id TEXT PRIMARY KEY,
+  config_hash TEXT NOT NULL,
+  automation_hash TEXT,
+  config_json JSONB NOT NULL,
+  automation_json JSONB,
+  updated_at TIMESTAMPTZ NOT NULL,
+  message_global_position BIGINT NOT NULL
+);
+```
+
+### Reaction History Projection
+
+```sql
+-- mori.reaction_history
+CREATE TABLE mori.reaction_history (
+  id TEXT PRIMARY KEY,
+  triggering_event_id TEXT NOT NULL,
+  reaction_name TEXT NOT NULL,
+  status TEXT NOT NULL,          -- triggered, completed, failed
+  started_at TIMESTAMPTZ NOT NULL,
+  completed_at TIMESTAMPTZ,
+  error TEXT,
+  message_global_position BIGINT NOT NULL,
+
+  -- Idempotency: prevent duplicate reactions
+  UNIQUE (triggering_event_id, reaction_name)
+);
+```
+
+### Projection Rebuild
+
+If projections need rebuilding (schema change, corruption):
+
+1. Truncate projection tables
+2. Reset subscription checkpoint to position 0
+3. Restart subscription — replays all events
 
 ## Subscriptions
 
-All four subscriptions run concurrently inside `mori automate run`:
+All four subscriptions run concurrently inside `mori automate run`, sharing a single connection pool and using `message-db-checkpoint-store` for position tracking.
 
 | Subscription | Category | Purpose |
 |---|---|---|
@@ -106,24 +368,37 @@ All four subscriptions run concurrently inside `mori automate run`:
 | `mori-automation` | `repository` | Matches events against selectors, triggers reactions |
 | `mori-reaction-executor` | `reaction` | Executes triggered reaction actions |
 
-## Projections
+### Registry Subscription (`mori-registry`)
 
-Projections are PostgreSQL tables updated by subscriptions. Key tables:
+Subscribes to the `project` category. Updates registry projection tables (`projects`, `packages`, `dependencies`, `bundles`) from project events. Handles all 11 granular project event types with targeted updates and single-item deletes.
 
-- `mori.projects` — registered projects
-- `mori.packages` — packages within projects
-- `mori.dependencies` — dependency name to project path lookup
-- `mori.bundles` — package bundles
-- `mori.repository_configs` — observed automation configuration
-- `mori.reaction_history` — execution log for reactions
+Defined in `Mori.Modules.Project.Subscription.RegistryHandler`.
 
-### Projection Rebuild
+### Config Observation Subscription (`mori-config-observation`)
 
-If projections need rebuilding:
+Subscribes to the `repository` category. Updates the `repository_configs` projection table when `MoriConfigObserved` or `MoriAutomationObserved` events arrive. Enables IORef-based hot-reload of automation config.
 
-1. Truncate projection tables
-2. Reset subscription checkpoint to position 0
-3. Restart subscription — replays all events
+Defined in `Mori.Modules.Repository.Subscription.ConfigObservationHandler`.
+
+### Automation Subscription (`mori-automation`)
+
+Subscribes to the `repository` category. Matches `ChangesetObserved` and `RefObserved` events against automation config selectors (glob patterns for paths, regex for branches/refs). When a match is found, triggers a reaction by writing a `ReactionTriggered` event.
+
+Config is loaded via IORef and hot-reloaded when the config observation handler detects changes.
+
+Defined in `Mori.Automation.Subscription.AutomationHandler`.
+
+### Reaction Executor Subscription (`mori-reaction-executor`)
+
+Subscribes to the `reaction` category. Executes triggered reactions:
+- **RunCommand** — shell execution via `System.Process`
+- **EmitEvent** — write event to a MessageDB stream
+- **Notify** — HTTP webhook via curl
+- **Schedule** — enqueue delayed action to PGMQ
+
+Writes `ReactionCompleted` or `ReactionFailed` events and updates the `reaction_history` projection table.
+
+Defined in `Mori.Automation.Subscription.ExecutorHandler`.
 
 ## Event Flow
 
@@ -143,3 +418,167 @@ Update projections (PostgreSQL tables)
    ↓
 Emit effects (run commands, notify, emit new events)
 ```
+
+## CLI Integration
+
+### Write Path (via events)
+
+```haskell
+-- mori register --local
+registerLocal :: MoriConfig -> Eff MoriEffects ()
+registerLocal config = do
+  projectId <- generateTypeId "proj"
+  let event = ProjectRegistered
+        { projectId = projectId
+        , namespace = config ^. #project . #namespace
+        , name = config ^. #project . #name
+        , ...
+        }
+  writeMessage (projectStream config) event
+
+-- mori automate ingest
+ingestVcsEvents :: RepoId -> VcsAdapter -> Eff MoriEffects ()
+ingestVcsEvents repoId adapter = do
+  events <- adapter.getNewEvents
+  forM_ events $ \evt ->
+    writeMessage (repositoryStream repoId) evt
+```
+
+### Read Path (from projections)
+
+```haskell
+-- mori deps locate streamly
+locateDependency :: Text -> Eff MoriEffects (Maybe DependencyInfo)
+locateDependency name = do
+  -- Query projection directly
+  runQuery $
+    select depTable
+    & where_ (#name .== literal name)
+
+-- mori agent context backend
+getAgentContext :: Role -> Eff MoriEffects AgentContext
+getAgentContext role = do
+  project <- getCurrentProject
+  deps <- resolveDependencies (project ^. #dependencies)
+  standards <- resolveStandards (project ^. #standards)
+  pure $ assembleContext role project deps standards
+```
+
+## Package Dependencies
+
+Mori uses the `message-db-hs` ecosystem and PGMQ for scheduled execution:
+
+```text
+-- mori-core.cabal (key dependencies)
+build-depends:
+  -- Effects
+  , effectful
+  -- Database
+  , hasql, hasql-pool, hasql-effectful
+  -- Event sourcing
+  , message-db-hs, message-db-effectful
+  , message-db-subscription, message-db-checkpoint-store
+  , tan-event-source
+  -- Queue & scheduling
+  , pgmq-core, pgmq-effectful, pgmq-hasql, pgmq-migration
+  , shibuya-core, shibuya-pgmq-adapter
+  -- Type safety
+  , mmzk-typeid  -- KindID for entity IDs
+  -- Schema
+  , dhall
+  -- Serialization
+  , aeson
+  -- Optics
+  , lens, generic-lens
+  -- Observability
+  , hs-opentelemetry-api, hs-opentelemetry-sdk
+```
+
+## Effect Stack
+
+Defined in `Mori.Effects`:
+
+```haskell
+-- Read operations (event store + config)
+type MoriReadEff es =
+  ( MessageDb :> es
+  , Reader StreamCategories :> es
+  , IOE :> es
+  )
+
+-- Read + write operations
+type MoriEff es =
+  ( MoriReadEff es
+  , Error WrongExpectedVersion :> es
+  , Error StreamMessageParsingError :> es
+  , Hasql :> es
+  , Error SessionError :> es
+  )
+
+-- Subscription handlers (read + write + subscription infra)
+type MoriSubscriptionEff es =
+  ( MoriEff es
+  , CheckpointStore :> es
+  , Error SubscriptionError :> es
+  , Concurrent :> es
+  , Trace :> es
+  , Pgmq :> es
+  )
+```
+
+## Testing
+
+### Pure Domain Logic
+
+Deciders and views are pure functions — test without IO:
+
+```haskell
+test_projectRegistration = do
+  let cmd = RegisterProject testConfig
+      events = decide cmd InitialState
+
+  events `shouldBe` [ProjectRegistered expectedData]
+```
+
+### Integration Tests (ephemeral-pg)
+
+Integration tests use `ephemeral-pg` for real PostgreSQL instances with MessageDB:
+
+```haskell
+-- TestSupport.Database provides pool lifecycle management
+-- Tests run against real MessageDB with migrations applied
+integrationTests :: TestTree
+integrationTests =
+  withResource acquireTestDb releaseTestDb $ \getTestDb ->
+    let getPool = testPool <$> getTestDb
+     in testGroup "Integration"
+          [ ProjectHandlerIntSpec.tests getPool
+          , RepoHandlerIntSpec.tests getPool
+          , ReactionHandlerIntSpec.tests getPool
+          , ReactionTableIntSpec.tests getPool
+          ]
+```
+
+### Golden Tests
+
+Event JSON serialization is verified via golden snapshot files (19 snapshots across all 3 aggregates) using `tasty-golden` + `aeson-pretty`.
+
+## Open Questions (Phase 2+)
+
+### Global Registry Sync
+
+- Sync direction: push, pull, or bidirectional?
+- Conflict resolution strategy
+- Offline operation and reconciliation
+- Event filtering (what syncs vs. stays local)
+
+### Event Versioning
+
+- More elegant versioning than type suffixes
+- Automatic upcasting
+- Schema registry integration
+
+### Multi-tenancy
+
+- Namespace isolation in global registry
+- Access control for events and projections

@@ -1,0 +1,294 @@
+---
+title: End-to-End Example
+description: Walk through a complete scenario showing how the Mori knowledge plane and automation plane interact with the same repository
+icon: Route
+---
+
+This document walks through a **single concrete scenario** showing how the **Mori knowledge plane** and the **Mori automation plane** both interact with the **same repository**, each in its own role.
+
+The goal is to make the architecture *feel real* by following one ripple end-to-end.
+
+## Scenario Overview
+
+Repository:
+
+```
+repo: github.com/acme/payments
+```
+
+Intent:
+
+- The team wants to **document** the payments service and its dependencies
+- They also want to **react** when core payment logic changes
+
+Both concerns live in the same repo, but are handled by **different Mori planes**.
+
+## Step 0: Repository State
+
+The repository initially contains:
+
+```
+payments/
+├─ src/
+├─ README.md
+└─ .git/
+```
+
+Mori is not yet aware of this repository.
+
+## Step 1: Knowledge Plane — Initialize Project Metadata
+
+A developer initializes Mori metadata:
+
+```bash
+mori init
+```
+
+Effects:
+
+- Creates `mori.dhall` (project manifest)
+- Creates `mori/` directory (for schema imports and local type definitions)
+- No automation enabled
+
+Example `mori.dhall` (simplified for illustration):
+
+```haskell
+let Mori = ./mori/schema/package.dhall
+
+in  { project =
+        { name = "payments"
+        , namespace = "acme"
+        , type = Mori.PackageType.Application
+        , description = Some "Core payments service"
+        , language = Mori.Language.Haskell
+        , lifecycle = Mori.Lifecycle.Active
+        , domains = [ "Payments" ]
+        , owners = [ "fintech-platform" ]
+        , origin = Mori.Origin.Own
+        }
+    , repos = []
+    , packages = []
+    , bundles = []
+    , dependencies = []
+    , apis = []
+    , agents = []
+    , standards = []
+    , docs = []
+    }
+```
+
+At this point:
+
+- Mori can **understand** the project
+- Mori will **not react** to events
+
+## Step 2: Knowledge Plane — Validate and Inspect
+
+The developer validates metadata:
+
+```bash
+mori validate
+mori show
+```
+
+Outputs:
+
+- Canonical evaluated metadata
+- No side effects
+
+The repository is now a **Mori-known project**.
+
+## Step 3: Knowledge Plane — Register with Global Registry (Optional)
+
+The project is registered:
+
+```bash
+mori register
+```
+
+Effects:
+
+- Uploads evaluated `mori.dhall`
+- Associates repo with team ownership
+- No automation permissions granted yet
+
+Registry now knows:
+
+- Project identity
+- Dependencies
+- Ownership
+
+## Step 4: Automation Plane — Declare Automation Policy
+
+Later, the team opts into automation.
+
+They add:
+
+```
+mori.automation.dhall
+```
+
+Example (simplified for illustration):
+
+```haskell
+let paymentChanges =
+      < ChangesetObserved =
+          { paths = Some [ "src/payments/" ]
+          , vcs = None < Git | Jujutsu >
+          , branches = Some [ "main" ]
+          }
+      >
+
+in  { project = ./mori.dhall
+    , automation =
+        { events = [ paymentChanges ]
+        , reactions =
+            [ { name = "notify-payments-change"
+              , when = [ paymentChanges ]
+              , run =
+                  < Notify =
+                      { channel = < Slack >, target = "#payments-alerts" }
+                  >
+              }
+            ]
+        , execution =
+            { allowLocal = True
+            , allowCI = False
+            , maxConcurrency = 1
+            }
+        }
+    }
+```
+
+Key point:
+
+- Automation explicitly references `mori.dhall`
+- Automation is still **inactive** until executed
+
+## Step 5: Automation Plane — Inspect Automation State
+
+A developer inspects automation:
+
+```bash
+mori automate inspect
+```
+
+Output explains:
+
+- automation config found
+- config hash
+- execution allowed locally
+- no registry constraints yet
+
+Nothing runs.
+
+## Step 6: A Real Change Happens (The Ripple)
+
+A developer commits a change:
+
+```bash
+git commit -m "Refactor payment settlement logic"
+```
+
+This produces VCS facts:
+
+- a new changeset
+- touched files under `src/payments/`
+
+## Step 7: Automation Plane — Ingest Events
+
+The developer ingests events:
+
+```bash
+mori automate ingest git
+```
+
+Effects:
+
+- Git commits normalized to `ChangesetObserved`
+- Events appended to local event store
+- No reactions executed
+
+## Step 8: Automation Plane — Execute Reactions
+
+The developer explicitly runs automation:
+
+```bash
+mori automate run
+```
+
+Mori evaluates:
+
+1. Event selectors match
+2. Path filter matches
+3. Branch filter matches
+4. Execution allowed locally
+5. Reaction not yet executed (idempotency)
+
+Result:
+
+- Slack notification sent
+
+## Step 9: Explainability (Both Planes)
+
+### Knowledge explanation
+
+```bash
+mori explain dependency payments
+```
+
+Explains:
+
+- how payments is modeled
+- dependencies (if any)
+
+### Automation explanation
+
+```bash
+mori automate explain event <event-id>
+```
+
+Explains:
+
+- why the event matched
+- which config version applied
+- why the reaction ran
+
+Both explanations reference **the same repository**, but different planes.
+
+## Step 10: CI Enters the Picture
+
+Later, CI runs:
+
+```bash
+mori automate ci run
+```
+
+Registry checks:
+
+- project is registered
+- automation exists
+- CI execution is **not approved**
+
+Result:
+
+- execution blocked
+- explicit error message
+- no partial execution
+
+## What This Example Demonstrates
+
+1. Knowledge and automation are separate concerns
+2. The same repo participates in both planes
+3. Automation is explicit and explainable
+4. CI is governed, not special-cased
+5. One commit can ripple through both planes safely
+
+## Final Mental Model
+
+> **Mori lets a repository describe what it is, and separately declare how it reacts — both driven by the same underlying facts, but never conflated.**
+
+## Related Documents
+
+- [Automation](/docs/guides/automation) — Automation configuration and event selectors
+- [Schema](/docs/architecture/schema) — Project identity schema (`mori.dhall`)
