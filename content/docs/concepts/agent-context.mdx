@@ -6,20 +6,26 @@ icon: Brain
 
 Agent context assembly is a **core requirement** of Mori, not an optional feature. It provides structured, queryable context to coding agents so they can find documentation, source code, standards, and examples on the local filesystem.
 
-## The Problem
+## Problem Statement
 
 Coding agents need reliable answers to questions like:
 
-- Where is the documentation for this dependency?
-- Where is the source code I can read to understand this API?
-- What standards apply to this type of project?
-- Are there cookbooks or examples for common patterns?
+* Where is the documentation for this dependency?
+* Where is the source code I can read to understand this API?
+* What standards apply to this type of project?
+* Are there cookbooks or examples for common patterns?
 
-Today, this context is assembled manually via prompts, which is error-prone, time-consuming, and inconsistent.
+Today, this context is assembled manually via prompts, which is:
+
+* Error-prone (paths change, docs move)
+* Time-consuming (repeated for every task)
+* Inconsistent (different engineers assemble different context)
+
+Mori solves this by making **dependency knowledge queryable**.
 
 ## Core Concept: Dependency Documentation Graph
 
-Mori models dependencies as **nodes with attached knowledge**:
+Mori models dependencies not just as package names, but as **nodes with attached knowledge**:
 
 ```
 Dependency
@@ -31,195 +37,71 @@ Dependency
         └── cookbooks / examples
 ```
 
-## Prerequisites
+This graph is queryable by agents via CLI or structured output.
 
-- A `mori.dhall` config with `agents` entries
-- Dependencies registered in the local registry (see [Local Registry](/docs/concepts/local-registry))
-- Registry subscription running (`mori automate run`) to populate read model tables
+## Dependency Projects & Local Registry
 
-## Configuring Agent Roles
+### The Problem with Per-Project Paths
 
-Agent roles are declared in the `agents` section of `mori.dhall`:
+If every project had to specify `localPath` for each dependency, we'd have:
+* Duplication across projects
+* Path drift when checkouts move
+* No single source of truth
 
-```haskell
-let Schema = ./schema/package.dhall
+### Solution: Dependencies as Registered Projects
 
-in  { -- ...other fields...
-      agents =
-      [ { role = "backend"
-        , description = Some "Backend development agent"
-        , includePaths = [ "src/", "lib/" ]
-        , excludePaths = [ "dist-newstyle/", "node_modules/" ]
-        , relatedPackages = [ "mori-core", "mori-cli" ]
-        }
-      , { role = "api-design"
-        , description = Some "API design and review agent"
-        , includePaths = [ "api/", "schema/" ]
-        , excludePaths = [] : List Text
-        , relatedPackages = [ "mori-core" ]
-        }
-      ]
-    }
-```
+Dependencies become **first-class Mori projects** registered with the **local registry**.
 
-### AgentHint Fields
+#### Example: Streamly Ecosystem
 
-| Field | Type | Purpose |
-|-------|------|---------|
-| `role` | `Text` | Unique role identifier passed to `mori agent context` |
-| `description` | `Optional Text` | Human-readable description shown by `mori agent list` |
-| `includePaths` | `List Text` | Paths the agent should focus on |
-| `excludePaths` | `List Text` | Paths the agent should ignore |
-| `relatedPackages` | `List Text` | Package names relevant to this role |
-
-## Listing Roles
-
-```bash
-mori agent list
-```
-
-```
-backend - Backend development agent
-api-design - API design and review agent
-```
-
-If no agents are configured, prints "No agent roles configured."
-
-## How Agent Context Works
-
-When you run:
-
-```bash
-mori agent context backend
-```
-
-Mori:
-
-1. Loads `mori.dhall` from the current directory
-2. Finds the agent hint matching the requested role
-3. Resolves each project-level dependency by name from the registry
-4. For each dependency, loads its `mori.dhall` to extract its docs
-5. Resolves standards as registered projects
-6. Extracts cookbooks from project-level docs (where `kind = Cookbook`)
-
-### JSON Output Format
-
-The result is a self-contained JSON document:
-
-```json
-{
-  "role": "backend",
-  "project": "payment-service",
-  "includePaths": [
-    "src/",
-    "lib/"
-  ],
-  "excludePaths": [
-    "dist-newstyle/"
-  ],
-  "standards": [
-    {
-      "name": "backend-architecture",
-      "path": "/home/dev/standards/backend-architecture"
-    }
-  ],
-  "dependencies": [
-    {
-      "name": "streamly",
-      "projectPath": "/home/dev/oss/streamly-project",
-      "packages": [
-        {
-          "name": "streamly",
-          "path": "/home/dev/oss/streamly-project/streamly"
-        },
-        {
-          "name": "streamly-core",
-          "path": "/home/dev/oss/streamly-project/streamly-core"
-        }
-      ],
-      "docs": [
-        {
-          "name": "folds-guide",
-          "path": "/home/dev/oss/streamly-project/docs/folds-guide.md"
-        }
-      ]
-    }
-  ],
-  "cookbooks": [
-    {
-      "name": "db-patterns",
-      "path": "/home/dev/services/payment-service/docs/db-patterns.md"
-    }
-  ]
-}
-```
-
-### Output Fields
-
-| Field | Source |
-|-------|--------|
-| `role` | The requested role name |
-| `project` | `project.name` from `mori.dhall` |
-| `includePaths` | Agent hint `includePaths` |
-| `excludePaths` | Agent hint `excludePaths` |
-| `standards` | Resolved from `standards` list — each name looked up as a registered project |
-| `dependencies` | Resolved from `dependencies` list — each name looked up in the registry, packages and docs included |
-| `cookbooks` | Filtered from `docs` where `kind = Cookbook` |
-
-## How Resolution Works
-
-### Dependencies
-
-Each name in the top-level `dependencies` list is looked up in the registry's
-`mori.projects` table. For each found project:
-
-1. Check if a bundle with the same name exists — if so, include only the
-   bundle's packages
-2. Otherwise, include all packages registered under that project
-3. Load the dependency's own `mori.dhall` to extract its documentation entries
-
-Missing dependencies produce a warning on stderr and are skipped:
-
-```
-Warning: dependency 'missing-lib' not found in registry
-```
-
-### Standards
-
-Each name in the `standards` list is looked up as a registered project. The
-resolved path points to the standard project's root directory.
-
-### Cookbooks
-
-Docs with `kind = Cookbook` receive special treatment. They're extracted from the project's own `docs` list into a dedicated `cookbooks` field in the agent context output so agents can discover practical recipes automatically. Paths are resolved relative to the project root.
-
-## Dependency Projects and the Local Registry
-
-Dependencies become **first-class Mori projects** registered with the local registry. Create wrapper projects for important dependencies:
+Create a wrapper project for the streamly ecosystem:
 
 ```
 streamly-project/
-├── streamly/           # git clone
-├── streamly-core/      # git clone
+├── streamly/           # git clone of streamly
+├── streamly-core/      # git clone of streamly-core
 ├── mori.dhall          # project manifest
 └── docs/
     ├── folds-guide.md
-    └── streaming-patterns.md
+    ├── streaming-patterns.md
+    └── performance-notes.md
 ```
 
-Register once:
-
-```bash
-cd streamly-project && mori register --local
-```
-
-Now every service that lists `"streamly"` in its dependencies resolves to this wrapper project automatically.
-
-## Package Bundles
-
-Bundles group related packages that are typically used together. When a dependency name matches a bundle, Mori resolves all packages in the bundle:
+#### `streamly-project/mori.dhall`
 
 ```haskell
+{ project =
+    { name = "streamly-project"
+    , namespace = "acme"
+    , type = < Library >
+    , description = Some "Streamly ecosystem with curated docs"
+    , language = < Haskell >
+    , lifecycle = < Active >
+    , domains = [ "Streaming" ]
+    , owners = [ "platform-team" ]
+    }
+
+, repos = []
+
+, packages =
+    [ { name = "streamly"
+      , type = < Library >, language = < Haskell >
+      , path = Some "./streamly"
+      , description = Some "Streaming library"
+      , visibility = < Public >
+      , runtime = { deployable = False, exposesApi = False }
+      , dependencies = [], docs = [], config = []
+      }
+    , { name = "streamly-core"
+      , type = < Library >, language = < Haskell >
+      , path = Some "./streamly-core"
+      , description = Some "Core streaming primitives"
+      , visibility = < Public >
+      , runtime = { deployable = False, exposesApi = False }
+      , dependencies = [], docs = [], config = []
+      }
+    ]
+
 , bundles =
     [ { name = "streamly"
       , description = Some "Streamly + streamly-core"
@@ -227,40 +109,529 @@ Bundles group related packages that are typically used together. When a dependen
       , primary = "streamly"
       }
     ]
+
+, dependencies = []
+, apis = []
+, agents = []
+, standards = []
+
+, docs =
+    [ { key = "folds-guide"
+      , kind = < Guide >, audience = < User >
+      , description = Some "Deep dive into Streamly folds"
+      , location = < LocalFile "./docs/folds-guide.md" >
+      }
+    , { key = "streaming-patterns"
+      , kind = < Cookbook >, audience = < User >
+      , description = Some "Common streaming patterns"
+      , location = < LocalFile "./docs/streaming-patterns.md" >
+      }
+    , { key = "upstream-docs"
+      , kind = < Reference >, audience = < User >
+      , description = Some "Streamly haddocks"
+      , location = < RepoPath "./streamly/docs" >
+      }
+    ]
+}
 ```
 
-## Integration with AI Agents
-
-The JSON output is designed to be piped into agent tooling:
+#### Register with Local Registry
 
 ```bash
-# Pipe directly to an agent
-mori agent context backend | my-agent --context -
-
-# Save for later use
-mori agent context backend > .agent-context.json
-
-# Use in a script
-CONTEXT=$(mori agent context backend)
+cd streamly-project
+mori register --local
 ```
 
-The `includePaths` and `excludePaths` fields tell the agent which parts of the
-codebase are relevant to its role. The `dependencies` field provides resolved
-paths to source code and documentation for each dependency, enabling the agent
-to understand the project's dependency graph without manual configuration.
+Now the local registry knows:
+* `streamly-project` exists
+* Its filesystem location
+* What packages it contains
+* What documentation is available
 
-## Errors
+### Resolution Flow
 
-| Error | Cause |
-|-------|-------|
-| `role 'X' not found in agent configuration` | The requested role doesn't exist in `mori.dhall` `agents` |
-| `dependency 'X' not registered` | A dependency name couldn't be found in the registry |
-| `failed to build agent context` | Database or effect stack error |
+When a service declares a dependency:
+
+```haskell
+-- payment-service/mori.dhall
+{ dependencies = [ "streamly" ] }
+```
+
+Resolution:
+
+```
+1. Service references "streamly"
+2. Mori queries local registry
+3. Registry returns: streamly-project @ /Users/dev/oss/streamly-project
+4. Agent gets filesystem paths to code + docs
+```
+
+```bash
+mori deps locate streamly
+```
+
+```json
+{
+  "name": "streamly",
+  "resolvedFrom": "local-registry",
+  "project": "streamly-project",
+  "projectPath": "/Users/dev/oss/streamly-project",
+  "packagePath": "/Users/dev/oss/streamly-project/streamly",
+  "docs": [
+    { "key": "folds-guide", "path": "/Users/dev/oss/streamly-project/docs/folds-guide.md" },
+    { "key": "streaming-patterns", "path": "/Users/dev/oss/streamly-project/docs/streaming-patterns.md" }
+  ]
+}
+```
+
+### Registry Hierarchy
+
+```
+Local Registry (machine-specific)
+       ↓ fallback
+Global Registry (org-wide, optional)
+       ↓ fallback
+Not Found
+```
+
+* Local registry is authoritative for development
+* Global registry provides org-wide defaults
+* Services don't hardcode paths; they reference by name
+
+### `mori.local.dhall` (Optional Overrides)
+
+For edge cases where per-project overrides are needed:
+
+```haskell
+-- mori.local.dhall (gitignored)
+-- Overrides for this specific project only
+
+{ dependencyOverrides =
+    [ { name = "streamly"
+      , extraDocs =
+          [ { key = "my-notes"
+            , location = < LocalFile "/Users/dev/personal/streamly-notes.md" >
+            }
+          ]
+      }
+    ]
+}
+```
+
+This is rare -- most context comes from the registry.
+
+## Package Bundles
+
+Some packages are only useful together. Streamly without streamly-core, or effectful without effectful-core, isn't practical.
+
+### PackageBundle Schema
+
+```haskell
+-- PackageBundle.dhall
+{ name : Text                    -- bundle name (e.g., "streamly")
+, description : Optional Text
+, packages : List Text           -- packages included (e.g., ["streamly", "streamly-core"])
+, primary : Text                 -- the "main" package for imports
+}
+```
+
+### Example: Streamly Bundle
+
+```haskell
+-- in streamly-project/mori.dhall
+
+{ project = { name = "streamly-project", ... }
+
+, packages =
+    [ { name = "streamly", path = Some "./streamly", ... }
+    , { name = "streamly-core", path = Some "./streamly-core", ... }
+    ]
+
+, bundles =
+    [ { name = "streamly"
+      , description = Some "Streamly streaming library"
+      , packages = [ "streamly", "streamly-core" ]
+      , primary = "streamly"
+      }
+    ]
+}
+```
+
+### Resolution Semantics
+
+When a service declares:
+
+```haskell
+{ dependencies = [ "streamly" ] }
+```
+
+Mori resolves:
+1. Look up "streamly" in registry
+2. Find it's a bundle in streamly-project
+3. Return paths to **all packages in the bundle**
+
+This avoids the need to list every sub-package explicitly.
+
+### Referencing Specific Packages
+
+For fine-grained control:
+
+```haskell
+{ dependencies =
+    [ "streamly"              -- gets the bundle (streamly + streamly-core)
+    , "hasql:hasql-pool"      -- gets only hasql-pool, not the full bundle
+    ]
+}
+```
+
+The `project:package` syntax allows opting out of bundle expansion.
+
+## Documentation Types
+
+### DocKind (extended)
+
+```haskell
+< Reference    -- API reference, module docs
+| Guide        -- Conceptual guide, tutorial
+| Cookbook     -- Recipe-based examples
+| Spec         -- Formal specification
+| Runbook      -- Operational procedures
+| Notes        -- Internal notes, observations
+>
+```
+
+### DocLocation
+
+```haskell
+< LocalFile : Text      -- absolute or relative path
+| LocalDir : Text       -- directory of docs
+| Url : Text            -- external URL
+| RepoPath : Text       -- path within dependency's repo
+>
+```
+
+## Standards and Cookbooks
+
+Beyond per-dependency docs, projects can declare **standards** that apply broadly, and cookbooks as `docs` entries:
+
+```haskell
+-- in mori.dhall
+{ standards =
+    [ "backend-architecture"
+    , "api-guidelines"
+    , "haskell-conventions"
+    ]
+
+, docs =
+    [ { key = "error-handling"
+      , kind = < Cookbook >, audience = < Internal >
+      , description = Some "Error handling patterns"
+      , location = < LocalFile "docs/cookbooks/errors.md" >
+      }
+    , { key = "streaming-patterns"
+      , kind = < Cookbook >, audience = < Internal >
+      , description = Some "Common streaming patterns"
+      , location = < LocalFile "docs/cookbooks/streaming.md" >
+      }
+    ]
+}
+```
+
+Standards are resolved from:
+1. Local checkout (if available)
+2. Mori registry (if registered)
+
+## Agent Interrogation Interface
+
+### Query: Where is dependency X?
+
+```bash
+mori deps locate streamly
+```
+
+Output:
+```json
+{
+  "name": "streamly",
+  "localPath": "/Users/dev/oss/streamly",
+  "source": { "type": "Hackage", "version": ">= 0.9" },
+  "docs": [
+    {
+      "key": "modules",
+      "kind": "Reference",
+      "location": "/Users/dev/oss/streamly/src"
+    },
+    {
+      "key": "internal-guide",
+      "kind": "Guide",
+      "location": "/Users/dev/docs/streamly-patterns.md"
+    }
+  ]
+}
+```
+
+### Query: What docs exist for dependency X?
+
+```bash
+mori deps docs streamly
+```
+
+Output:
+```
+streamly docs:
+  [Reference] modules        → /Users/dev/oss/streamly/src
+  [Guide]     internal-guide → /Users/dev/docs/streamly-patterns.md
+```
+
+### Query: Assemble context for a task
+
+```bash
+mori agent context --role backend-refactor --deps streamly,effectful,hasql
+```
+
+Output:
+```json
+{
+  "role": "backend-refactor",
+  "standards": [
+    { "name": "backend-architecture", "path": "/Users/dev/standards/backend.md" }
+  ],
+  "dependencies": [
+    {
+      "name": "streamly",
+      "localPath": "/Users/dev/oss/streamly",
+      "docs": [ ... ]
+    },
+    {
+      "name": "effectful",
+      "localPath": "/Users/dev/oss/effectful",
+      "docs": [ ... ]
+    },
+    {
+      "name": "hasql",
+      "localPath": "/Users/dev/oss/hasql",
+      "docs": [ ... ]
+    }
+  ],
+  "cookbooks": [
+    { "name": "streaming-patterns", "path": "/Users/dev/project/docs/cookbooks/streaming.md" }
+  ],
+  "includePaths": [ "src" ],
+  "excludePaths": [ "dist", "node_modules" ]
+}
+```
+
+### Query: What standards apply?
+
+```bash
+mori standards list
+mori standards show backend-architecture
+```
+
+## Concrete Example: Haskell Service
+
+A Haskell service using hasql, streamly, and effectful.
+
+### Step 1: Set Up Dependency Projects
+
+Create wrapper projects for each ecosystem:
+
+```
+~/oss/
+├── streamly-project/
+│   ├── streamly/
+│   ├── streamly-core/
+│   ├── mori.dhall
+│   └── docs/
+├── effectful-project/
+│   ├── effectful/
+│   ├── effectful-core/
+│   ├── mori.dhall
+│   └── docs/
+└── hasql-project/
+    ├── hasql/
+    ├── hasql-pool/
+    ├── mori.dhall
+    └── docs/
+```
+
+Register each:
+
+```bash
+cd ~/oss/streamly-project && mori register --local
+cd ~/oss/effectful-project && mori register --local
+cd ~/oss/hasql-project && mori register --local
+```
+
+### Step 2: Service Declares Dependencies
+
+```haskell
+-- payment-service/mori.dhall
+
+{ project =
+    { name = "payment-service"
+    , namespace = "acme"
+    , type = < Application >
+    , description = Some "Core payment processing service"
+    , language = < Haskell >
+    , lifecycle = < Active >
+    , domains = [ "Payments" ]
+    , owners = [ "fintech-platform" ]
+    }
+
+, repos = []
+
+, packages = []
+  -- For simple single-package services, the project-level fields suffice.
+
+, bundles = []
+
+, dependencies =
+    [ "streamly"      -- resolved via registry
+    , "effectful"     -- resolved via registry
+    , "hasql"         -- resolved via registry
+    ]
+
+, apis = []
+
+, agents =
+    [ { role = "backend-refactor"
+      , description = Some "Refactor Haskell service code"
+      , includePaths = [ "src" ]
+      , excludePaths = [ "dist-newstyle" ]
+      , relatedPackages = []
+      }
+    ]
+
+, standards = [ "backend-architecture", "haskell-conventions" ]
+
+, docs =
+    [ { key = "db-patterns", kind = < Cookbook >, audience = < Internal >
+      , description = Some "Database access patterns"
+      , location = < LocalFile "docs/db-patterns.md" >
+      }
+    , { key = "effect-patterns", kind = < Cookbook >, audience = < Internal >
+      , description = Some "Effectful patterns"
+      , location = < LocalFile "docs/effects.md" >
+      }
+    ]
+}
+```
+
+Note: No `localPath` declarations for dependencies. The registry resolves them. Cookbooks are modeled as `docs` entries with `kind = Cookbook`.
+
+### Step 3: Agent Queries Context
+
+```bash
+mori agent context --role backend-refactor
+```
+
+Output:
+
+```json
+{
+  "role": "backend-refactor",
+  "project": "payment-service",
+  "includePaths": [ "src" ],
+  "excludePaths": [ "dist-newstyle" ],
+
+  "standards": [
+    {
+      "name": "backend-architecture",
+      "path": "/Users/dev/standards/backend-architecture/docs"
+    },
+    {
+      "name": "haskell-conventions",
+      "path": "/Users/dev/standards/haskell-conventions/docs"
+    }
+  ],
+
+  "dependencies": [
+    {
+      "name": "streamly",
+      "projectPath": "/Users/dev/oss/streamly-project",
+      "packages": [
+        { "name": "streamly", "path": "/Users/dev/oss/streamly-project/streamly" },
+        { "name": "streamly-core", "path": "/Users/dev/oss/streamly-project/streamly-core" }
+      ],
+      "docs": [
+        { "key": "folds-guide", "path": "/Users/dev/oss/streamly-project/docs/folds-guide.md" },
+        { "key": "streaming-patterns", "path": "/Users/dev/oss/streamly-project/docs/streaming-patterns.md" }
+      ]
+    },
+    {
+      "name": "effectful",
+      "projectPath": "/Users/dev/oss/effectful-project",
+      "packages": [
+        { "name": "effectful", "path": "/Users/dev/oss/effectful-project/effectful" },
+        { "name": "effectful-core", "path": "/Users/dev/oss/effectful-project/effectful-core" }
+      ],
+      "docs": [ ... ]
+    },
+    {
+      "name": "hasql",
+      "projectPath": "/Users/dev/oss/hasql-project",
+      "packages": [
+        { "name": "hasql", "path": "/Users/dev/oss/hasql-project/hasql" },
+        { "name": "hasql-pool", "path": "/Users/dev/oss/hasql-project/hasql-pool" }
+      ],
+      "docs": [ ... ]
+    }
+  ],
+
+  "cookbooks": [
+    { "name": "db-patterns", "path": "/Users/dev/services/payment-service/docs/db-patterns.md" },
+    { "name": "effect-patterns", "path": "/Users/dev/services/payment-service/docs/effects.md" }
+  ]
+}
+```
+
+The agent now has:
+* Filesystem paths to all dependency source code
+* Curated docs for each dependency
+* Applicable standards
+* Project-specific cookbooks
+* Scope constraints (include/exclude paths)
 
 ## Design Principles
 
-1. **Declarative, not imperative** — context derived from configuration
-2. **Local-first** — works offline with local checkouts
-3. **Overlay model** — machine-specific paths don't pollute shared config
-4. **Structured output** — JSON for agents, human-readable for developers
-5. **Queryable** — fine-grained queries, not monolithic dumps
+1. **Declarative, not imperative**: Context is derived from configuration, not scripts
+2. **Local-first**: Works offline with local checkouts
+3. **Overlay model**: Machine-specific paths don't pollute shared config
+4. **Structured output**: JSON for agents, human-readable for developers
+5. **Queryable**: Fine-grained queries, not monolithic dumps
+
+## Implementation Phases
+
+### Phase 1: Local-First (Current Focus)
+
+* Local registry as database-backed service
+* Manual creation of dependency wrapper projects
+* Manual registration via `mori register --local`
+* Works entirely offline
+
+### Phase 2: Global Registry
+
+* Any project with `mori.dhall` can be registered globally
+* Local registry becomes a performance cache
+* New developers bootstrap by syncing from global registry
+* Local still authoritative for doc updates and customization
+
+### Phase 3: Version Pinning
+
+* Third-party dependency version alignment
+* Ensure registered wrapper matches what services actually use
+* Version-aware doc resolution
+
+## Open Questions
+
+* **Doc freshness**: How to detect stale docs when upstream repos update?
+* **Standards distribution**: How are org-wide standards distributed and versioned?
+* **Agent context caching**: Should assembled context be cached for performance?
+* **Bundle conflicts**: What if two projects define bundles with the same name?
+
+### Resolved
+
+* **Registry storage**: PostgreSQL projections derived from events. See [Event Sourcing](/docs/concepts/event-sourcing).
+* **Cookbooks**: Modeled as `docs` entries with `kind = Cookbook` rather than a separate field.
+* **Project-level dependencies**: `List Text` at project root, resolved by name via registry.

@@ -4,18 +4,24 @@ description: Event-sourced project registration and dependency resolution
 icon: Archive
 ---
 
-The local registry is mori's event-sourced store for project metadata. It records every change to your projects as immutable events in MessageDB, then projects those events into PostgreSQL tables that power dependency resolution, agent context, and automation.
+The local registry is mori's event-sourced store for project metadata. It
+records every change to your projects as immutable events in MessageDB, then
+projects those events into PostgreSQL tables that power dependency resolution,
+agent context, and automation.
 
-## Two Layers
+Two layers make this work:
 
 1. **Event store** — events written to MessageDB streams (`project-{namespace}:{name}`)
 2. **Read model** — projection tables in the `mori` schema, populated by a subscription
 
-Commands like `deps resolve`, `deps locate`, `deps explain`, and `agent context` query the read model. Without running the subscription that populates it, these tables stay empty even after registration.
+Commands like `deps resolve`, `deps locate`, `deps explain`, and `agent context`
+query the read model. Without running the subscription that populates it, these
+tables stay empty even after registration.
 
 ## Database Setup
 
-Mori requires PostgreSQL with [MessageDB](https://github.com/message-db/message-db) installed.
+Mori requires PostgreSQL with [MessageDB](https://github.com/message-db/message-db)
+installed.
 
 Set the connection string:
 
@@ -35,7 +41,7 @@ mori doctor
 ✓ Required tables exist
 ```
 
-### Running Migrations
+## Running Migrations
 
 Migrations create all required schemas and tables:
 
@@ -52,7 +58,8 @@ Four phases run in order:
 | PGMQ schema | Queue infrastructure for scheduled actions |
 | Application tables | `mori` schema with 10 SQL migration scripts |
 
-A final migration sets the PostgreSQL `search_path` to `public, message_store, mori` so queries can reference tables without schema prefixes.
+A final migration sets the PostgreSQL `search_path` to `public, message_store, mori`
+so queries can reference tables without schema prefixes.
 
 Migrations are idempotent — safe to re-run at any time.
 
@@ -161,7 +168,8 @@ CREATE TABLE mori.reaction_history (
 
 ### checkpoints
 
-Tracks subscription progress. Each named subscription stores the last global position it processed.
+Tracks subscription progress. Each named subscription stores the last global
+position it processed.
 
 ```sql
 CREATE TABLE checkpoints (
@@ -173,7 +181,8 @@ CREATE TABLE checkpoints (
 );
 ```
 
-Every table with a `message_position` column uses it for idempotent upserts — a write only takes effect if its position is newer than the stored one.
+Every table with a `message_position` column uses it for idempotent upserts —
+a write only takes effect if its position is newer than the stored one.
 
 ## How Registration Works
 
@@ -181,15 +190,18 @@ When you run `mori register --local`, the following happens:
 
 1. **Load config** — reads `mori.dhall` from the current directory
 2. **Check existence** — queries the read model for `(namespace, name)`
-3. **New project** — generates a `proj_*` TypeID and emits a `ProjectRegistered` event containing all project metadata
-4. **Existing project** — computes a granular diff against the current state and emits only the specific change events needed (type changed, package added, etc.)
+3. **New project** — generates a `proj_*` TypeID and emits a `ProjectRegistered`
+   event containing all project metadata
+4. **Existing project** — computes a granular diff against the current state and
+   emits only the specific change events needed (type changed, package added, etc.)
 5. **Write events** — appends events to the stream `project-{namespace}:{name}`
 
 If nothing changed, mori prints "Project up to date" and emits no events.
 
 ## Event Types
 
-All events are written to streams named `project-{namespace}:{name}` under the `project` category.
+All events are written to streams named `project-{namespace}:{name}` under the
+`project` category.
 
 | Event | When emitted |
 |-------|-------------|
@@ -207,7 +219,8 @@ All events are written to streams named `project-{namespace}:{name}` under the `
 
 ## Subscriptions and Projections
 
-The registry subscription runs as part of `mori automate run`. Three subscriptions start concurrently:
+The registry subscription runs as part of `mori automate run`. Three
+subscriptions start concurrently:
 
 | Subscription | Category | Purpose |
 |-------------|----------|---------|
@@ -215,14 +228,17 @@ The registry subscription runs as part of `mori automate run`. Three subscriptio
 | `mori-automation` | `repository` | Matches events against selectors, triggers reactions |
 | `mori-reaction-executor` | `reaction` | Executes triggered reaction actions |
 
-The registry handler parses each event and performs the corresponding database operation:
+The registry handler parses each event and performs the corresponding database
+operation:
 
 - **Registered** → upsert project + all packages, dependencies, bundles
 - **Changed/Updated** → targeted `UPDATE` of the specific column
 - **Added** → `INSERT` into the relevant table
 - **Removed** → `DELETE` from the relevant table
 
-All operations are idempotent — the handler checks `message_position` ordering before applying changes. The subscription checkpoint tracks the last processed `global_position` so it resumes where it left off after restarts.
+All operations are idempotent — the handler checks `message_position` ordering
+before applying changes. The subscription checkpoint tracks the last processed
+`global_position` so it resumes where it left off after restarts.
 
 ## Populating the Read Model
 
@@ -236,9 +252,13 @@ mori register --local
 mori automate run
 ```
 
-Without step 2, the read model tables stay empty. Commands that query the read model (`deps resolve`, `deps locate`, `deps explain`, `agent context`) require both steps to return results.
+Without step 2, the read model tables stay empty. Commands that query the read
+model (`deps resolve`, `deps locate`, `deps explain`, `agent context`) require
+both steps to return results.
 
-Once `mori automate run` is running, it continuously processes new events. You can register additional projects in another terminal and the read model updates automatically.
+Once `mori automate run` is running, it continuously processes new events. You
+can register additional projects in another terminal and the read model updates
+automatically.
 
 ## Verifying the Registry
 
@@ -286,17 +306,20 @@ SELECT name, stream, last_processed_global_position, last_processed_at
 FROM checkpoints;
 ```
 
-Compare `last_processed_global_position` against the highest `global_position` in `message_store.messages` to see if the subscription is caught up.
+Compare `last_processed_global_position` against the highest `global_position`
+in `message_store.messages` to see if the subscription is caught up.
 
 ## Troubleshooting
 
 ### Tables don't exist
 
-Migrations haven't been run. Run `cabal run mori-migrations` and verify with `mori doctor`.
+Migrations haven't been run. Run `cabal run mori-migrations` and verify with
+`mori doctor`.
 
 ### Read model empty despite events existing
 
-The subscription hasn't been started. Run `mori automate run` to start processing events into the read model tables.
+The subscription hasn't been started. Run `mori automate run` to start
+processing events into the read model tables.
 
 ### Stale projections
 
@@ -308,7 +331,8 @@ FROM checkpoints
 WHERE name = 'mori-registry';
 ```
 
-If the position is behind the latest event, the subscription may have stopped. Restart `mori automate run`.
+If the position is behind the latest event, the subscription may have stopped.
+Restart `mori automate run`.
 
 ### Replaying the subscription from scratch
 
@@ -322,4 +346,5 @@ DELETE FROM checkpoints WHERE name = 'mori-registry';
 mori automate run
 ```
 
-The subscription reprocesses all events from the beginning. Because all operations are idempotent, the final read model state is the same.
+The subscription reprocesses all events from the beginning. Because all
+operations are idempotent, the final read model state is the same.

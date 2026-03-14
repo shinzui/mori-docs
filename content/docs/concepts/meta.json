@@ -5,6 +5,8 @@
 		"event-sourcing",
 		"vcs-integration",
 		"agent-context",
+		"repository-interrogation",
+		"automation-configuration",
 		"local-registry"
 	]
 }

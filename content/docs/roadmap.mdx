@@ -20,7 +20,7 @@ Mori is built in three phases:
 - Query agent context
 - Ingest VCS events and run automation
 
-### 1.1 Foundation
+### 1.1 Foundation ✅
 
 **Objective**: Core infrastructure that everything else builds on.
 
@@ -42,7 +42,7 @@ Mori is built in three phases:
 
 **Deliverable**: `mori doctor` command that verifies database connectivity.
 
-### 1.2 Schema & Validation
+### 1.2 Schema & Validation ✅
 
 **Objective**: Parse and validate `mori.dhall` files.
 
@@ -58,7 +58,7 @@ Mori is built in three phases:
 
 **Deliverable**: Can initialize a project and validate its config.
 
-### 1.3 Local Registry
+### 1.3 Local Registry ✅
 
 **Objective**: Register projects and resolve dependencies by name.
 
@@ -82,7 +82,7 @@ Mori is built in three phases:
 
 **Deliverable**: Can register wrapper projects and resolve dependencies by name.
 
-### 1.4 Agent Context
+### 1.4 Agent Context ✅
 
 **Objective**: Assemble structured context for AI coding agents.
 
@@ -98,7 +98,7 @@ Mori is built in three phases:
 
 **Deliverable**: Agent can query Mori for project context.
 
-### 1.5 VCS Ingestion
+### 1.5 VCS Ingestion ✅
 
 **Objective**: Observe and normalize VCS events.
 
@@ -119,28 +119,28 @@ Mori is built in three phases:
 
 **Deliverable**: Can ingest git history into event store.
 
-### 1.6 Automation Engine (1.6a / 1.6b)
+### 1.6 Automation Engine (1.6a ✅ / 1.6b ✅)
 
 **Objective**: React to VCS events based on automation config.
 
-#### 1.6.1 Automation Config
+#### 1.6.1 Automation Config ✅
 - [x] Parse `mori.automation.dhall`
 - [x] Event selectors (path, branch, VCS filters)
 - [x] Reaction definitions
 - [x] Dhall schema files (`schema/automation/`)
 - [x] Config validation (unique selectors, valid references)
 
-#### 1.6.2 Config Events (1.6b)
+#### 1.6.2 Config Events (1.6b ✅)
 - [x] `MoriConfigObserved` event type (mori.dhall observation, emitted on `automate run` startup)
 - [x] `MoriAutomationObserved` event type (emitted on `automate run` startup, idempotent by hash)
 - [x] Config projection table (`mori.repository_configs`) + IORef-based hot-reload
 
-#### 1.6.3 Automation Subscription
+#### 1.6.3 Automation Subscription ✅
 - [x] `mori-automation` subscription
 - [x] Event matching logic (glob patterns: `*`, `**`)
 - [x] Trigger reaction events
 
-#### 1.6.4 Reaction Execution
+#### 1.6.4 Reaction Execution ✅
 - [x] `ReactionTriggered` event type
 - [x] `ReactionCompleted` / `ReactionFailed` events
 - [x] `mori-reaction-executor` subscription
@@ -154,7 +154,7 @@ Mori is built in three phases:
 - [x] `mori automate inspect` — show config summary + reaction statistics
 - [x] `mori automate explain <pos>` — explain which selectors match a specific event
 
-#### 1.6.6 Reaction Aggregate
+#### 1.6.6 Reaction Aggregate ✅
 - [x] Reaction domain types (`ReactionId`, `ReactionResult`)
 - [x] Reaction decider (Initial → Pending → Done)
 - [x] Reaction infrastructure (stream building, state reconstruction)

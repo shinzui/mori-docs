@@ -4,68 +4,131 @@ description: Registry architecture for project discovery and navigation
 icon: Globe
 ---
 
-The Mori registry provides project discovery, dependency resolution, and navigation. It operates in two tiers: a local registry (Phase 1, complete) and a global registry (Phase 2, planned).
+> **Historical document.** This was written before the event-sourcing architecture was adopted.
+> Key decisions that have been **superseded**:
+>
+> - **Local registry**: This doc describes a standalone JSON/SQLite registry. The project now uses **PostgreSQL/MessageDB** projections derived from events. See [Event Sourcing](/docs/concepts/event-sourcing).
+> - **`mori register`**: This doc describes global registry upload as the default. Phase 1 uses `mori register --local` only.
+> - **Command details**: The authoritative CLI specification is [CLI Architecture](/docs/architecture/cli).
+>
+> Some concepts here (navigation, search, namespacing) remain valid and are referenced by CLI.md.
 
-## Core Principles
+## Core CLI Principles
 
-1. **Local-first, registry-enhanced** — Mori works fully offline
-2. **Explicit actions, no background magic** — registration is always user-initiated
-3. **Explainability over convenience** — every decision can be inspected
-4. **One root per project** — CLI commands operate relative to a single `mori.dhall` root
+1. **Local-first, registry-enhanced**
+   Mori must work fully offline. The registry augments discovery.
 
-## Local Registry
+2. **Explicit actions, no background magic**
+   Registration, resolution, and navigation are always user-initiated.
 
-The local registry is an **event-sourced read model** derived from events in MessageDB. It is the authoritative source for development.
+3. **Explainability over convenience**
+   Every non-trivial command must be inspectable (`--explain`).
 
-### Responsibilities
+4. **One root per project**
+   CLI commands always operate relative to a single `mori.dhall` root.
 
-- **Project registration** — track all Mori projects on the local filesystem
-- **Dependency resolution** — resolve names to filesystem paths
-- **Agent context assembly** — provide structured context for coding agents
+## Global Mori Registry (Conceptual)
 
-### Registry Hierarchy
+The registry is a **read-optimized index** of projects that have opted in.
 
-```
-Local Registry (machine-specific, authoritative for dev)
-       ↓ fallback
-Global Registry (org-wide defaults)
-       ↓ fallback
-Not Found
-```
+Each registered entry includes:
 
-## `mori register`
+* project identity (name, type)
+* repository information
+* evaluated Mori metadata (JSON)
+* registration source (repo + commit)
 
-Register the current project in the registry:
+The registry never mutates local state automatically.
+
+## Command: `mori register`
+
+### Purpose
+
+Register the current project in the global Mori registry.
+
+This enables:
+
+* global discovery
+* dependency reuse
+* navigation (`mori cd`)
+
+### Preconditions
+
+* Must be executed inside a directory containing `mori.dhall`
+* Mori schema must validate
+
+### Behavior
 
 ```bash
-mori register --local
+mori register
 ```
 
 Steps:
+
 1. Load and validate `mori.dhall`
-2. Evaluate Dhall to canonical form
-3. Emit registration events to MessageDB
-4. Record registration receipt locally
+2. Resolve dependencies (local + registry)
+3. Evaluate Dhall to canonical JSON
+4. Upload metadata to registry
+5. Record registration receipt locally
 
-Flags: `--dry-run`, `--explain`, `--force`, `--local`
+### Output
 
-## `mori cd`
+```text
+✔ Mori project validated
+✔ Registered as: internal:agent-qualification
+✔ Commit: a1b2c3d
+```
 
-Navigate to a registered project from anywhere:
+### Flags
+
+```bash
+mori register --dry-run
+mori register --explain
+mori register --force
+```
+
+* `--dry-run`: show what would be registered
+* `--explain`: show resolution and merge decisions
+* `--force`: allow overwriting an existing registry entry (ownership required)
+
+## Command: `mori cd`
+
+### Purpose
+
+Navigate to a registered project from anywhere.
+
+This is a **developer productivity command**, not a build feature.
+
+### Basic Usage
 
 ```bash
 mori cd agent-qualification
-mori cd streamly
 ```
 
-Resolution rules:
-1. Prefer existing local checkout known to Mori
+Behavior:
+
+* Look up project in registry
+* Resolve local checkout path
+* Change directory to project root
+
+### Resolution Rules
+
+1. Prefer local checkout already known to Mori
 2. If missing, prompt to clone
 3. Never clone implicitly without confirmation
 
-## `mori search`
+### Examples
 
-Discover existing projects, packages, or standards:
+```bash
+mori cd streamly
+mori cd backend-architecture
+```
+
+## Command: `mori search`
+
+### Purpose
+
+Discover existing projects, packages, or standards.
 
 ```bash
 mori search streamly
@@ -73,24 +136,115 @@ mori search --type library
 mori search --language haskell
 ```
 
-## Global Registry (Phase 2)
+Results are always sourced from the registry.
 
-The Global Mori Registry will provide:
+## Command: `mori add dependency`
 
-- Project discovery and indexing
-- Ownership and team metadata
-- Organization-wide automation policies
-- Trust levels (local-only, CI-approved, org-wide)
+### Purpose
 
-It will **not**:
+Add a dependency to the current package using registry metadata.
 
-- Execute reactions
-- Push automation into repos
-- Override local configuration
+```bash
+mori add dependency streamly
+```
 
-## Design Invariants
+Behavior:
 
-- Registry access is optional
-- CLI behavior is deterministic
-- All side effects are explicit
-- All resolution decisions are explainable
+1. Query registry for `streamly`
+2. Display available metadata (docs, language, source)
+3. Prompt for local checkout (optional)
+4. Update local `Package.dhall`
+
+This avoids retyping metadata already known to Mori.
+
+## Command: `mori deps resolve`
+
+### Purpose
+
+Resolve and explain all dependencies for the current project.
+
+```bash
+mori deps resolve
+mori deps resolve --explain
+```
+
+Outputs:
+
+* authoritative metadata source (local vs registry)
+* applied augmentations
+* unresolved dependencies
+
+## Command: `mori introspect`
+
+### Purpose
+
+Analyze project dependencies from build files and compare with Mori metadata.
+
+Examples:
+
+```bash
+mori introspect        # auto-detect (cabal, npm, go.mod)
+mori introspect cabal
+```
+
+Behavior:
+
+* Extract dependency names
+* Match against registry
+* Suggest additions or enrichment
+
+## Command: `mori list`
+
+### Purpose
+
+List known entities.
+
+```bash
+mori list projects
+mori list packages
+mori list standards
+```
+
+Results may come from:
+
+* local Mori
+* registry
+
+## Command: `mori explain`
+
+### Purpose
+
+Explain Mori decisions in human terms.
+
+```bash
+mori explain dependency streamly
+mori explain project agent-qualification
+```
+
+This command is **mandatory** for debuggability.
+
+## Non-Goals (Explicit)
+
+The CLI will **not**:
+
+* replace package managers
+* auto-modify code
+* run builds or deployments
+* infer intent implicitly
+
+## Invariants (Must Hold)
+
+* Registry access is optional
+* CLI behavior is deterministic
+* All side effects are explicit
+* All resolution decisions are explainable
+
+## Mental Model
+
+> The Mori CLI is a **navigation and coordination tool**, not an execution engine.
+
+It helps developers and agents:
+
+* find knowledge
+* reuse existing context
+* move between projects safely

@@ -4,12 +4,14 @@ description: How Mori interrogates a repository after receiving a VCS event, loa
 icon: SearchCode
 ---
 
-Mori interrogates repositories to determine participation and activate reactions in a replay-safe, event-sourced way:
+This document describes **how Mori interrogates a repository after receiving a VCS event**, determines whether the repository participates in Mori, loads configuration, and activates reactions in a **replay-safe, event-sourced way**.
 
-- **Observation, not assumption** — Mori observes facts about a repo rather than checking it
-- **Configuration as domain data** — discovery, loading, validation, and activation are modeled as events
-- **Deterministic** — interrogation always happens at a specific changeset, never implicitly at HEAD
-- **Compatible** with Git, Jujutsu (jj), local-first workflows, CI/ephemeral checkouts, and incremental replay
+This design is compatible with:
+
+* Git and Jujutsu (jj)
+* Local-first workflows
+* CI / ephemeral checkouts
+* Incremental replay
 
 ## Problem Statement
 
@@ -21,9 +23,15 @@ Given a VCS event (e.g. `ChangesetObserved`), Mori must answer:
 
 Constraints:
 
-- No implicit assumptions
-- No reliance on mutable filesystem state during replay
-- Configuration changes must be observable and auditable
+* No implicit assumptions
+* No reliance on mutable filesystem state during replay
+* Configuration changes must be observable and auditable
+
+## Core Principle
+
+> **Mori never "checks a repo". Mori observes facts about a repo.**
+
+Configuration discovery, loading, validation, and activation are all modeled as **events**, not side effects.
 
 ## Repository Context Resolution
 
@@ -41,11 +49,13 @@ data RepoContext
 
 Rules:
 
-- Local ingestion uses `LocalRepo`
-- CI / hosted ingestion uses `CheckedOutRepo`
-- Interrogation always happens **at a specific changeset**, never implicitly at `HEAD`
+* Local ingestion uses `LocalRepo`
+* CI / hosted ingestion uses `CheckedOutRepo`
+* Interrogation always happens **at a specific changeset**, never implicitly at `HEAD`
 
-## Configuration Discovery
+## Mori Configuration Discovery
+
+### Canonical location
 
 Mori configuration is discovered at **exactly one location**:
 
@@ -57,9 +67,9 @@ No directory walking. No heuristics.
 
 Benefits:
 
-- Deterministic behavior
-- Cheap interrogation
-- Easy caching
+* Deterministic behavior
+* Cheap interrogation
+* Easy caching
 
 ## Interrogation Result Model
 
@@ -79,7 +89,10 @@ data MoriConfigRef = MoriConfigRef
   }
 ```
 
-The `hash` is a **content hash**, not mtime. This enables change detection, replay, and caching.
+Notes:
+
+* `hash` is a **content hash**, not mtime
+* Enables change detection, replay, and caching
 
 ## Configuration Loading Pipeline
 
@@ -99,7 +112,7 @@ loadMoriConfig
 
 Only validated configurations may activate reactions.
 
-## MoriConfigObserved Event
+## MoriConfigObserved Event (Critical)
 
 Successful configuration loading emits a first-class domain event:
 
@@ -113,16 +126,16 @@ data MoriConfigObservedV1 = MoriConfigObservedV1
 
 Why this matters:
 
-- Configuration becomes **versioned domain data**
-- Replay behavior is deterministic
-- Config-driven reactions are auditable
+* Configuration becomes **versioned domain data**
+* Replay behavior is deterministic
+* Config-driven reactions are auditable
 
 ## Invalid or Missing Configuration
 
 ### Missing config
 
-- Emit nothing
-- Repo remains inactive
+* Emit nothing
+* Repo remains inactive
 
 ### Invalid config
 
@@ -137,9 +150,9 @@ data MoriConfigInvalidV1 = MoriConfigInvalidV1
 
 Invalid config:
 
-- Blocks reactions
-- Surfaces actionable diagnostics
-- Does not poison future valid configs
+* Blocks reactions
+* Surfaces actionable diagnostics
+* Does not poison future valid configs
 
 ## Active Configuration Projection
 
@@ -151,8 +164,8 @@ ActiveMoriConfig :: RepoId -> Maybe ContentHash
 
 Rules:
 
-- Updated only by `MoriConfigObserved`
-- Cleared by config removal or invalidation (optional policy)
+* Updated only by `MoriConfigObserved`
+* Cleared by config removal or invalidation (optional policy)
 
 Reactor logic becomes:
 
@@ -165,17 +178,17 @@ onEvent event =
 
 ## Caching Strategy
 
-### Config Content Cache (performance)
+### A) Config Content Cache (performance)
 
-- Key: `(repoUuid, configHash)`
-- Value: parsed + validated `MoriConfig`
-- Safe to evict at any time
+* Key: `(repoUuid, configHash)`
+* Value: parsed + validated `MoriConfig`
+* Safe to evict at any time
 
-### Active Config Projection (correctness)
+### B) Active Config Projection (correctness)
 
-- Key: `repoUuid`
-- Value: current `configHash`
-- Rebuilt by replaying events
+* Key: `repoUuid`
+* Value: current `configHash`
+* Rebuilt by replaying events
 
 Never conflate these two.
 
@@ -196,40 +209,55 @@ Full pipeline:
 
 ```
 VCS Event
-  |
+  ↓
 Resolve RepoContext
-  |
+  ↓
 Interrogate Config (if needed)
-  |
+  ↓
 Emit MoriConfigObserved / Invalid
-  |
+  ↓
 Project Active Config
-  |
+  ↓
 Run Config-Driven Reactions
 ```
 
 Configuration is **not read dynamically** during reaction execution.
 
-## Failure Modes and Guarantees
+## Failure Modes & Guarantees
 
-| Scenario | Outcome |
-|---|---|
-| No mori.dhall | Safe noop |
-| Invalid config | Explicit error event |
-| Config removed | Active config cleared |
-| Replay months later | Identical behavior |
+| Scenario            | Outcome               |
+| ------------------- | --------------------- |
+| No mori.dhall       | Safe noop             |
+| Invalid config      | Explicit error event  |
+| Config removed      | Active config cleared |
+| Replay months later | Identical behavior    |
 
 This design guarantees:
 
-- Determinism
-- Idempotency
-- Local/CI parity
+* Determinism
+* Idempotency
+* Local/CI parity
 
 ## Relationship to Mori Philosophy
 
-- Metadata is explicit
-- State is derived
-- Configuration is domain data
-- Behavior is explainable
+* Metadata is explicit
+* State is derived
+* Configuration is domain data
+* Behavior is explainable
 
 > **Mori activates repositories by observation, not assumption.**
+
+## Open Questions
+
+The following design questions remain to be resolved:
+
+* **Dhall imports**: Network imports allowed? Pinned? What about import caching?
+* **`mori.automation.dhall` loading**: Where's the full automation loading pipeline?
+* **ContentHash algorithm**: SHA256? Blake3? Includes imports or just root file?
+* **Changeset-specific loading**: How does "at a specific changeset" work? `git show`? Worktree?
+* **Circular imports**: Detection? Error handling?
+* **Partial validity**: Flow when `mori.dhall` is valid but `mori.automation.dhall` is invalid?
+
+### Resolved
+
+* **RepoId generation**: TypeID (`repo_xxxx`) generated on `mori init`. See [Event Sourcing](/docs/concepts/event-sourcing).

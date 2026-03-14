@@ -8,11 +8,11 @@ Mori defines a **VCS-neutral, event-sourced schema** for reacting to version-con
 
 ## Goals
 
-- Support **Git today, Jujutsu tomorrow** without schema breakage
-- Treat VCS activity as an **append-only event log**
-- Be **provider-agnostic** (local repos, hosted platforms later)
-- Survive **rebases, amends, squashes, and force pushes**
-- Enable **deterministic replay and idempotent reactions**
+* Support **Git today, Jujutsu tomorrow** without schema breakage
+* Treat VCS activity as an **append-only event log**
+* Be **provider-agnostic** (local repos, hosted platforms later)
+* Survive **rebases, amends, squashes, and force pushes**
+* Enable **deterministic replay and idempotent reactions**
 
 Core principle:
 
@@ -20,9 +20,7 @@ Core principle:
 
 ## Core Concepts
 
-### Event Envelope
-
-Every event is wrapped in a generic envelope that carries identity, versioning, and timing metadata:
+### Event Envelope (required for all events)
 
 ```haskell
 data EventEnvelope a = EventEnvelope
@@ -38,8 +36,8 @@ data EventEnvelope a = EventEnvelope
 
 **Why two timestamps?**
 
-- `occurredAt`: VCS truth (commit / changeset time)
-- `observedAt`: ingestion truth (important for replay, delay, rewrites)
+* `occurredAt`: VCS truth (commit / changeset time)
+* `observedAt`: ingestion truth (important for replay, delay, rewrites)
 
 ## Repository Identity
 
@@ -71,15 +69,15 @@ data ObjectId = ObjectId
 
 Used consistently for:
 
-- Changesets / commits
-- Trees
-- Parents
+* Changesets / commits
+* Trees
+* Parents
 
 ## Canonical Events
 
-### ChangesetObserved
+### 1. ChangesetObserved (foundation event)
 
-The foundation event. Represents **observing a changeset node in the DAG** at a point in time:
+Represents **observing a changeset node in the DAG** at a point in time.
 
 ```haskell
 data ChangesetObservedV1 = ChangesetObservedV1
@@ -116,9 +114,9 @@ data Message = Message
   }
 ```
 
-### ChangesetRewritten
+### 2. ChangesetRewritten
 
-Represents **history mutation** (first-class in jj, inferred in Git):
+Represents **history mutation** (first-class in jj, inferred in Git).
 
 ```haskell
 data ChangesetRewrittenV1 = ChangesetRewrittenV1
@@ -141,9 +139,9 @@ data RewriteReason
 
 No history is deleted. Rewrites add **edges**, not removals.
 
-### RefObserved
+### 3. RefObserved
 
-Represents observing a **named pointer** at a moment in time:
+Represents observing a **named pointer** at a moment in time.
 
 ```haskell
 data RefObservedV1 = RefObservedV1
@@ -166,21 +164,21 @@ Refs are **views**, not properties of changesets.
 
 ### Git to Canonical
 
-- Commit SHA maps to `ObjectId Git`
-- Tree SHA maps to `ObjectId Git`
-- Parents map to `Set ObjectId`
-- Author/Committer preserved exactly
-- Commit message parsed into subject/body/trailers
-- Branches detected via ref inspection, emitted as `RefObserved`
-- Rewrites usually not explicit; ref movement is authoritative
+* Commit SHA maps to `ObjectId Git`
+* Tree SHA maps to `ObjectId Git`
+* Parents map to `Set ObjectId`
+* Author / Committer preserved exactly
+* Commit message parsed into subject/body/trailers
+* Branches detected via ref inspection and emitted as `RefObserved`
+* Rewrites usually **not explicit**; ref movement is authoritative
 
 ### Jujutsu to Canonical
 
-- Changeset ID maps to `ObjectId Jujutsu`
-- Parents / tree mapped directly
-- Rewrites emitted explicitly as `ChangesetRewritten`
-- Bookmarks emitted as `RefObserved (kind = Bookmark)`
-- Multiple heads are normal and supported
+* Changeset ID maps to `ObjectId Jujutsu`
+* Parents / tree mapped directly
+* Rewrites emitted explicitly as `ChangesetRewritten`
+* Bookmarks emitted as `RefObserved (kind = Bookmark)`
+* Multiple heads are normal and supported
 
 ## Event Invariants
 
@@ -195,48 +193,48 @@ Refs are **views**, not properties of changesets.
 
 ### Changeset Index
 
-- Key: `ObjectId`
-- Value: latest observed payload
+* Key: `ObjectId`
+* Value: latest observed payload
 
 ### Rewrite Graph
 
-- Directed edges: `oldId` to `newId`
-- Used to follow history evolution (especially jj)
+* Directed edges: `oldId` to `newId`
+* Used to follow history evolution (especially jj)
 
 ### Ref Table
 
-- Key: `Ref`
-- Value: last observed `Maybe ObjectId`
+* Key: `Ref`
+* Value: last observed `Maybe ObjectId`
 
 ### Reachability (optional cache)
 
-- Used mainly for Git
-- Rebuildable from scratch
+* Used mainly for Git
+* Rebuildable from scratch
 
 ## Idempotency & Reactions
 
-Every reaction has a deterministic **reaction key**:
+* Every reaction has a deterministic **reaction key**:
 
 ```
 hash(eventId + reactionName + reactionVersion)
 ```
 
-- Store processed reaction keys in a table
-- Use `INSERT ... ON CONFLICT DO NOTHING`
-- Replays never re-execute side effects
-- Bump `reactionVersion` to intentionally re-run logic
+* Store processed reaction keys in a table
+* Use `INSERT ... ON CONFLICT DO NOTHING`
+* Replays never re-execute side effects
+* Bump `reactionVersion` to intentionally re-run logic
 
 ## CLI Ingestion Architecture
 
 ```
 Repo Scanner
-   |
+   ↓
 VCS Adapter (git | jj)
-   |
+   ↓
 Normalizer
-   |
+   ↓
 Event Store (append-only)
-   |
+   ↓
 Reactor + Projections
 ```
 
@@ -261,13 +259,13 @@ This model treats Git as a constrained subset of Jujutsu and remains stable as w
 
 The following design questions remain to be resolved:
 
-- **metadata field usage**: What adapter-specific extensions belong here? Examples needed.
-- **Multi-remote repos**: How are repos with multiple remotes handled?
+* **metadata field usage**: What adapter-specific extensions belong here? Examples needed.
+* **Multi-remote repos**: How are repos with multiple remotes handled?
 
 ### Resolved
 
-- **RepoId generation**: TypeID (`repo_xxxx`) generated on `mori init`.
-- **Cursor persistence**: Subscription checkpoints in MessageDB.
-- **Event storage**: MessageDB on PostgreSQL. Streams organized as `repository-{repo_typeid}`.
-- **touchedPaths**: Added to `ChangesetObservedV1`. Required for path-based automation matching.
-- **observedAt in ChangesetRewrittenV1**: Removed -- `observedAt` lives in the `EventEnvelope`, not the payload. The `ChangesetRewrittenV1` payload carries only domain-specific fields.
+* **RepoId generation**: TypeID (`repo_xxxx`) generated on `mori init`. See [Event Sourcing](/docs/concepts/event-sourcing).
+* **Cursor persistence**: Subscription checkpoints in MessageDB. See [Event Sourcing](/docs/concepts/event-sourcing).
+* **Event storage**: MessageDB on PostgreSQL. Streams organized as `repository-{repo_typeid}`.
+* **touchedPaths**: Added to `ChangesetObservedV1`. Required for path-based automation matching.
+* **observedAt in ChangesetRewrittenV1**: Removed -- `observedAt` lives in the `EventEnvelope`, not the payload. The `ChangesetRewrittenV1` payload carries only domain-specific fields.

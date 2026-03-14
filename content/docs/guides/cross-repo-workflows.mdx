@@ -1,0 +1,301 @@
+---
+title: Cross-Repo Workflows
+description: Trigger actions across repositories with workflow signals
+icon: GitBranch
+---
+
+Cross-repo workflows let a change in one repository automatically trigger
+actions in other repositories on the same machine. When a schema changes in
+`schema-repo`, mori can automatically run codegen in `payment-service` and
+`billing-service` — with full tracing of what happened and whether it succeeded.
+
+This builds on [Automation](/docs/guides/automation) and the [Local Registry](/docs/concepts/local-registry).
+
+---
+
+## How It Works
+
+Mori uses **workflow signals** — typed, correlated events that propagate across
+repository boundaries through the event store. The flow:
+
+1. A VCS event (commit, tag) matches a selector in the source repo
+2. The source repo's reaction emits a **Signal** action
+3. Mori resolves target projects via the registry, writes signal events to their streams
+4. Each target repo's automation matches the signal and runs its own reactions
+5. A **workflow projection** tracks the entire chain for observability
+
+No repos call each other directly. They emit facts; other repos react.
+
+---
+
+## Prerequisites
+
+- [Automation](/docs/guides/automation) set up in both source and target repos
+- All repos registered in the local registry (`mori register`)
+- All repos have a `mori/repo-id` file (created by `mori init` or `mori automate ingest`)
+- Database migrations run (the `mori.workflows` and `mori.workflow_steps` tables)
+
+---
+
+## Configuration
+
+### Source Repo: Emitting Signals
+
+Add a `Signal` action to a reaction in the source repo's `mori.automation.dhall`:
+
+```haskell
+let EventSelector = ./schema/automation/EventSelector.dhall
+let ReactionAction = ./schema/automation/ReactionAction.dhall
+
+in  { events =
+      [ EventSelector.ChangesetSelector
+          { name = "openapi-changed"
+          , paths = [ "openapi.yaml", "openapi/**" ]
+          , branches = [ "main" ]
+          , messagePatterns = [] : List Text
+          }
+      ]
+    , reactions =
+      [ { name = "notify-clients"
+        , on = [ "openapi-changed" ]
+        , actions =
+          [ ReactionAction.Signal
+              { signalType = "SchemaChanged"
+              , targets = [ "payment-service", "billing-service" ]
+              , payload = [ { mapKey = "schema", mapValue = "openapi.yaml" } ]
+              }
+          ]
+        }
+      ]
+    , execution = { allowLocal = True, allowCI = False, maxConcurrency = None Integer }
+    }
+```
+
+The `Signal` action fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `signalType` | `Text` | Domain-meaningful name (e.g., `"SchemaChanged"`, `"ArtifactPublished"`) |
+| `targets` | `List Text` | Project names from the registry, or `"*dependents*"` (see below) |
+| `payload` | `List { mapKey, mapValue }` | Key-value data forwarded to targets |
+
+### Target Repo: Receiving Signals
+
+Add a `SignalSelector` to the target repo's `mori.automation.dhall`:
+
+```haskell
+let EventSelector = ./schema/automation/EventSelector.dhall
+let ReactionAction = ./schema/automation/ReactionAction.dhall
+
+in  { events =
+      [ EventSelector.SignalSelector
+          { name = "schema-updated"
+          , signalTypes = [ "SchemaChanged" ]
+          , sourceProjects = [ "schema-repo" ]
+          }
+      ]
+    , reactions =
+      [ { name = "regenerate-client"
+        , on = [ "schema-updated" ]
+        , actions =
+          [ ReactionAction.RunCommand
+              { command = "make"
+              , args = [ "generate-client" ]
+              , workingDir = None Text
+              , timeout = Some +120
+              , env = [] : List { mapKey : Text, mapValue : Text }
+              }
+          ]
+        }
+      ]
+    , execution = { allowLocal = True, allowCI = False, maxConcurrency = None Integer }
+    }
+```
+
+The `SignalSelector` fields:
+
+| Field | Type | Behavior |
+|-------|------|----------|
+| `name` | `Text` | Unique selector name |
+| `signalTypes` | `List Text` | Signal types to match. Empty = match all. |
+| `sourceProjects` | `List Text` | Source project names to match. Empty = match all. |
+
+---
+
+## Dynamic Targets: `*dependents*`
+
+Instead of naming every target explicitly, use `"*dependents*"` to automatically
+resolve all projects that depend on any package published by the source project:
+
+```haskell
+ReactionAction.Signal
+  { signalType = "SchemaChanged"
+  , targets = [ "*dependents*" ]
+  , payload = [ { mapKey = "schema", mapValue = "openapi.yaml" } ]
+  }
+```
+
+Mori queries the registry's dependency graph at dispatch time:
+
+1. Finds all packages declared by the source project
+2. Finds all other projects that list those packages as dependencies
+3. Dispatches signals to each
+
+You can mix dynamic and explicit targets — they are deduplicated:
+
+```haskell
+, targets = [ "*dependents*", "extra-service" ]
+```
+
+---
+
+## Event Flow
+
+```
+1. Developer commits openapi.yaml in schema-repo
+
+2. mori automate ingest git (schema-repo)
+   → ChangesetObserved written to repository-{schema-repo-id}-{date}
+
+3. mori-automation subscription matches "openapi-changed" selector
+   → Triggers "notify-clients" reaction
+   → Writes ReactionTriggered to reaction-{rxn-id}
+
+4. mori-reaction-executor picks up the reaction
+   → Sees Signal action with targets ["payment-service", "billing-service"]
+   → Resolves targets via registry → gets repo IDs and paths
+   → Generates WorkflowId (wf_xxxx)
+   → Writes events:
+     - WorkflowStarted to workflow-{wf-id}
+     - WorkflowSignalEmitted to source repo's stream (audit trail)
+     - WorkflowSignalReceived to each target repo's stream
+     - WorkflowSignalDelivered to workflow-{wf-id} (per target)
+
+5. mori-automation subscription picks up WorkflowSignalReceived
+   on payment-service's stream
+   → Matches "schema-updated" SignalSelector
+   → Triggers "regenerate-client" reaction
+
+6. mori-reaction-executor runs `make generate-client`
+   → Writes ReactionCompleted or ReactionFailed
+
+7. mori-workflow subscription detects all steps done
+   → Writes WorkflowCompleted to workflow-{wf-id}
+```
+
+---
+
+## CLI Commands
+
+### List recent workflows
+
+```bash
+mori workflow list
+```
+
+```
+Recent Workflows
+================
+ID                      SIGNAL          SOURCE        TARGETS  STATUS       STARTED
+wf_01h455vb4pex5vs...  SchemaChanged   schema-repo         2  ✓ completed  2026-03-06 10:15:32 UTC
+wf_01h455vb4pex5vs...  ConfigUpdated   config-repo         1  ✗ failed     2026-03-06 09:30:15 UTC
+```
+
+Limit the number of results:
+
+```bash
+mori workflow list -n 5
+```
+
+### Show active workflows
+
+```bash
+mori workflow status
+```
+
+Shows workflows with steps still in progress (pending or delivered but not
+yet completed). Includes step details for each active workflow.
+
+### Trace a workflow
+
+```bash
+mori workflow trace wf_01h455vb4pex5vsknk084sn02q
+```
+
+```
+Workflow Detail
+===============
+ID:              wf_01h455vb4pex5vsknk084sn02q
+Signal Type:     SchemaChanged
+Source Project:  schema-repo
+Source Repo:     repo_01h455vb4pex5vsknk084sn02q
+Status:          ✓ completed
+Targets:         payment-service, billing-service
+Started At:      2026-03-06 10:15:32 UTC
+Completed At:    2026-03-06 10:15:33 UTC
+Duration:        1253ms
+
+  Steps for wf_01h455vb4pex5vsknk084sn02q:
+  TARGET            STATUS       REACTION                DURATION  ERROR
+  payment-service   ✓ completed  rxn_01h4...002            1040ms
+  billing-service   ✓ completed  rxn_01h4...003            1168ms
+```
+
+---
+
+## Subscriptions
+
+When `mori automate run` starts, it runs four concurrent subscriptions:
+
+| Subscription | Category | Purpose |
+|-------------|----------|---------|
+| `mori-automation` | `repository` | Match selectors, trigger reactions |
+| `mori-reaction-executor` | `reaction` | Execute triggered actions (including signal dispatch) |
+| `mori-registry` | `project` | Populate registry read model |
+| `mori-workflow` | `workflow` | Maintain `mori.workflows` and `mori.workflow_steps` projections |
+
+Plus a shibuya worker for scheduled actions.
+
+---
+
+## Troubleshooting
+
+### Signal target not found
+
+```
+target not found: payment-service
+```
+
+The target project isn't registered in the local registry. Run:
+
+```bash
+cd /path/to/payment-service
+mori register
+```
+
+### No repo-id for target
+
+```
+no repo-id for target: payment-service
+```
+
+The target project directory doesn't have a `mori/repo-id` file. Run
+`mori automate ingest git` or `mori init` in the target project to create one.
+
+### No workflows found
+
+If `mori workflow list` returns no results:
+
+1. Verify the `mori.workflows` table exists (run migrations)
+2. Verify the `mori-workflow` subscription is running (`mori automate run`)
+3. Check that signal dispatch is working — look for `WorkflowSignalEmitted` events in the source repo's stream
+
+### `*dependents*` resolves to no targets
+
+The source project has no packages declared, or no other projects list those
+packages as dependencies. Verify with:
+
+```bash
+mori deps resolve  # in the source project
+mori registry list # check other projects have dependencies
+```

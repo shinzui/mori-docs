@@ -4,7 +4,8 @@ description: The mori.dhall type system and project identity layer
 icon: Braces
 ---
 
-The `mori.dhall` schema defines the **identity layer** of Mori configuration.
+> This document defines the **identity layer** of Mori configuration (`mori.dhall`).
+> For reactive automation, see [Automation Configuration](/docs/concepts/automation-configuration).
 
 **Mori** is a typed project metadata system for repositories.
 It describes *what a project is*, *what it depends on*, and *what agents should know about it*.
@@ -17,12 +18,23 @@ Mori is:
 
 ## Design Principles
 
-1. **Single source of truth** — Dhall files are authoritative; JSON is derived
-2. **Typed, composable metadata** — no stringly-typed conventions
-3. **CLI-first UX** — humans interact via `mori` commands, not raw Dhall
-4. **Agent-aware by default** — metadata designed to generate reliable agent context
-5. **Knowledge lives where it is owned** — shared knowledge in shared projects, not duplicated per repo
-6. **Identity precedes behavior** — `mori.dhall` describes what a project *is*; `mori.automation.dhall` describes what *happens*
+1. **Single source of truth**
+   Dhall files are authoritative; JSON is derived.
+
+2. **Typed, composable metadata**
+   No stringly-typed conventions.
+
+3. **CLI-first UX**
+   Humans interact via `mori` commands, not raw Dhall.
+
+4. **Agent-aware by default**
+   Metadata is designed to generate reliable agent context.
+
+5. **Knowledge lives where it is owned**
+   Shared knowledge (standards, conventions) lives in shared projects, not duplicated per repo.
+
+6. **Identity precedes behavior**
+   `mori.dhall` describes what a project *is*; `mori.automation.dhall` describes what *happens*.
 
 ## v0 Scope
 
@@ -34,117 +46,6 @@ v0 defines the **identity layer**:
 * Agent context hints
 
 **Automation and reactive behavior are defined separately in `mori.automation.dhall`.**
-
-## Schema Package Structure
-
-The schema is organized into three directories:
-
-```
-mori-schema/
-├── package.dhall              # Entry point -- re-exports all types
-├── Project.dhall              # Root project manifest type
-├── types/                     # 16 union types (enumerations)
-│   ├── Language.dhall
-│   ├── PackageType.dhall
-│   ├── Lifecycle.dhall
-│   ├── Visibility.dhall
-│   ├── DependencyKind.dhall
-│   ├── DependencySource.dhall
-│   ├── DocKind.dhall
-│   ├── DocLocation.dhall
-│   ├── DocAudience.dhall
-│   ├── ApiType.dhall
-│   ├── ApiDependencyRole.dhall
-│   ├── ApiUpdateStrategy.dhall
-│   ├── ConsumerBatching.dhall
-│   ├── ConfigValueType.dhall
-│   ├── ConfigSourceHint.dhall
-│   ├── StandardScope.dhall
-│   └── PermissionMode.dhall
-├── records/                   # 15 record types
-│   ├── Repo.dhall
-│   ├── Package.dhall
-│   ├── PackageBundle.dhall
-│   ├── Dependency.dhall
-│   ├── DocRef.dhall
-│   ├── Runtime.dhall
-│   ├── ConfigItem.dhall
-│   ├── Api.dhall
-│   ├── ApiDependency.dhall
-│   ├── ApiUpdatePolicy.dhall
-│   ├── AgentHint.dhall
-│   ├── Skill.dhall
-│   ├── SkillTool.dhall
-│   ├── Subagent.dhall
-│   └── StandardProject.dhall
-└── automation/                # 5 automation types
-    ├── Automation.dhall
-    ├── EventSelector.dhall
-    ├── Reaction.dhall
-    ├── ReactionAction.dhall
-    └── ExecutionPolicy.dhall
-```
-
-All types are re-exported through `package.dhall`, so consumers import a single file:
-
-```haskell
-let Schema = ./schema/package.dhall
-
-in  Schema.Project::{ ... }
-```
-
-## Type Hierarchy
-
-```
-Project (root -- mori.dhall)
-├── project metadata
-│   ├── type: PackageType
-│   ├── language: Language
-│   └── lifecycle: Lifecycle
-├── repos: List Repo
-├── packages: List Package
-│   ├── type: PackageType
-│   ├── language: Language
-│   ├── visibility: Visibility
-│   ├── runtime: Runtime
-│   ├── dependencies: List Dependency
-│   │   └── WithAugmentation -> DocRef
-│   ├── docs: List DocRef
-│   │   ├── kind: DocKind
-│   │   ├── audience: DocAudience
-│   │   └── location: DocLocation
-│   └── config: List ConfigItem
-│       ├── type: ConfigValueType
-│       └── sourceHint: ConfigSourceHint
-├── bundles: List PackageBundle
-├── apis: List Api
-│   ├── type: ApiType
-│   ├── dependencies: List ApiDependency
-│   │   └── role: ApiDependencyRole
-│   └── updatePolicy: ApiUpdatePolicy
-│       ├── strategy: ApiUpdateStrategy
-│       └── consumerBatching: ConsumerBatching
-├── agents: List AgentHint
-├── skills: List Skill
-│   ├── tools: List SkillTool
-│   └── metadata: Map Text Text
-├── subagents: List Subagent
-│   └── permissionMode: PermissionMode
-├── standards: List Text
-└── docs: List DocRef
-
-Automation (mori.automation.dhall)
-├── events: List EventSelector
-│   ├── ChangesetSelector
-│   └── RefSelector
-├── reactions: List Reaction
-│   └── actions: List ReactionAction
-│       ├── RunCommand
-│       ├── EmitEvent
-│       ├── Notify
-│       └── Schedule -> ScheduledAction
-└── execution: ExecutionPolicy
-```
 
 ## Dhall Schema (v0)
 
@@ -356,7 +257,7 @@ When a project declares a dependency on a bundle name, Mori resolves all package
 }
 ```
 
-## Shared Standards & Canonical Knowledge
+## Shared Standards & Canonical Knowledge (Proposed v0 Extension)
 
 Many organizations maintain **standardization documents** that are:
 
@@ -1191,9 +1092,8 @@ Mori acts as the **contract**, infrastructure as the **implementation**.
 
 See the following architectural documents for the complete vision:
 
-* `mori-high-level-architecture.md` -- Data Plane + Control Plane
-* `mori-automation-configuration.md` -- Reactive automation
-* `mori-repository-interrogation.md` -- Event-sourced activation
+* [Automation Configuration](/docs/concepts/automation-configuration) -- Reactive automation
+* [Repository Interrogation](/docs/concepts/repository-interrogation) -- Event-sourced activation
 
 ## Mental Model
 

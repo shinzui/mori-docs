@@ -4,11 +4,13 @@ description: Set up mori cd and other shell features
 icon: Terminal
 ---
 
-Mori provides shell integration for commands that need to affect the parent shell environment. Currently this covers the `mori cd` command.
+Mori provides shell integration for commands that need to affect the
+parent shell environment. Currently this covers the `mori cd` command.
 
-## `mori cd` — Navigate to a project
+## `mori cd` -- Navigate to a project
 
-`mori cd` looks up a registered project and changes directory to its local path.
+`mori cd` looks up a registered project and changes directory to its
+local path.
 
 ```bash
 mori cd namespace/project   # fully qualified
@@ -17,13 +19,15 @@ mori cd project             # by name (any namespace)
 
 ### Why a shell wrapper is needed
 
-A subprocess cannot change the working directory of its parent shell. The `mori` binary prints the resolved path to stdout; a thin shell wrapper captures it and calls `builtin cd`.
+A subprocess cannot change the working directory of its parent shell.
+The `mori` binary prints the resolved path to stdout; a thin shell
+wrapper captures it and calls `builtin cd`.
 
 ### Zsh setup
 
 Add the following to `~/.zshrc`:
 
-```text
+```zsh
 mori() {
   if [[ "$1" == "cd" ]]; then
     shift
@@ -57,7 +61,7 @@ mori() {
 
 Add the following to `~/.config/fish/functions/mori.fish`:
 
-```text
+```fish
 function mori
     if test (count $argv) -ge 1; and test "$argv[1]" = "cd"
         set -l target (command mori cd $argv[2..])
@@ -71,9 +75,11 @@ end
 
 ## How it works
 
-1. The shell function intercepts `mori cd <project>`
-2. It calls `command mori cd <project>` which queries the local registry and prints the project's filesystem path to stdout
-3. If the lookup fails, `mori` exits non-zero and the function propagates the error
-4. On success, `builtin cd` changes the shell's working directory
+1. The shell function intercepts `mori cd <project>`.
+2. It calls `command mori cd <project>` which queries the local
+   registry and prints the project's filesystem path to stdout.
+3. If the lookup fails, `mori` exits non-zero and the function
+   propagates the error via `return $?`.
+4. On success, `builtin cd` changes the shell's working directory.
 
 All other `mori` subcommands pass through to the binary unchanged.

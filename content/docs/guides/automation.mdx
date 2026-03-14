@@ -4,7 +4,9 @@ description: Configure reactive automation with event selectors and reactions
 icon: Zap
 ---
 
-Mori's automation engine reacts to VCS events (commits, branch/tag changes) by matching them against configurable selectors and executing actions. It runs as a long-lived process that continuously processes events from the event store.
+Mori's automation engine reacts to VCS events (commits, branch/tag changes) by
+matching them against configurable selectors and executing actions. It runs as a
+long-lived process that continuously processes events from the event store.
 
 ## Prerequisites
 
@@ -160,7 +162,7 @@ Matches `RefObserved` events (branch/tag pointer changes).
 | `refPatterns` | `List Text` | Ref name patterns (e.g., `"main"`, `"release/*"`). Empty = match all. |
 | `kinds` | `List Text` | `"branch"`, `"tag"`, or both. Empty = match all. |
 
-### Glob Patterns
+### Glob patterns
 
 - `*` matches any characters within a single path segment (stops at `/`)
 - `**` matches any characters across path segments (crosses `/`)

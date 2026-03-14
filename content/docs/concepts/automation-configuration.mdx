@@ -1,0 +1,277 @@
+---
+title: Automation Configuration
+description: The mori.automation.dhall configuration file for reactive behavior
+icon: Settings
+---
+
+This document defines **`mori.automation.dhall`**, the configuration file that enables **reactive behavior** in Mori.
+
+It is intentionally **separate** from `mori.dhall`, which defines **project identity and dependencies**.
+
+## Purpose and Separation of Concerns
+
+Mori uses **two distinct configuration layers**:
+
+### `mori.dhall` (Project Manifest)
+
+* Describes **what the project is**
+* Declares ownership, identity, dependencies
+* Used for documentation, indexing, and registry purposes
+* Safe to load eagerly
+
+### `mori.automation.dhall` (Automation Policy)
+
+* Describes **what Mori should do** in response to events
+* Declares event selectors, reactions, execution constraints
+* Operational and security-sensitive
+* Loaded only during repository interrogation
+
+> A repository may have `mori.dhall` without ever enabling automation.
+
+## Relationship Between the Two Files
+
+`mori.automation.dhall` **must explicitly reference** `mori.dhall`.
+
+This establishes a clear dependency direction:
+
+```
+mori.automation.dhall ───▶ mori.dhall
+```
+
+Automation **cannot exist without project identity**, but project identity does not imply automation.
+
+## Canonical Structure
+
+```haskell
+{ project : ./mori.dhall
+, automation : Automation
+}
+```
+
+This makes the linkage explicit and auditable.
+
+## Automation Schema
+
+```haskell
+Automation =
+{ events : List EventSelector
+, reactions : List Reaction
+, execution : ExecutionPolicy
+}
+```
+
+No project metadata is duplicated here.
+
+## Event Selection
+
+Automation reacts only to **explicitly selected events**.
+
+```haskell
+EventSelector =
+  < ChangesetObserved : ChangesetObservedSelector
+  | ChangesetRewritten : ChangesetRewrittenSelector
+  | RefObserved : RefObservedSelector
+  >
+```
+
+### ChangesetObserved Selector
+
+```haskell
+ChangesetObservedSelector =
+{ vcs : Optional < Git | Jujutsu >
+, branches : Optional (List Text)
+, paths : Optional (List Text)
+}
+```
+
+Notes:
+
+* `branches` are **observational filters**, not authoritative
+* `paths` enables cheap change-based triggering
+
+### ChangesetRewritten Selector
+
+```haskell
+ChangesetRewrittenSelector =
+{ reasons : Optional (List < Rebase | Amend | Squash | ConflictResolution >)
+}
+```
+
+### RefObserved Selector
+
+```haskell
+RefObservedSelector =
+{ kinds : Optional (List < Branch | Tag | Bookmark >)
+, names : Optional (List Text)
+}
+```
+
+## Reactions
+
+Reactions declare **what Mori does** when selected events occur.
+
+```haskell
+Reaction =
+{ name : Text
+, when : List EventSelector
+, run : ReactionAction
+}
+```
+
+Rules:
+
+* Reactions are declarative
+* No implicit control flow
+* No access to mutable global state
+
+## Reaction Actions
+
+```haskell
+ReactionAction =
+  < RunCommand : CommandAction
+  | EmitEvent : EmitEventAction
+  | Notify : NotifyAction
+  | Schedule : ScheduleAction
+  >
+```
+
+### RunCommand
+
+```haskell
+CommandAction =
+{ command : Text
+, args : List Text
+, workingDir : Optional Text
+}
+```
+
+Constraints:
+
+* No shell expansion
+* Arguments are explicit and deterministic
+
+### EmitEvent
+
+```haskell
+EmitEventAction =
+{ eventType : Text
+, payload : Text
+}
+```
+
+### Notify
+
+```haskell
+NotifyAction =
+{ channel : < Slack | Email | Webhook >
+, target : Text
+}
+```
+
+### Schedule
+
+```haskell
+ScheduleAction =
+{ delaySeconds : Natural
+, action : ReactionAction
+}
+```
+
+Allows deferred execution without embedding queue semantics.
+
+## Execution Policy
+
+```haskell
+ExecutionPolicy =
+{ allowLocal : Bool
+, allowCI : Bool
+, maxConcurrency : Natural
+}
+```
+
+Used to enforce:
+
+* Safety boundaries
+* CI vs local execution rules
+* Resource limits
+
+## Validation Rules
+
+An automation config is invalid if:
+
+* A reaction references no events
+* Execution policy forbids all environments
+* Project reference cannot be resolved
+
+An automation config with no reactions is valid but results in no-op behavior.
+
+Invalid automation blocks activation but does not invalidate `mori.dhall`.
+
+## Example Minimal `mori.automation.dhall`
+
+```haskell
+{ project = ./mori.dhall
+, automation =
+  { events = []
+  , reactions = []
+  , execution =
+    { allowLocal = True
+    , allowCI = False
+    , maxConcurrency = 1
+    }
+  }
+}
+```
+
+## Interrogation Semantics
+
+During repository interrogation:
+
+1. Mori loads `mori.dhall` (project identity)
+2. Mori checks for `mori.automation.dhall`
+3. If present and valid, automation is activated
+4. If absent, repository remains non-reactive
+
+This preserves safe defaults.
+
+## Design Invariants
+
+1. Automation is opt-in
+2. Identity precedes behavior
+3. Configuration is domain data
+4. All effects are explainable via events
+5. Replay produces identical behavior
+
+## Why This Split Matters
+
+This separation enables:
+
+* Indexing projects without running code
+* Safer CI defaults
+* Org-wide policy enforcement
+* Clear security boundaries
+* Easier mental models
+
+> **Projects declare who they are. Automation declares what happens.**
+
+## Relationship to Mori Architecture
+
+* Loaded during repository interrogation
+* Emitted as `MoriAutomationObserved` event
+* Drives reactor behavior
+* References but never duplicates project metadata
+
+## Open Questions
+
+The following design questions remain to be resolved:
+
+* **RunCommand security**: Sandboxing? Allowed binaries? Working directory restrictions?
+* **Environment variables**: How are they passed to commands? Inherited? Explicit?
+* **Command templating**: Can reactions reference event data? `${changeset.id}`?
+* **EmitEvent scope**: Local only? Cross-repo? How does it enter the event store?
+* **Notify auth**: Where do Slack tokens / webhook secrets live?
+* **Schedule persistence**: What if Mori restarts before delay expires?
+* **Reaction dependencies**: Can reaction B wait for reaction A? DAG support?
+* **Idempotency tracking**: How is "already ran" tracked? Event ID?
+* **maxConcurrency scope**: Per-repo? Per-reaction? Global?
+* **Error handling**: Retry? Dead-letter? Continue-on-failure?

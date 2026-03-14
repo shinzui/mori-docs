@@ -1,0 +1,65 @@
+---
+title: Command Aliases
+description: Define custom command shortcuts for frequently used mori commands
+icon: Tag
+---
+
+Aliases let you define short names for frequently used mori commands.
+They are configured in your user config file (`config.dhall`) and expanded
+before command parsing.
+
+## Configuration
+
+Aliases live in the `aliases` field of your `config.dhall`:
+
+```haskell
+{ aliases = toMap
+    { st = "show --full"
+    , reg = "registry list"
+    , val = "validate --strict"
+    }
+}
+```
+
+Each entry maps a short name (Text) to a command expansion (Text).
+
+## Config File Locations
+
+Mori looks for `config.dhall` in this order (first found wins):
+
+1. `MORI_CONFIG` environment variable
+2. `./mori-config.dhall` (local, per-project)
+3. `~/.config/mori/config.dhall` (XDG standard)
+4. `~/.mori/config.dhall` (dot-directory)
+
+## How Aliases Work
+
+- Only the first argument is checked for alias expansion.
+- The alias value is split on whitespace and replaces the first argument.
+- Any remaining arguments are appended after the expansion.
+- Built-in commands cannot be shadowed by aliases.
+
+**Examples:**
+
+```bash
+$ mori st my-project
+# expands to: mori show --full my-project
+
+$ mori reg --format json
+# expands to: mori registry list --format json
+```
+
+## Built-in Commands (cannot be aliased)
+
+`doctor`, `init`, `validate`, `show`, `register`, `registry`, `cd`, `schema`,
+`deps`, `agent`, `automate`, `completions`, `help`, `alias`
+
+## Managing Aliases
+
+List configured aliases:
+
+```bash
+$ mori alias list
+```
+
+To add, remove, or change aliases, edit your `config.dhall` directly.

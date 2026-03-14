@@ -1,0 +1,81 @@
+---
+title: Reaction History
+description: View and inspect automation reaction execution history
+icon: History
+---
+
+View and inspect automation reaction execution history. Reactions are
+triggered when VCS events match selectors defined in your automation
+config (`mori.automation.dhall`).
+
+## Commands
+
+| Command | Description |
+|---|---|
+| `mori reaction list` | List recent reactions |
+| `mori reaction show` | Show full details for a single reaction |
+
+## List
+
+```bash
+mori reaction list [--limit N] [--status STATUS] [--name NAME]
+```
+
+Shows a table of recent reactions with their status, name, triggering
+event type, duration, and start time.
+
+### Options
+
+| Option | Description | Default |
+|---|---|---|
+| `-n, --limit N` | Maximum rows to show | `20` |
+| `--status STATUS` | Filter by status: `triggered`, `completed`, `failed` | — |
+| `--name NAME` | Filter by reaction name | — |
+
+### Examples
+
+```bash
+mori reaction list                      # Show last 20 reactions
+mori reaction list -n 50                # Show last 50 reactions
+mori reaction list --status failed      # Show only failed reactions
+mori reaction list --name sync-registry # Show reactions for sync-registry
+```
+
+Both `--status` and `--name` can be combined:
+
+```bash
+mori reaction list --status completed --name run-tests
+```
+
+## Show
+
+```bash
+mori reaction show <REACTION_ID>
+```
+
+Displays full details for a single reaction, including the triggering
+stream, position, timestamps, duration, and error message (if failed).
+
+The reaction ID is a TypeID starting with `rxn_` — copy it from the
+ID column of `mori reaction list`.
+
+### Example
+
+```bash
+mori reaction list                  # Find the reaction ID
+mori reaction show rxn_01hy3x...   # Show full details
+```
+
+## Status Values
+
+| Status | Description |
+|---|---|
+| `triggered` | The reaction was matched and dispatched but has not finished executing yet. |
+| `completed` | All actions in the reaction executed successfully. |
+| `failed` | One or more actions failed. Use `mori reaction show` to see the error message. |
+
+## See Also
+
+- [Automation guide](/docs/guides/automation) — automation config structure and event selectors
+- `mori automate inspect` — config summary and aggregate reaction stats
+- `mori automate explain` — which selectors match a specific event

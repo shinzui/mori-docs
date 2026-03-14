@@ -4,13 +4,19 @@ description: How to write and maintain a mori.dhall project manifest
 icon: FileText
 ---
 
-This guide explains how to write and maintain a `mori.dhall` project manifest. It covers the concepts behind each section, common patterns, and practical recipes.
+This guide explains how to write and maintain a `mori.dhall` project manifest. It
+covers the concepts behind each section, common patterns, and practical recipes.
 
 For a field-by-field reference, see [Schema Reference](/docs/guides/schema-reference).
 
+---
+
 ## What is `mori.dhall`?
 
-`mori.dhall` is the **identity layer** of your project. It declares what a project _is_ — its name, ownership, packages, dependencies, APIs, and agent configuration — using [Dhall](https://dhall-lang.org/), a typed configuration language.
+`mori.dhall` is the **identity layer** of your project. It declares what a
+project _is_ — its name, ownership, packages, dependencies, APIs, and agent
+configuration — using [Dhall](https://dhall-lang.org/), a typed configuration
+language.
 
 Mori uses this file as the single source of truth for:
 
@@ -19,7 +25,10 @@ Mori uses this file as the single source of truth for:
 - **Automation** — pairing project identity with reactive behavior
 - **Validation** — ensuring project metadata is well-typed and consistent
 
-The companion file `mori.automation.dhall` describes what _happens_ (reactions to VCS events). This guide focuses exclusively on the identity layer.
+The companion file `mori.automation.dhall` describes what _happens_ (reactions
+to VCS events). This guide focuses exclusively on the identity layer.
+
+---
 
 ## Getting Started
 
@@ -29,7 +38,9 @@ The companion file `mori.automation.dhall` describes what _happens_ (reactions t
 mori init --name my-project
 ```
 
-This creates a `mori.dhall` with sensible defaults. If a `schema/` directory exists in the project, the scaffold uses typed imports from `schema/package.dhall`. Otherwise it inlines the full type definitions.
+This creates a `mori.dhall` with sensible defaults. If a `schema/` directory
+exists in the project, the scaffold uses typed imports from `schema/package.dhall`.
+Otherwise it inlines the full type definitions.
 
 ### Validate at any time
 
@@ -37,11 +48,15 @@ This creates a `mori.dhall` with sensible defaults. If a `schema/` directory exi
 mori validate
 ```
 
-Dhall's type checker catches structural errors immediately — missing fields, wrong types, and typos are caught before anything reaches the event store.
+Dhall's type checker catches structural errors immediately — missing fields,
+wrong types, and typos are caught before anything reaches the event store.
+
+---
 
 ## Project Identity
 
-The `project` record is the core of your manifest. It answers: _What is this project, who owns it, and where does it live in the organization?_
+The `project` record is the core of your manifest. It answers: _What is this
+project, who owns it, and where does it live in the organization?_
 
 ```haskell
 let Schema = ./schema/package.dhall
@@ -63,7 +78,8 @@ in  { project =
 
 ### Choosing a namespace and name
 
-The `(namespace, name)` pair forms the project's unique identity in the registry. Think of it like a package scope:
+The `(namespace, name)` pair forms the project's unique identity in the
+registry. Think of it like a package scope:
 
 ```
 @acme/payment-service
@@ -88,7 +104,8 @@ The `(namespace, name)` pair forms the project's unique identity in the registry
 | `Tool` | CLI, migration script, admin utility |
 | `Other "..."` | Anything else (provide a descriptive name) |
 
-The same enum is used for both projects and packages. This keeps the model simple — one type describes what something _is_ at any level.
+The same enum is used for both projects and packages. This keeps the model
+simple — one type describes what something _is_ at any level.
 
 ### Lifecycle
 
@@ -99,11 +116,15 @@ The same enum is used for both projects and packages. This keeps the model simpl
 | `Deprecated` | Still functional but no longer recommended |
 | `Archived` | Frozen, read-only, kept for reference |
 
-Agents and tooling can use lifecycle to adjust behavior — for example, an agent might warn before modifying a deprecated project.
+Agents and tooling can use lifecycle to adjust behavior — for example, an agent
+might warn before modifying a deprecated project.
+
+---
 
 ## Repositories
 
-The `repos` list describes where the project's source code lives. Most projects have a single entry, but multi-repo setups are supported.
+The `repos` list describes where the project's source code lives. Most projects
+have a single entry, but multi-repo setups are supported.
 
 ```haskell
 , repos =
@@ -125,7 +146,8 @@ Each field is optional except `name`:
 | `git` | Generic git URL for other hosts |
 | `localPath` | Explicit local filesystem path |
 
-You can combine fields — for example, a GitHub-hosted repo with a known local checkout:
+You can combine fields — for example, a GitHub-hosted repo with a known local
+checkout:
 
 ```haskell
 { name = "main"
@@ -136,9 +158,13 @@ You can combine fields — for example, a GitHub-hosted repo with a known local 
 }
 ```
 
+---
+
 ## Packages
 
-Packages are the buildable units within a project. A Haskell project might have a core library, a service executable, and a migration tool — each is a separate package.
+Packages are the buildable units within a project. A Haskell project might have
+a core library, a service executable, and a migration tool — each is a separate
+package.
 
 ```haskell
 , packages =
@@ -189,28 +215,37 @@ Packages are the buildable units within a project. A Haskell project might have 
 
 ### Runtime
 
-The `runtime` record tells tools and agents about a package's deployment characteristics:
+The `runtime` record tells tools and agents about a package's deployment
+characteristics:
 
-- `deployable = True` — produces an artifact that gets deployed (service, worker, CLI)
+- `deployable = True` — produces an artifact that gets deployed (service,
+  worker, CLI)
 - `exposesApi = True` — exposes a network API that other services consume
 
-A library has both set to `False`. A service typically has both `True`. A CLI tool is deployable but does not expose an API.
+A library has both set to `False`. A service typically has both `True`. A CLI
+tool is deployable but does not expose an API.
 
 ### path
 
-The `path` field is relative to the project root. If the package lives at the root (single-package project), use `None Text`. If it lives in a subdirectory:
+The `path` field is relative to the project root. If the package lives at the
+root (single-package project), use `None Text`. If it lives in a subdirectory:
 
 ```haskell
 , path = Some "packages/payments-core"
 ```
 
+---
+
 ## Dependencies
 
-Mori uses a **registry-first** model for dependencies. Instead of hardcoding filesystem paths, you declare dependencies by name and let the local registry resolve them.
+Mori uses a **registry-first** model for dependencies. Instead of hardcoding
+filesystem paths, you declare dependencies by name and let the local registry
+resolve them.
 
 ### Two levels of dependencies
 
-**Project-level** — simple name list, good for declaring the overall dependency footprint:
+**Project-level** — simple name list, good for declaring the overall dependency
+footprint:
 
 ```haskell
 , dependencies = [ "effectful", "aeson", "hasql" ]
@@ -225,7 +260,8 @@ Mori uses a **registry-first** model for dependencies. Instead of hardcoding fil
   ]
 ```
 
-Project-level dependencies are `List Text` (just names). Package-level dependencies use `List Dependency` which offers more control.
+Project-level dependencies are `List Text` (just names). Package-level
+dependencies use `List Dependency` which offers more control.
 
 ### The registry-first resolution model
 
@@ -235,13 +271,17 @@ When you or an agent query a dependency:
 mori deps locate effectful
 ```
 
-Mori looks it up by name in the local registry — a PostgreSQL table populated by event-sourced projections. The registry knows the dependency's filesystem path, packages, and documentation.
+Mori looks it up by name in the local registry — a PostgreSQL table populated by
+event-sourced projections. The registry knows the dependency's filesystem path,
+packages, and documentation.
 
-This avoids the N x M problem where every service hardcodes paths to every shared dependency. Register once, reference everywhere.
+This avoids the N x M problem where every service hardcodes paths to every
+shared dependency. Register once, reference everywhere.
 
 ### Augmenting a dependency
 
-Most dependencies need nothing beyond a name. When you need to attach project-specific documentation or override a path, use the augmented form:
+Most dependencies need nothing beyond a name. When you need to attach
+project-specific documentation or override a path, use the augmented form:
 
 ```haskell
 Schema.Dependency.WithAugmentation
@@ -260,12 +300,16 @@ Schema.Dependency.WithAugmentation
 
 Key rules:
 
-- **Consumers augment, never override.** You can add extra docs, but you cannot change a dependency's type, APIs, or domain model.
-- **`localPathOverride` is a fallback.** Use it only for dependencies not yet in the registry. The expectation is that frequently-used dependencies are registered as wrapper projects.
+- **Consumers augment, never override.** You can add extra docs, but you cannot
+  change a dependency's type, APIs, or domain model.
+- **`localPathOverride` is a fallback.** Use it only for dependencies not yet in
+  the registry. The expectation is that frequently-used dependencies are
+  registered as wrapper projects.
 
 ### Creating wrapper projects for third-party dependencies
 
-For important third-party dependencies, create a wrapper project with curated documentation:
+For important third-party dependencies, create a wrapper project with curated
+documentation:
 
 ```
 streamly-project/
@@ -346,11 +390,16 @@ Register once:
 cd streamly-project && mori register --local
 ```
 
-Now every service that lists `"streamly"` in its dependencies will resolve to this wrapper project automatically.
+Now every service that lists `"streamly"` in its dependencies will resolve to
+this wrapper project automatically.
+
+---
 
 ## Package Bundles
 
-Bundles group related packages that are typically used together. When a dependency name matches a bundle, Mori resolves all packages in the bundle rather than searching for a single package.
+Bundles group related packages that are typically used together. When a
+dependency name matches a bundle, Mori resolves all packages in the bundle
+rather than searching for a single package.
 
 ```haskell
 , bundles =
@@ -376,11 +425,16 @@ dependencies = [ "streamly" ]
 
 Mori resolves both `streamly` and `streamly-core` from the wrapper project.
 
-For fine-grained control, use `project:package` syntax to reference a specific package within a bundle.
+For fine-grained control, use `project:package` syntax to reference a specific
+package within a bundle.
+
+---
 
 ## APIs
 
-If your project exposes APIs, the `apis` list describes them. This enables Mori to model the **update graph** — who owns an API, who consumes it, and how changes propagate.
+If your project exposes APIs, the `apis` list describes them. This enables Mori
+to model the **update graph** — who owns an API, who consumes it, and how
+changes propagate.
 
 ```haskell
 , apis =
@@ -436,7 +490,9 @@ The update policy tells agents and tooling how API changes should propagate:
 | `requireTests` | `Bool` | Must tests pass before propagation |
 | `consumerBatching` | `Sequential`, `Parallel` | Update consumers one at a time or all at once |
 
-**`ClientFirst`** (most common): regenerate the client library, then update each consumer. This ensures the client always reflects the latest spec before downstream services consume it.
+**`ClientFirst`** (most common): regenerate the client library, then update each
+consumer. This ensures the client always reflects the latest spec before
+downstream services consume it.
 
 If you don't need an update policy:
 
@@ -444,9 +500,12 @@ If you don't need an update policy:
 , updatePolicy = None Schema.ApiUpdatePolicy
 ```
 
+---
+
 ## Configuration Requirements
 
-Packages can declare their runtime configuration requirements. This enables infrastructure validation and gives agents awareness of runtime assumptions.
+Packages can declare their runtime configuration requirements. This enables
+infrastructure validation and gives agents awareness of runtime assumptions.
 
 ```haskell
 , config =
@@ -501,7 +560,8 @@ Source hints tell tooling _where_ a config value is expected to come from:
 | `File "/etc/app/config.yaml"` | Filesystem path |
 | `Default "info"` | Default value if not provided |
 
-These are hints, not enforcement. Mori describes requirements; infrastructure supplies values.
+These are hints, not enforcement. Mori describes requirements; infrastructure
+supplies values.
 
 ### Validation
 
@@ -512,9 +572,12 @@ mori config list payments-service
 mori config validate
 ```
 
+---
+
 ## Documentation
 
-The `docs` list attaches documentation references to your project or individual packages. Docs can point to local files, directories, repository paths, or URLs.
+The `docs` list attaches documentation references to your project or individual
+packages. Docs can point to local files, directories, repository paths, or URLs.
 
 ```haskell
 , docs =
@@ -572,7 +635,9 @@ The `docs` list attaches documentation references to your project or individual 
 
 ### Cookbooks and agent context
 
-Docs with `kind = Cookbook` receive special treatment. When `mori agent context` generates JSON for an agent, cookbooks are extracted into a dedicated `cookbooks` field so agents can discover practical recipes automatically:
+Docs with `kind = Cookbook` receive special treatment. When `mori agent context`
+generates JSON for an agent, cookbooks are extracted into a dedicated `cookbooks`
+field so agents can discover practical recipes automatically:
 
 ```json
 {
@@ -582,9 +647,13 @@ Docs with `kind = Cookbook` receive special treatment. When `mori agent context`
 }
 ```
 
+---
+
 ## Agent Hints
 
-Agent hints tell AI coding assistants which parts of your codebase are relevant to specific roles. This is how Mori provides targeted context instead of dumping the entire project on an agent.
+Agent hints tell AI coding assistants which parts of your codebase are relevant
+to specific roles. This is how Mori provides targeted context instead of dumping
+the entire project on an agent.
 
 ```haskell
 , agents =
@@ -625,24 +694,36 @@ Mori:
 4. Resolves standards as registered projects
 5. Extracts cookbooks from the project's docs
 
-The result is a self-contained JSON document that gives the agent everything it needs — paths to focus on, paths to ignore, dependency source code locations, and relevant documentation.
+The result is a self-contained JSON document that gives the agent everything it
+needs — paths to focus on, paths to ignore, dependency source code locations,
+and relevant documentation.
 
 ### Tips for effective agent configuration
 
 - **Be specific with `includePaths`** — narrow paths produce better agent focus
-- **Always add `excludePaths`** for build output, generated code, and `node_modules`-style directories
-- **Use `relatedPackages`** to connect roles to the packages they work on — this drives dependency resolution in the agent context
-- **Define roles by activity**, not by team — `"backend"`, `"frontend"`, `"ops"` work better than `"team-alpha"`
+- **Always add `excludePaths`** for build output, generated code, and
+  `node_modules`-style directories
+- **Use `relatedPackages`** to connect roles to the packages they work on —
+  this drives dependency resolution in the agent context
+- **Define roles by activity**, not by team — `"backend"`, `"frontend"`,
+  `"ops"` work better than `"team-alpha"`
+
+See [Agent Context](/docs/concepts/agent-context) for the full JSON output format and
+integration patterns.
+
+---
 
 ## Standards
 
-Standards are shared knowledge projects — architecture guidelines, coding conventions, API standards — that your project explicitly follows.
+Standards are shared knowledge projects — architecture guidelines, coding
+conventions, API standards — that your project explicitly follows.
 
 ```haskell
 , standards = [ "backend-architecture", "haskell-conventions", "api-guidelines" ]
 ```
 
-Each name is resolved as a registered project in the local registry. Standard projects:
+Each name is resolved as a registered project in the local registry. Standard
+projects:
 
 - Exist solely to publish shared documentation
 - Do not define packages or APIs
@@ -650,7 +731,8 @@ Each name is resolved as a registered project in the local registry. Standard pr
 
 ### Standard projects
 
-A standard project is a Mori project whose primary purpose is to publish shared knowledge:
+A standard project is a Mori project whose primary purpose is to publish shared
+knowledge:
 
 ```haskell
 { project =
@@ -695,7 +777,9 @@ A standard project is a Mori project whose primary purpose is to publish shared 
 }
 ```
 
-Register the standard project, then any project referencing `"backend-architecture"` in its `standards` list gains access to that documentation through the agent context.
+Register the standard project, then any project referencing
+`"backend-architecture"` in its `standards` list gains access to that
+documentation through the agent context.
 
 ### Why standards are separate from dependencies
 
@@ -703,6 +787,8 @@ Register the standard project, then any project referencing `"backend-architectu
 - They never affect builds or deployments
 - They exist to guide humans and agents
 - Keeping them separate prevents standards from polluting dependency graphs
+
+---
 
 ## Dhall Tips
 
@@ -716,7 +802,8 @@ let Schema = ./schema/package.dhall
 in  { project = { ... }, ... }
 ```
 
-`Schema` gives you access to all types via dot notation: `Schema.PackageType.Application`, `Schema.Language.Haskell`, etc.
+`Schema` gives you access to all types via dot notation:
+`Schema.PackageType.Application`, `Schema.Language.Haskell`, etc.
 
 ### Optional values
 
@@ -762,14 +849,18 @@ An empty map:
 , env = [] : List { mapKey : Text, mapValue : Text }
 ```
 
+---
+
 ## Validation Rules
 
 Beyond Dhall type-checking, `mori validate` applies semantic validation:
 
 1. **Namespace** — must be non-empty and contain no whitespace
-2. **No duplicate package names** — package names must be unique within a project
+2. **No duplicate package names** — package names must be unique within a
+   project
 3. **Non-empty dependencies** — all dependency names must be non-empty strings
-4. **Bundle integrity** — `primary` must appear in `packages`; all package references must be non-empty
+4. **Bundle integrity** — `primary` must appear in `packages`; all package
+   references must be non-empty
 
 ### Common errors
 
@@ -780,6 +871,8 @@ Beyond Dhall type-checking, `mori validate` applies semantic validation:
 | `List elements should all have the same type` | Mixing `Dependency.ByName` (Text) with bare strings — use the union type consistently |
 | `duplicate package name` | Two packages share the same `name` in the packages list |
 | `bundle primary not in packages` | The `primary` field references a package not listed in the bundle's `packages` |
+
+---
 
 ## Recipes
 
@@ -1018,6 +1111,8 @@ in  { project =
     }
 ```
 
+---
+
 ## What Belongs in `mori.dhall` vs `mori.automation.dhall`
 
 | Concern | File |
@@ -1035,4 +1130,5 @@ in  { project =
 | Execution policy | `mori.automation.dhall` |
 | Scheduled actions | `mori.automation.dhall` |
 
-**Rule of thumb:** `mori.dhall` describes what a project _is_; `mori.automation.dhall` describes what _happens_.
+**Rule of thumb:** `mori.dhall` describes what a project _is_; `mori.automation.dhall`
+describes what _happens_.

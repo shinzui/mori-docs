@@ -18,8 +18,8 @@ repo: github.com/acme/payments
 
 Intent:
 
-- The team wants to **document** the payments service and its dependencies
-- They also want to **react** when core payment logic changes
+* The team wants to **document** the payments service and its dependencies
+* They also want to **react** when core payment logic changes
 
 Both concerns live in the same repo, but are handled by **different Mori planes**.
 
@@ -36,7 +36,7 @@ payments/
 
 Mori is not yet aware of this repository.
 
-## Step 1: Knowledge Plane — Initialize Project Metadata
+## Step 1: Knowledge Plane -- Initialize Project Metadata
 
 A developer initializes Mori metadata:
 
@@ -46,9 +46,9 @@ mori init
 
 Effects:
 
-- Creates `mori.dhall` (project manifest)
-- Creates `mori/` directory (for schema imports and local type definitions)
-- No automation enabled
+* Creates `mori.dhall` (project manifest)
+* Creates `mori/` directory (for schema imports and local type definitions)
+* No automation enabled
 
 Example `mori.dhall` (simplified for illustration):
 
@@ -77,12 +77,14 @@ in  { project =
     }
 ```
 
+> **Note:** See [Schema Architecture](/docs/architecture/schema) for the complete schema definition.
+
 At this point:
 
-- Mori can **understand** the project
-- Mori will **not react** to events
+* Mori can **understand** the project
+* Mori will **not react** to events
 
-## Step 2: Knowledge Plane — Validate and Inspect
+## Step 2: Knowledge Plane -- Validate and Inspect
 
 The developer validates metadata:
 
@@ -93,12 +95,12 @@ mori show
 
 Outputs:
 
-- Canonical evaluated metadata
-- No side effects
+* Canonical evaluated metadata
+* No side effects
 
 The repository is now a **Mori-known project**.
 
-## Step 3: Knowledge Plane — Register with Global Registry (Optional)
+## Step 3: Knowledge Plane -- Register with Global Registry (Optional)
 
 The project is registered:
 
@@ -108,17 +110,17 @@ mori register
 
 Effects:
 
-- Uploads evaluated `mori.dhall`
-- Associates repo with team ownership
-- No automation permissions granted yet
+* Uploads evaluated `mori.dhall`
+* Associates repo with team ownership
+* No automation permissions granted yet
 
 Registry now knows:
 
-- Project identity
-- Dependencies
-- Ownership
+* Project identity
+* Dependencies
+* Ownership
 
-## Step 4: Automation Plane — Declare Automation Policy
+## Step 4: Automation Plane -- Declare Automation Policy
 
 Later, the team opts into automation.
 
@@ -160,12 +162,14 @@ in  { project = ./mori.dhall
     }
 ```
 
+> **Note:** See [Automation Configuration](/docs/concepts/automation-configuration) for the complete automation schema.
+
 Key point:
 
-- Automation explicitly references `mori.dhall`
-- Automation is still **inactive** until executed
+* Automation explicitly references `mori.dhall`
+* Automation is still **inactive** until executed
 
-## Step 5: Automation Plane — Inspect Automation State
+## Step 5: Automation Plane -- Inspect Automation State
 
 A developer inspects automation:
 
@@ -175,10 +179,10 @@ mori automate inspect
 
 Output explains:
 
-- automation config found
-- config hash
-- execution allowed locally
-- no registry constraints yet
+* automation config found
+* config hash
+* execution allowed locally
+* no registry constraints yet
 
 Nothing runs.
 
@@ -192,10 +196,10 @@ git commit -m "Refactor payment settlement logic"
 
 This produces VCS facts:
 
-- a new changeset
-- touched files under `src/payments/`
+* a new changeset
+* touched files under `src/payments/`
 
-## Step 7: Automation Plane — Ingest Events
+## Step 7: Automation Plane -- Ingest Events
 
 The developer ingests events:
 
@@ -205,11 +209,11 @@ mori automate ingest git
 
 Effects:
 
-- Git commits normalized to `ChangesetObserved`
-- Events appended to local event store
-- No reactions executed
+* Git commits normalized to `ChangesetObserved`
+* Events appended to local event store
+* No reactions executed
 
-## Step 8: Automation Plane — Execute Reactions
+## Step 8: Automation Plane -- Execute Reactions
 
 The developer explicitly runs automation:
 
@@ -227,7 +231,7 @@ Mori evaluates:
 
 Result:
 
-- Slack notification sent
+* Slack notification sent
 
 ## Step 9: Explainability (Both Planes)
 
@@ -239,8 +243,8 @@ mori explain dependency payments
 
 Explains:
 
-- how payments is modeled
-- dependencies (if any)
+* how payments is modeled
+* dependencies (if any)
 
 ### Automation explanation
 
@@ -250,9 +254,9 @@ mori automate explain event <event-id>
 
 Explains:
 
-- why the event matched
-- which config version applied
-- why the reaction ran
+* why the event matched
+* which config version applied
+* why the reaction ran
 
 Both explanations reference **the same repository**, but different planes.
 
@@ -266,15 +270,15 @@ mori automate ci run
 
 Registry checks:
 
-- project is registered
-- automation exists
-- CI execution is **not approved**
+* project is registered
+* automation exists
+* CI execution is **not approved**
 
 Result:
 
-- execution blocked
-- explicit error message
-- no partial execution
+* execution blocked
+* explicit error message
+* no partial execution
 
 ## What This Example Demonstrates
 
@@ -286,9 +290,4 @@ Result:
 
 ## Final Mental Model
 
-> **Mori lets a repository describe what it is, and separately declare how it reacts — both driven by the same underlying facts, but never conflated.**
-
-## Related Documents
-
-- [Automation](/docs/guides/automation) — Automation configuration and event selectors
-- [Schema](/docs/architecture/schema) — Project identity schema (`mori.dhall`)
+> **Mori lets a repository describe what it is, and separately declare how it reacts -- both driven by the same underlying facts, but never conflated.**

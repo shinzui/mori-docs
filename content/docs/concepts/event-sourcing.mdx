@@ -6,8 +6,8 @@ icon: Database
 
 Mori uses event sourcing as its core persistence model:
 
-- **Events are the source of truth** — all state is derived by folding events
-- **MessageDB** provides the event store — a battle-tested PostgreSQL extension
+- **Events are the source of truth** -- all state is derived by folding events
+- **MessageDB** provides the event store -- battle-tested PostgreSQL extension
 - **Projections** (read models) are stored in PostgreSQL tables for fast queries
 - **Subscriptions** process events and update projections
 
@@ -264,7 +264,7 @@ data Actor
   | SystemActor Text  -- e.g., "mori-automation", "mori-cli"
 ```
 
-## Projections
+## Projections (Read Models)
 
 Projections are PostgreSQL tables updated by subscriptions.
 
@@ -355,18 +355,9 @@ If projections need rebuilding (schema change, corruption):
 
 1. Truncate projection tables
 2. Reset subscription checkpoint to position 0
-3. Restart subscription — replays all events
+3. Restart subscription -- replays all events
 
 ## Subscriptions
-
-All four subscriptions run concurrently inside `mori automate run`, sharing a single connection pool and using `message-db-checkpoint-store` for position tracking.
-
-| Subscription | Category | Purpose |
-|---|---|---|
-| `mori-registry` | `project` | Updates registry projection tables |
-| `mori-config-observation` | `repository` | Updates config projection, enables hot-reload |
-| `mori-automation` | `repository` | Matches events against selectors, triggers reactions |
-| `mori-reaction-executor` | `reaction` | Executes triggered reaction actions |
 
 ### Registry Subscription (`mori-registry`)
 
@@ -391,33 +382,18 @@ Defined in `Mori.Automation.Subscription.AutomationHandler`.
 ### Reaction Executor Subscription (`mori-reaction-executor`)
 
 Subscribes to the `reaction` category. Executes triggered reactions:
-- **RunCommand** — shell execution via `System.Process`
-- **EmitEvent** — write event to a MessageDB stream
-- **Notify** — HTTP webhook via curl
-- **Schedule** — enqueue delayed action to PGMQ
+- **RunCommand** -- shell execution via `System.Process`
+- **EmitEvent** -- write event to a MessageDB stream
+- **Notify** -- HTTP webhook via curl
+- **Schedule** -- enqueue delayed action to PGMQ
 
 Writes `ReactionCompleted` or `ReactionFailed` events and updates the `reaction_history` projection table.
 
 Defined in `Mori.Automation.Subscription.ExecutorHandler`.
 
-## Event Flow
+### All subscriptions run together
 
-```
-VCS Event (git commit, jj operation)
-   ↓
-Normalize to canonical events
-   ↓
-Write to MessageDB (repository-{id} stream)
-   ↓
-Subscriptions process events:
-   ├── mori-automation: match events → trigger reactions
-   ├── mori-registry: update project/dependency projections
-   └── mori-reaction-executor: execute triggered reactions
-   ↓
-Update projections (PostgreSQL tables)
-   ↓
-Emit effects (run commands, notify, emit new events)
-```
+All four subscriptions run concurrently inside `mori automate run`, sharing a single connection pool and using `message-db-checkpoint-store` for position tracking.
 
 ## CLI Integration
 
@@ -530,7 +506,7 @@ type MoriSubscriptionEff es =
 
 ### Pure Domain Logic
 
-Deciders and views are pure functions — test without IO:
+Deciders and views are pure functions -- test without IO:
 
 ```haskell
 test_projectRegistration = do

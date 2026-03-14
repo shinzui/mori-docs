@@ -34,8 +34,6 @@ The root type is defined in `schema/Project.dhall`:
 | `dependencies` | `List Text` | Project-level dependency names, resolved via the registry |
 | `apis` | `List Api` | API definitions |
 | `agents` | `List AgentHint` | AI agent role configuration |
-| `skills` | `List Skill` | Agent skills provided by this project |
-| `subagents` | `List Subagent` | Subagent definitions |
 | `standards` | `List Text` | Names of standard projects this project follows |
 | `docs` | `List DocRef` | Project-level documentation |
 
@@ -183,16 +181,6 @@ Declares a configuration requirement for a package.
 }
 ```
 
-### DocRef
-
-| Field | Type | Notes |
-|-------|------|-------|
-| `key` | `Text` | Unique identifier |
-| `kind` | `DocKind` | Documentation classification |
-| `audience` | `DocAudience` | Target audience |
-| `description` | `Optional Text` | Brief description |
-| `location` | `DocLocation` | Where the doc is located |
-
 ## bundles
 
 Package groupings for wrapper projects. When an agent resolves a dependency that
@@ -297,75 +285,6 @@ usage details.
 ]
 ```
 
-## skills
-
-Agent skills provided by this project. Skills follow the Agent Skills spec (agentskills.io).
-
-| Field | Type | Notes |
-|-------|------|-------|
-| `name` | `Text` | Skill identifier (matches directory name) |
-| `description` | `Text` | What the skill does and when to use it |
-| `path` | `Optional Text` | Relative path to skill directory |
-| `tools` | `List SkillTool` | Tools with language annotations |
-| `compatibility` | `Optional Text` | Environment requirements |
-| `metadata` | `List { mapKey, mapValue }` | Arbitrary key-value pairs |
-
-### SkillTool
-
-| Field | Type | Notes |
-|-------|------|-------|
-| `name` | `Text` | Tool name |
-| `description` | `Optional Text` | What the tool does |
-| `languages` | `List Language` | Languages this tool supports |
-
-```haskell
-[ { name = "format-check"
-  , description = "Validate code formatting"
-  , path = Some ".claude/skills/format-check"
-  , tools =
-    [ { name = "fourmolu"
-      , description = Some "Haskell formatter"
-      , languages = [ Schema.Language.Haskell ]
-      }
-    ]
-  , compatibility = None Text
-  , metadata = [] : List { mapKey : Text, mapValue : Text }
-  }
-]
-```
-
-## subagents
-
-Subagent definitions for specialized AI assistants.
-
-| Field | Type | Notes |
-|-------|------|-------|
-| `name` | `Text` | Unique identifier (lowercase + hyphens) |
-| `description` | `Text` | When to delegate to this subagent |
-| `provider` | `Optional Text` | Agent platform (e.g., `"claude-code"`) |
-| `model` | `Optional Text` | Model name (e.g., `"sonnet"`, `"gpt-4o"`) |
-| `tools` | `List Text` | Tool allowlist |
-| `disallowedTools` | `List Text` | Tools to deny |
-| `permissionMode` | `Optional PermissionMode` | Permission prompt handling |
-| `skills` | `List Text` | Skills to preload |
-| `background` | `Bool` | Always run in background |
-| `isolation` | `Optional Text` | Isolation mode (e.g., `"worktree"`) |
-
-```haskell
-[ { name = "test-runner"
-  , description = "Run tests after code changes"
-  , provider = Some "claude-code"
-  , model = Some "sonnet"
-  , tools = [ "Bash", "Read", "Grep" ]
-  , disallowedTools = [ "Edit", "Write" ]
-  , permissionMode = Some Schema.PermissionMode.AcceptEdits
-  , skills = [] : List Text
-  , background = True
-  , isolation = Some "worktree"
-  }
-]
-```
-
 ## standards
 
 Names of standard projects this project follows. Each name is resolved as a
@@ -406,99 +325,83 @@ Project-level documentation references.
 Docs with `kind = Cookbook` are included in the `cookbooks` field of the agent
 context output.
 
-## StandardProject
-
-Standard projects publish shared documentation and conventions. They are referenced by name in the `standards` field and resolved as registered projects.
-
-| Field | Type | Notes |
-|-------|------|-------|
-| `name` | `Text` | Standard name |
-| `scope` | `StandardScope` | Organizational scope |
-| `description` | `Optional Text` | Brief description |
-| `repo` | `Repo` | Repository containing the standard |
-| `docs` | `List DocRef` | Documentation references |
-| `appliesTo` | Record | Which project types and languages this applies to |
-
-The `appliesTo` record contains:
-
-| Field | Type | Notes |
-|-------|------|-------|
-| `types` | `List PackageType` | Project types this standard applies to |
-| `languages` | `List Language` | Languages this standard applies to |
-
 ## Type Enums
 
 ### Language
 
-`Haskell` | `TypeScript` | `JavaScript` | `Python` | `Go` | `Rust` | `Java` | `Kotlin` | `Swift` | `Ruby` | `Elixir` | `Clojure` | `Scala` | `Dhall` | `Nix` | `SQL` | `Shell` | `Other <text>`
+```
+Haskell | TypeScript | JavaScript | Python | Go | Rust | Java | Kotlin
+| Swift | Ruby | Elixir | Clojure | Scala | Dhall | Nix | SQL | Shell
+| Other <text>
+```
 
 ### PackageType
 
-`Application` | `Library` | `Client` | `Worker` | `Tool` | `Other <text>`
+```
+Application | Library | Client | Worker | Tool | Other <text>
+```
 
 ### Lifecycle
 
-`Active` | `Experimental` | `Deprecated` | `Archived`
+```
+Active | Experimental | Deprecated | Archived
+```
 
 ### Visibility
 
-`Public` | `Internal` | `Private`
-
-### DependencyKind
-
-`Internal` | `ThirdParty`
-
-### DependencySource
-
-`Hackage` | `Npm` | `PyPI` | `Crates` | `Maven` | `GitHub` | `GitLab` | `Git` | `Local` | `Other <text>`
+```
+Public | Internal | Private
+```
 
 ### DocKind
 
-`Reference` | `Guide` | `Cookbook` | `Spec` | `Runbook` | `Notes` | `Other <text>`
+```
+Reference | Guide | Cookbook | Spec | Runbook | Notes | Other <text>
+```
 
 ### DocLocation
 
-`LocalFile <path>` | `LocalDir <path>` | `RepoPath <path>` | `Url <url>`
+```
+LocalFile <path> | LocalDir <path> | RepoPath <path> | Url <url>
+```
 
 ### DocAudience
 
-`Module` | `User` | `API` | `Internal` | `Other <text>`
+```
+Module | User | API | Internal | Other <text>
+```
 
 ### ApiType
 
-`OpenAPI` | `GraphQL` | `GRPC` | `AsyncAPI` | `Smithy` | `Other <text>`
-
-### ApiDependencyRole
-
-`Client` | `Consumer`
-
-### ApiUpdateStrategy
-
-`ClientFirst` | `ManualApproval` | `NoAutomation`
-
-### ConsumerBatching
-
-`Sequential` | `Parallel`
+```
+OpenAPI | GraphQL | GRPC | AsyncAPI | Smithy | Other <text>
+```
 
 ### ConfigValueType
 
-`String` | `Integer` | `Boolean` | `Secret` | `Url` | `FilePath` | `Duration` | `Json` | `Other <text>`
+```
+String | Integer | Boolean | Secret | Url | FilePath | Duration | Json
+| Other <text>
+```
 
 ### ConfigSourceHint
 
-`EnvVar <name>` | `K8sSecret <name>` | `K8sConfigMap <name>` | `Vault <path>` | `File <path>` | `Default <value>`
+```
+EnvVar <name> | K8sSecret <name> | K8sConfigMap <name> | Vault <path>
+| File <path> | Default <value>
+```
 
 ### Origin
 
-`Own` | `ThirdParty` | `Fork` | `Vendored`
-
-### PermissionMode
-
-`Default` | `AcceptEdits` | `DontAsk` | `BypassPermissions` | `Plan`
+```
+Own | ThirdParty | Fork | Vendored
+```
 
 ### StandardScope
 
-`Organization` | `Domain` | `Platform` | `Language` | `Team` | `Other <text>`
+```
+Organization | Domain | Platform | Language | Team | Other <text>
+```
 
 ## Validation Rules
 
@@ -587,8 +490,6 @@ in  { project =
         , relatedPackages = [ "payments-core", "payments-service" ]
         }
       ]
-    , skills = [] : List Schema.Skill
-    , subagents = [] : List Schema.Subagent
     , standards = [] : List Text
     , docs =
       [ { key = "architecture"

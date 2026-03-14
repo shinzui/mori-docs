@@ -1,4 +1,15 @@
 {
 	"title": "Guides",
-	"pages": ["index", "automation", "schema-reference", "shell-integration"]
+	"pages": [
+		"index",
+		"automation",
+		"automation-daemon",
+		"cross-repo-workflows",
+		"reaction-history",
+		"end-to-end-example",
+		"aliases",
+		"schema-reference",
+		"schema-migrations",
+		"shell-integration"
+	]
 }
