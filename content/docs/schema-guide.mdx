@@ -372,6 +372,8 @@ in  { project =
     , dependencies = [] : List Text
     , apis = [] : List Schema.Api
     , agents = [] : List Schema.AgentHint
+    , skills = [] : List Schema.Skill
+    , subagents = [] : List Schema.Subagent
     , standards = [] : List Text
     , docs =
       [ { key = "folds-guide"
@@ -713,6 +715,103 @@ integration patterns.
 
 ---
 
+## Skills
+
+Skills define reusable agent capabilities provided by your project, following the
+[agentskills.io](https://agentskills.io) specification. Each skill points to a
+directory containing skill definitions and declares which tools it uses.
+
+```haskell
+, skills =
+  [ { name = "code-review"
+    , description = "Run code review checks"
+    , path = Some ".claude/skills/code-review"
+    , tools =
+      [ { name = "eslint-runner"
+        , description = Some "Runs ESLint"
+        , languages = [ Schema.Language.TypeScript ]
+        }
+      ]
+    , compatibility = Some "Requires node 18+"
+    , metadata = [ { mapKey = "author", mapValue = "platform-team" } ]
+    }
+  ]
+```
+
+### Key fields
+
+| Field | Purpose |
+|-------|---------|
+| `name` | Skill identifier, referenced by subagents |
+| `path` | Relative path to the skill directory |
+| `tools` | Tools the skill uses, with language annotations |
+| `compatibility` | Environment requirements (e.g., runtime version) |
+| `metadata` | Arbitrary key-value pairs for custom tooling |
+
+### When to define skills
+
+- You have reusable workflows that agents should be able to invoke
+- You want to standardize tooling across subagents
+- You need to document tool-language relationships for multi-language projects
+
+---
+
+## Subagents
+
+Subagents define specialized AI assistants that can be delegated to for specific
+tasks. They configure the agent platform, model, available tools, and permission
+boundaries.
+
+```haskell
+, subagents =
+  [ { name = "code-reviewer"
+    , description = "Review pull requests for quality"
+    , provider = Some "claude-code"
+    , model = Some "sonnet"
+    , tools = [ "Read", "Grep", "Bash" ]
+    , disallowedTools = [] : List Text
+    , permissionMode = Some Schema.PermissionMode.AcceptEdits
+    , skills = [ "code-review" ]
+    , background = False
+    , isolation = None Text
+    }
+  ]
+```
+
+### Permission modes
+
+| Mode | Behavior |
+|------|----------|
+| `Default` | Normal permission prompting |
+| `AcceptEdits` | Auto-approve file edits |
+| `DontAsk` | Suppress all permission prompts |
+| `BypassPermissions` | Skip permission checks entirely |
+| `Plan` | Plan-only mode, no execution |
+
+### Key fields
+
+| Field | Purpose |
+|-------|---------|
+| `name` | Unique identifier (lowercase + hyphens) |
+| `description` | When to delegate to this subagent |
+| `provider` | Agent platform (e.g., `"claude-code"`) |
+| `model` | Model to use (e.g., `"sonnet"`, `"opus"`) |
+| `tools` / `disallowedTools` | Tool allowlist and denylist |
+| `skills` | Skill names to preload |
+| `background` | Run in background (`True`) or foreground (`False`) |
+| `isolation` | Isolation mode (e.g., `"worktree"` for git worktree isolation) |
+
+### Tips for effective subagent configuration
+
+- **Keep tool lists minimal** — give each subagent only the tools it needs
+- **Use skills for shared capabilities** — reference skills by name instead of
+  duplicating tool configurations
+- **Set `background = True`** for long-running or independent tasks
+- **Use `isolation = Some "worktree"`** for subagents that modify files, to
+  prevent conflicts with other agents
+
+---
+
 ## Standards
 
 Standards are shared knowledge projects — architecture guidelines, coding
@@ -759,6 +858,8 @@ knowledge:
 , dependencies = [] : List Text
 , apis = [] : List Schema.Api
 , agents = [] : List Schema.AgentHint
+, skills = [] : List Schema.Skill
+, subagents = [] : List Schema.Subagent
 , standards = [] : List Text
 , docs =
     [ { key = "ddd"
@@ -917,6 +1018,8 @@ in  { project =
     , dependencies = [ "aeson" ]
     , apis = [] : List Schema.Api
     , agents = [] : List Schema.AgentHint
+    , skills = [] : List Schema.Skill
+    , subagents = [] : List Schema.Subagent
     , standards = [] : List Text
     , docs = [] : List Schema.DocRef
     }
@@ -1032,6 +1135,8 @@ in  { project =
         , relatedPackages = [ "order-domain", "order-service" ]
         }
       ]
+    , skills = [] : List Schema.Skill
+    , subagents = [] : List Schema.Subagent
     , standards = [ "backend-architecture" ]
     , docs =
       [ { key = "order-flow"
@@ -1106,6 +1211,8 @@ in  { project =
     , dependencies = [] : List Text
     , apis = [] : List Schema.Api
     , agents = [] : List Schema.AgentHint
+    , skills = [] : List Schema.Skill
+    , subagents = [] : List Schema.Subagent
     , standards = [] : List Text
     , docs = [] : List Schema.DocRef
     }
@@ -1122,6 +1229,7 @@ in  { project =
 | Dependencies | `mori.dhall` |
 | APIs and update policies | `mori.dhall` |
 | Agent roles and context hints | `mori.dhall` |
+| Skills and subagent definitions | `mori.dhall` |
 | Configuration requirements | `mori.dhall` |
 | Documentation references | `mori.dhall` |
 | Standards adherence | `mori.dhall` |

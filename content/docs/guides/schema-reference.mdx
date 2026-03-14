@@ -34,6 +34,8 @@ The root type is defined in `schema/Project.dhall`:
 | `dependencies` | `List Text` | Project-level dependency names, resolved via the registry |
 | `apis` | `List Api` | API definitions |
 | `agents` | `List AgentHint` | AI agent role configuration |
+| `skills` | `List Skill` | Agent skill definitions |
+| `subagents` | `List Subagent` | Specialized AI assistant definitions |
 | `standards` | `List Text` | Names of standard projects this project follows |
 | `docs` | `List DocRef` | Project-level documentation |
 
@@ -285,6 +287,75 @@ usage details.
 ]
 ```
 
+## skills
+
+Agent skill definitions following the [agentskills.io](https://agentskills.io) spec.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `name` | `Text` | Skill identifier |
+| `description` | `Text` | What the skill does |
+| `path` | `Optional Text` | Relative path to skill directory |
+| `tools` | `List SkillTool` | Tools with language annotations |
+| `compatibility` | `Optional Text` | Environment requirements |
+| `metadata` | `List { mapKey, mapValue : Text }` | Arbitrary key-value pairs |
+
+```haskell
+[ { name = "code-review"
+  , description = "Run code review checks"
+  , path = Some ".claude/skills/code-review"
+  , tools =
+    [ { name = "eslint-runner"
+      , description = Some "Runs ESLint"
+      , languages = [ Schema.Language.TypeScript ]
+      }
+    ]
+  , compatibility = Some "Requires node 18+"
+  , metadata = [ { mapKey = "author", mapValue = "platform-team" } ]
+  }
+]
+```
+
+### SkillTool
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `name` | `Text` | Tool identifier |
+| `description` | `Optional Text` | What the tool does |
+| `languages` | `List Language` | Languages the tool's scripts use |
+
+## subagents
+
+Specialized AI assistant definitions.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `name` | `Text` | Unique identifier (lowercase + hyphens) |
+| `description` | `Text` | When to delegate to this subagent |
+| `provider` | `Optional Text` | Agent platform (e.g., `"claude-code"`) |
+| `model` | `Optional Text` | Model name (e.g., `"sonnet"`, `"gpt-4o"`) |
+| `tools` | `List Text` | Tool allowlist |
+| `disallowedTools` | `List Text` | Tools to deny |
+| `permissionMode` | `Optional PermissionMode` | Permission prompt handling |
+| `skills` | `List Text` | Skill names to preload |
+| `background` | `Bool` | Always run in background |
+| `isolation` | `Optional Text` | Isolation mode (e.g., `"worktree"`) |
+
+```haskell
+[ { name = "code-reviewer"
+  , description = "Review pull requests for quality"
+  , provider = Some "claude-code"
+  , model = Some "sonnet"
+  , tools = [ "Read", "Grep", "Bash" ]
+  , disallowedTools = [] : List Text
+  , permissionMode = Some Schema.PermissionMode.AcceptEdits
+  , skills = [ "code-review" ]
+  , background = False
+  , isolation = None Text
+  }
+]
+```
+
 ## standards
 
 Names of standard projects this project follows. Each name is resolved as a
@@ -403,6 +474,42 @@ Own | ThirdParty | Fork | Vendored
 Organization | Domain | Platform | Language | Team | Other <text>
 ```
 
+### PermissionMode
+
+Permission mode for subagents:
+
+```
+Default | AcceptEdits | DontAsk | BypassPermissions | Plan
+```
+
+### EventSelector
+
+Selects which VCS events trigger reactions (used in `mori.automation.dhall`):
+
+```
+ChangesetSelector : { name, paths, branches, messagePatterns }
+RefSelector : { name, refPatterns, kinds }
+```
+
+### ReactionAction
+
+Action to execute when a reaction fires:
+
+```
+RunCommand : { command, args, workingDir, timeout, env }
+EmitEvent : { eventType, streamName, eventData }
+Notify : { url, method, headers, bodyTemplate }
+Schedule : { delaySeconds, action : ScheduledAction }
+```
+
+### ScheduledAction
+
+Non-recursive subset of `ReactionAction` (no `Schedule` variant):
+
+```
+RunCommand | EmitEvent | Notify (same fields as ReactionAction)
+```
+
 ## Validation Rules
 
 Beyond Dhall type-checking, mori applies semantic validation:
@@ -490,6 +597,8 @@ in  { project =
         , relatedPackages = [ "payments-core", "payments-service" ]
         }
       ]
+    , skills = [] : List Schema.Skill
+    , subagents = [] : List Schema.Subagent
     , standards = [] : List Text
     , docs =
       [ { key = "architecture"
