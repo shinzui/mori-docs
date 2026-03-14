@@ -1,0 +1,217 @@
+---
+title: Changelog
+description: Notable changes and new features in mori
+icon: ScrollText
+---
+
+All notable changes to mori, organized by date. This changelog covers user-facing
+features, commands, and schema changes.
+
+---
+
+## 2026-03-14
+
+### Multi-repo automation daemon
+- **`mori automate daemon`** — manage automation for all registered repos from a single process
+- Discovers repos from the project registry, loads configs, routes events automatically
+- Periodic config refresh with `--refresh-interval` flag
+- See [Automation Daemon guide](/docs/guides/automation-daemon)
+
+### Reaction history commands
+- **`mori reaction list`** — list recent reactions with filtering by status and name
+- **`mori reaction show`** — inspect full details for a single reaction
+- See [Reaction History guide](/docs/guides/reaction-history)
+
+### Agent schema migration
+- **`mori agent schema-migrate`** — AI-assisted schema migration that validates and fixes `mori.dhall` automatically
+
+### Bug fixes
+- Fix reaction executor subscription silently failing on startup
+
+---
+
+## 2026-03-13
+
+### Runtime environment type
+- Add `RuntimeEnvironment` type to schema for package execution runtime configuration
+
+### Shell completions overhaul
+- Replace manual completion registry with optparse-applicative built-in protocol
+- Completions now automatically stay in sync with command definitions
+
+---
+
+## 2026-03-12
+
+### Path command
+- **`mori path`** — print local project path with existence check
+- `--package NAME` and `--doc KEY` flags to locate specific packages or docs
+- FZF integration with `--pick` for interactive selection
+
+### Schema migrations
+- **`mori schema migrate`** — first-class migration system for schema evolution
+- Migrations for `skills`, `subagents`, and package `lifecycle` fields
+- `--apply`, `--dry-run`, and `--file` flags
+
+### Command aliases
+- Add aliases help topic to CLI help system
+- See [Aliases guide](/docs/guides/aliases)
+
+### Compile-time schema embedding
+- Schema definitions embedded at compile time for `mori schema print`
+- Agent prompts now use `mori schema print` instead of inline embedding
+
+---
+
+## 2026-03-11
+
+### Skills and subagents schema
+- **`skills`** field — define agent skill definitions following the agentskills.io spec
+- **`subagents`** field — define specialized AI assistants with provider, model, tools, and permission configuration
+- `PermissionMode` type: `Default`, `AcceptEdits`, `DontAsk`, `BypassPermissions`, `Plan`
+- Package **`lifecycle`** field — `Active`, `Experimental`, `Deprecated`, `Archived`
+- Deprecated lifecycle displayed in pale red in `show` and `registry show` commands
+- Skills and subagents integrated into `agent bootstrap` prompts, schema catalog, and `init` scaffold
+- See [Schema Reference](/docs/guides/schema-reference) for full field documentation
+
+### Schema upgrade improvements
+- `--latest` flag for `mori schema upgrade` to resolve from GitHub
+
+---
+
+## 2026-03-10
+
+### Registry enhancements
+- Resolve full paths for local docs in `registry show --full`
+
+---
+
+## 2026-03-03 – 2026-03-09
+
+### Schema as git submodule
+- Replace `schema/` directory with git submodule pointing to [mori-schema](https://github.com/shinzui/mori-schema)
+- Project Origin type (`Own`, `ThirdParty`, `Fork`, `Vendored`) and enriched Dependency metadata
+
+### Cross-repo workflows
+- Signal-based workflow system for cross-repository automation
+- `SignalSelector` event selector for receiving typed signals
+- `*dependents*` dynamic target resolution
+- `mori workflow list`, `mori workflow status`, `mori workflow trace` commands
+- See [Cross-Repo Workflows guide](/docs/guides/cross-repo-workflows)
+
+### First-class schema migration system
+- `mori schema migrate` with `--apply` and `--dry-run` modes
+- Migration for `origin` field and augmented `Dependency` type
+
+### Documentation references in registry
+- Docs-only projects now discoverable via `registry list`, `search`, `show`
+
+### Agent bootstrap corpus mode
+- `--corpus` flag for `agent bootstrap` to set up corpus project contexts
+
+---
+
+## 2026-02-27 – 2026-03-01
+
+### Dependency tree visualization
+- **`mori deps tree`** — recursive dependency tree with colored nodes
+
+### CLI beautification
+- Colored, styled output for all CLI commands
+- `Pretty` module foundation for consistent output formatting
+- Styled output for `doctor`, `show`, `registry list/show/search`, `deps resolve/locate/explain/tree`
+
+### Agent enhancements
+- `--allowedTools` and `--permission-mode` flags for `agent bootstrap` and `agent assist`
+- Registry-based dependency context injected into agent assist prompts
+- Enhanced `registry search` to include package name matches
+
+### Shell completions
+- Shell completion support for bash, zsh, and fish
+- `install-completions-zsh` recipe
+
+---
+
+## 2026-02-25 – 2026-02-26
+
+### Shell integration
+- **`mori cd`** — change directory to a registered project
+- Bare project name support with ambiguity detection
+- See [Shell Integration guide](/docs/guides/shell-integration)
+
+### Schema commands
+- **`mori schema print`** — display embedded schema definitions
+- **`mori schema upgrade`** — upgrade to latest schema version with remote resolution
+- Embedded help topics for schema records, types, and modification
+
+### Agent commands
+- **`mori agent assist`** — launch Claude with mori project context
+- **`mori agent bootstrap`** — registry-aware project setup
+- `--debug` flag to print system prompt
+
+### Registry query commands
+- **`mori registry list`** — list registered projects with `--namespace` filtering
+- **`mori registry show`** — show project details
+- **`mori registry search`** — search across projects
+
+### Show command
+- `--full` flag for detailed section output
+
+### Version info
+- Git SHA included in `mori --version` output
+
+---
+
+## 2026-02-24
+
+### Nix build support
+- Global mori binary installation via Nix
+- Inline projection after `register` for immediate read model population
+- `MORI_PG_CONNECTION_STRING` replaces `PG_CONNECTION_STRING`
+
+---
+
+## 2026-02-14 – 2026-02-18
+
+### Testing and stabilization
+- Golden tests for event JSON serialization across all aggregates
+- Upgrade to hasql 1.10 with Tier 2 integration tests
+- Fix `<<loop>>` in FromDhall for recursive ReactionAction/ScheduleAction
+- Fix `automate run` startup issues (checkpoints table, ConcUnlift, executor parsing)
+
+### Event sourcing improvements
+- TypeID-based stream identity for Project aggregate
+- Daily stream partitioning for Repository aggregate
+- Registry subscription and config projection (Milestone 1.3.2, 1.6.2)
+- Scheduled action execution via pgmq + shibuya (Milestone 1.6.4)
+
+---
+
+## 2026-02-11 – 2026-02-12
+
+### Phase 1 core implementation
+
+All Phase 1 milestones completed:
+
+- **Milestone 1.1** — Foundation infrastructure (PostgreSQL + MessageDB, effect stack, TypeID)
+- **Milestone 1.2** — Schema & Validation (`mori init`, `mori validate`, `mori show`)
+- **Milestone 1.3** — Local Registry (`mori register --local`, dependency resolution)
+- **Milestone 1.4** — Agent Context (`mori agent context <role>`)
+- **Milestone 1.5** — VCS Ingestion (`mori automate ingest`)
+- **Milestone 1.6a** — Automation Engine (`mori automate run`, event selectors, reactions)
+- **Milestone 1.6b** — Automation Observability (`mori automate inspect`, `mori automate explain`)
+
+See [Roadmap](/docs/roadmap) for milestone details.
+
+---
+
+## 2026-01-21 – 2026-02-01
+
+### Project inception
+- Nix flake and multi-package Haskell project structure
+- Architecture documentation: CLI, Registry, Schema, Evaluation
+- Dhall schema design for project identity layer
+- Event sourcing architecture with MessageDB
+- Automation system design
+- Agent context assembly architecture
+- Implementation roadmap
