@@ -4,10 +4,12 @@ description: Mori's event sourcing architecture built on MessageDB and PostgreSQ
 icon: Database
 ---
 
+## 1. Overview
+
 Mori uses event sourcing as its core persistence model:
 
-- **Events are the source of truth** -- all state is derived by folding events
-- **MessageDB** provides the event store -- battle-tested PostgreSQL extension
+- **Events are the source of truth** — all state is derived by folding events
+- **MessageDB** provides the event store — battle-tested PostgreSQL extension
 - **Projections** (read models) are stored in PostgreSQL tables for fast queries
 - **Subscriptions** process events and update projections
 
@@ -18,7 +20,9 @@ This architecture enables:
 - Horizontal scaling via consumer groups
 - Same infrastructure for local and global registry (Phase 2)
 
-## Why MessageDB Over SQLite
+---
+
+## 2. Why MessageDB Over SQLite
 
 The original design considered SQLite for simplicity. MessageDB was chosen because:
 
@@ -32,7 +36,9 @@ The original design considered SQLite for simplicity. MessageDB was chosen becau
 | Code reuse | New code | Existing `message-db-hs` ecosystem |
 | Global registry | Different implementation | Same infrastructure |
 
-## Infrastructure
+---
+
+## 3. Infrastructure
 
 ### PostgreSQL with MessageDB
 
@@ -51,6 +57,8 @@ PostgreSQL
     ├── repository_configs
     ├── reaction_history
     ├── repository_stream_day
+    ├── workflows
+    ├── workflow_steps
     └── checkpoints
 ```
 
@@ -58,7 +66,7 @@ PostgreSQL
 
 PostgreSQL runs locally via Nix (already standard in projects). The `flake.nix` provides:
 
-```text
+```nix
 services.postgres = {
   enable = true;
   extensions = [ "message-db" ];
@@ -76,7 +84,9 @@ migrations/
 └── ...
 ```
 
-## Identity: TypeIDs
+---
+
+## 4. Identity: TypeIDs
 
 Mori uses **TypeIDs** for all entity identifiers:
 
@@ -105,7 +115,9 @@ Projects have a required namespace (organization):
 - Enables registry-style naming (`@org/project`)
 - Required for all projects
 
-## Stream Organization
+---
+
+## 5. Stream Organization
 
 ### Entity Streams
 
@@ -113,13 +125,16 @@ Each aggregate has its own stream:
 
 ```
 repository-{repo_typeid}
-  └── VCS events, config observations
+  └── VCS events, config observations, signal emitted/received
 
 project-{namespace}:{name}
   └── Registration, updates
 
 reaction-{event_typeid}:{reaction_name}
   └── Reaction lifecycle
+
+workflow-{workflow_typeid}
+  └── Workflow lifecycle (started, signal delivered, step completed/failed, completed)
 ```
 
 ### Category Streams
@@ -127,9 +142,10 @@ reaction-{event_typeid}:{reaction_name}
 Subscriptions consume category streams:
 
 ```
-repository    → All repository events
+repository    → All repository events (incl. signal emitted/received)
 project       → All project/registry events
 reaction      → All reaction events
+workflow      → All workflow lifecycle events
 ```
 
 ### Stream Naming Convention
@@ -143,9 +159,11 @@ Examples:
   reaction-evt_01h455vb4pex5vsknk084sn02q:notify-slack
 ```
 
-## Event Types
+---
 
-### Repository Events (5 types)
+## 6. Event Types
+
+### Repository Events (7 types)
 
 Defined in `Mori.Modules.Repository.Domain.Event`. Top-level uses TaggedObject `"type"`/`"data"` encoding via `eventAesonOptions`; nested data types use `defaultOptions` (camelCase).
 
@@ -199,6 +217,23 @@ data RepositoryDayOpenedData = RepositoryDayOpenedData
   , automationHash :: !(Maybe Text)
   , configHash    :: !(Maybe Text)
   }
+
+-- Cross-repo signal events (written by signal dispatcher)
+data WorkflowSignalEmittedData = WorkflowSignalEmittedData
+  { repoId     :: !RepoId
+  , workflowId :: !WorkflowId
+  , signalType :: !Text
+  , targets    :: ![Text]
+  , payload    :: !(Map Text Value)
+  }
+
+data WorkflowSignalReceivedData = WorkflowSignalReceivedData
+  { repoId        :: !RepoId
+  , workflowId    :: !WorkflowId
+  , signalType    :: !Text
+  , sourceProject :: !Text
+  , payload       :: !(Map Text Value)
+  }
 ```
 
 ### Project Events (11 types)
@@ -243,11 +278,28 @@ data ReactionEvent
   | ReactionFailed !ReactionFailedData
 ```
 
+### Workflow Events (5 types)
+
+Defined in `Mori.Modules.Workflow.Domain.Event`. Track cross-repo workflow lifecycle:
+
+```haskell
+data WorkflowEvent
+  = WorkflowStarted !WorkflowStartedData
+  | WorkflowSignalDelivered !WorkflowSignalDeliveredData
+  | WorkflowStepCompleted !WorkflowStepCompletedData
+  | WorkflowStepFailed !WorkflowStepFailedData
+  | WorkflowCompleted !WorkflowCompletedData
+```
+
+Stream: `workflow-{workflow_typeid}`
+
 ### Event Versioning
 
 > **Note**: A more elegant versioning approach is planned. Events currently use unversioned message types (e.g., `ChangesetObserved`, `ProjectRegistered`). Versioning and upcasting are deferred to Phase 3.
 
-## Event Metadata
+---
+
+## 7. Event Metadata
 
 Every message includes standard metadata:
 
@@ -264,7 +316,9 @@ data Actor
   | SystemActor Text  -- e.g., "mori-automation", "mori-cli"
 ```
 
-## Projections (Read Models)
+---
+
+## 8. Projections (Read Models)
 
 Projections are PostgreSQL tables updated by subscriptions.
 
@@ -349,15 +403,48 @@ CREATE TABLE mori.reaction_history (
 );
 ```
 
+### Workflow Projection
+
+```sql
+-- mori.workflows
+CREATE TABLE mori.workflows (
+  id TEXT PRIMARY KEY,
+  signal_type TEXT NOT NULL,
+  source_project TEXT NOT NULL,
+  target_count INT NOT NULL,
+  status TEXT NOT NULL,          -- started, completed, failed, partial
+  started_at TIMESTAMPTZ NOT NULL,
+  completed_at TIMESTAMPTZ,
+  duration_ms BIGINT,
+  message_global_position BIGINT NOT NULL
+);
+
+-- mori.workflow_steps
+CREATE TABLE mori.workflow_steps (
+  workflow_id TEXT NOT NULL REFERENCES mori.workflows(id),
+  target_project TEXT NOT NULL,
+  status TEXT NOT NULL,          -- pending, delivered, completed, failed
+  reaction_id TEXT,
+  started_at TIMESTAMPTZ,
+  completed_at TIMESTAMPTZ,
+  duration_ms BIGINT,
+  error TEXT,
+  message_global_position BIGINT NOT NULL,
+  PRIMARY KEY (workflow_id, target_project)
+);
+```
+
 ### Projection Rebuild
 
 If projections need rebuilding (schema change, corruption):
 
 1. Truncate projection tables
 2. Reset subscription checkpoint to position 0
-3. Restart subscription -- replays all events
+3. Restart subscription — replays all events
 
-## Subscriptions
+---
+
+## 9. Subscriptions
 
 ### Registry Subscription (`mori-registry`)
 
@@ -373,7 +460,7 @@ Defined in `Mori.Modules.Repository.Subscription.ConfigObservationHandler`.
 
 ### Automation Subscription (`mori-automation`)
 
-Subscribes to the `repository` category. Matches `ChangesetObserved` and `RefObserved` events against automation config selectors (glob patterns for paths, regex for branches/refs). When a match is found, triggers a reaction by writing a `ReactionTriggered` event.
+Subscribes to the `repository` category. Matches `ChangesetObserved`, `RefObserved`, and `WorkflowSignalReceived` events against automation config selectors (glob patterns for paths, regex for branches/refs, signal type/source filters). When a match is found, triggers a reaction by writing a `ReactionTriggered` event.
 
 Config is loaded via IORef and hot-reloaded when the config observation handler detects changes.
 
@@ -382,20 +469,29 @@ Defined in `Mori.Automation.Subscription.AutomationHandler`.
 ### Reaction Executor Subscription (`mori-reaction-executor`)
 
 Subscribes to the `reaction` category. Executes triggered reactions:
-- **RunCommand** -- shell execution via `System.Process`
-- **EmitEvent** -- write event to a MessageDB stream
-- **Notify** -- HTTP webhook via curl
-- **Schedule** -- enqueue delayed action to PGMQ
+- **RunCommand** — shell execution via `System.Process`
+- **EmitEvent** — write event to a MessageDB stream
+- **Notify** — HTTP webhook via curl
+- **Schedule** — enqueue delayed action to PGMQ
+- **Signal** — dispatch cross-repo signals via `Signal.Dispatcher`
 
 Writes `ReactionCompleted` or `ReactionFailed` events and updates the `reaction_history` projection table.
 
 Defined in `Mori.Automation.Subscription.ExecutorHandler`.
 
+### Workflow Subscription (`mori-workflow`)
+
+Subscribes to the `workflow` category. Maintains the `workflows` and `workflow_steps` projection tables. Handles all 5 workflow event types. Automatically detects workflow completion when all steps reach a terminal state.
+
+Defined in `Mori.Modules.Workflow.Subscription.WorkflowHandler`.
+
 ### All subscriptions run together
 
-All four subscriptions run concurrently inside `mori automate run`, sharing a single connection pool and using `message-db-checkpoint-store` for position tracking.
+All five subscriptions run concurrently inside `mori automate run`, sharing a single connection pool and using `message-db-checkpoint-store` for position tracking.
 
-## CLI Integration
+---
+
+## 10. CLI Integration
 
 ### Write Path (via events)
 
@@ -440,11 +536,13 @@ getAgentContext role = do
   pure $ assembleContext role project deps standards
 ```
 
-## Package Dependencies
+---
+
+## 11. Package Dependencies
 
 Mori uses the `message-db-hs` ecosystem and PGMQ for scheduled execution:
 
-```text
+```haskell
 -- mori-core.cabal (key dependencies)
 build-depends:
   -- Effects
@@ -470,7 +568,9 @@ build-depends:
   , hs-opentelemetry-api, hs-opentelemetry-sdk
 ```
 
-## Effect Stack
+---
+
+## 12. Effect Stack
 
 Defined in `Mori.Effects`:
 
@@ -502,11 +602,13 @@ type MoriSubscriptionEff es =
   )
 ```
 
-## Testing
+---
+
+## 13. Testing
 
 ### Pure Domain Logic
 
-Deciders and views are pure functions -- test without IO:
+Deciders and views are pure functions — test without IO:
 
 ```haskell
 test_projectRegistration = do
@@ -537,9 +639,11 @@ integrationTests =
 
 ### Golden Tests
 
-Event JSON serialization is verified via golden snapshot files (19 snapshots across all 3 aggregates) using `tasty-golden` + `aeson-pretty`.
+Event JSON serialization is verified via golden snapshot files across all 4 aggregates (repository, project, reaction, workflow) using `tasty-golden` + `aeson-pretty`.
 
-## Open Questions (Phase 2+)
+---
+
+## 14. Open Questions (Phase 2+)
 
 ### Global Registry Sync
 

@@ -42,6 +42,8 @@ Mori is built in three phases:
 
 **Deliverable**: `mori doctor` command that verifies database connectivity.
 
+---
+
 ### 1.2 Schema & Validation ✅
 
 **Objective**: Parse and validate `mori.dhall` files.
@@ -57,6 +59,8 @@ Mori is built in three phases:
 - [x] `mori show` — render evaluated config (human and JSON)
 
 **Deliverable**: Can initialize a project and validate its config.
+
+---
 
 ### 1.3 Local Registry ✅
 
@@ -82,6 +86,8 @@ Mori is built in three phases:
 
 **Deliverable**: Can register wrapper projects and resolve dependencies by name.
 
+---
+
 ### 1.4 Agent Context ✅
 
 **Objective**: Assemble structured context for AI coding agents.
@@ -97,6 +103,8 @@ Mori is built in three phases:
 - [x] `mori agent list` — list configured agent roles
 
 **Deliverable**: Agent can query Mori for project context.
+
+---
 
 ### 1.5 VCS Ingestion ✅
 
@@ -118,6 +126,8 @@ Mori is built in three phases:
 - [x] `mori automate ingest --repo <path>` — specify repo
 
 **Deliverable**: Can ingest git history into event store.
+
+---
 
 ### 1.6 Automation Engine (1.6a ✅ / 1.6b ✅)
 
@@ -163,13 +173,80 @@ Mori is built in three phases:
 
 **Deliverable**: Automation reacts to commits matching configured rules.
 
-### 1.7 Jujutsu Support (Stretch)
+---
+
+### 1.7 Multi-Repo Automation ✅
+
+**Objective**: Run automation across multiple repositories with a single daemon.
+
+#### 1.7.1 Automation Daemon
+- [x] `mori automate daemon` — multi-repo automation worker
+- [x] Discovers all registered repos and runs ingestion + automation for each
+- [x] Concurrent subscription workers per repo
+- [x] Shared connection pool across repos
+
+#### 1.7.2 Reaction Observability Commands
+- [x] `mori reaction list` — list recent reactions with status
+- [x] `mori reaction show <id>` — show reaction details
+
+**Deliverable**: Multi-repo automation from a single daemon process.
+
+---
+
+### 1.8 Cross-Repo Workflows (M1–M4 ✅ / M5 ✅ / M6 ✅)
+
+**Objective**: Signal-based communication and workflow tracking across repositories.
+
+#### 1.8.1 Signal Types & Schema ✅
+- [x] `WorkflowId` type (`KindID "wf"`)
+- [x] `WorkflowStatus` enum (Started | Completed | Failed | Partial)
+- [x] `SignalAction` type (signalType, targets, payload)
+- [x] `SignalSelectorData` for signal-aware automation matching
+- [x] `WorkflowEvent` ADT (5 variants: Started, SignalDelivered, StepCompleted, StepFailed, Completed)
+- [x] `WorkflowSignalEmitted` / `WorkflowSignalReceived` repository events
+- [x] Golden tests (7 event snapshots)
+
+#### 1.8.2 Signal Dispatch ✅
+- [x] `Dispatcher.hs` — signal resolution, event writing, dynamic targets
+- [x] Three-way action partitioning in ExecutorHandler (Schedule/Signal/Immediate)
+- [x] Target resolution via registry (project name → repo ID)
+- [x] Workflow lifecycle events (Started → SignalDelivered)
+
+#### 1.8.3 Signal Matching ✅
+- [x] `matchesSignalSelector` in Matcher.hs (filter by signalTypes, sourceProjects)
+- [x] Empty filter lists = wildcard (match all)
+- [x] Explain module extended for SignalSelector
+- [x] 8 test cases for signal matching
+
+#### 1.8.4 Workflow Tracking ✅
+- [x] `mori.workflows` + `mori.workflow_steps` projection tables
+- [x] `mori-workflow` subscription (WorkflowHandler)
+- [x] Automatic workflow completion detection
+- [x] ReadModelRepository queries (recent, active, by-ID, steps)
+
+#### 1.8.5 Workflow CLI Commands ✅
+- [x] `mori workflow list [--limit N]` — recent workflows
+- [x] `mori workflow status` — in-progress workflows with steps
+- [x] `mori workflow trace <WORKFLOW_ID>` — detailed workflow visualization
+
+#### 1.8.6 Dynamic Targets ✅
+- [x] `*dependents*` placeholder resolution via dependency graph
+- [x] `getDependentProjectNames` registry query
+- [x] Merged with explicit targets and deduplicated
+
+**Deliverable**: Cross-repo signal dispatch, automated reaction to signals, full workflow observability.
+
+---
+
+### 1.9 Jujutsu Support (Stretch)
 
 **Objective**: Support jj as alternative VCS.
 
 - [ ] jj adapter (operation log parsing)
 - [ ] `ChangesetRewritten` event handling
 - [ ] `mori automate ingest jj`
+
+---
 
 ### Phase 1 Milestone
 
@@ -179,6 +256,10 @@ Mori is built in three phases:
 3. Query agent context for their service
 4. Ingest git commits
 5. Run automation reactions locally
+6. Dispatch cross-repo signals and track workflow execution
+7. Run multi-repo automation from a single daemon
+
+---
 
 ## Phase 2: Global Registry
 
@@ -212,6 +293,8 @@ Mori is built in three phases:
 - [ ] Policy enforcement
 - [ ] Trust levels
 
+---
+
 ## Phase 3: Advanced Features
 
 ### 3.1 Version Pinning
@@ -237,6 +320,8 @@ Mori is built in three phases:
 - [ ] Elegant versioning solution (in progress)
 - [ ] Automatic upcasting
 - [ ] Schema registry
+
+---
 
 ## Implementation Order (Phase 1)
 
@@ -268,6 +353,8 @@ Mori is built in three phases:
                         └── reaction execution
 ```
 
+---
+
 ## Open Design Questions
 
 ### Resolved
@@ -284,7 +371,9 @@ Mori is built in three phases:
 | Project-level dependencies | `List Text` at project root; `List Dependency` (union) at Package level |
 | Cookbooks | Modeled as `docs` entries with `kind = Cookbook` |
 | ApiUpdatePolicy location | Stays in identity schema (SCHEMA.md) with behavioral note |
-| Worker process model | Long-running `mori automate run` with 4 concurrent subscriptions (registry, config-observation, automation, reaction-executor) |
+| Worker process model | Long-running `mori automate run` with 5 concurrent subscriptions (registry, config-observation, automation, reaction-executor, workflow) |
+| Cross-repo communication | Signal-based dispatch with workflow tracking |
+| Multi-repo automation | `mori automate daemon` discovers registered repos |
 
 ### Still Open
 
@@ -293,6 +382,8 @@ Mori is built in three phases:
 | VCS Adapter mechanism | Git hooks? Polling? fswatch? (Phase 1: CLI-driven `mori automate ingest`) |
 | Event versioning | Elegant solution in progress |
 | Standards distribution | How are org-wide standards versioned and resolved? |
+
+---
 
 ## Success Criteria
 
@@ -304,8 +395,11 @@ Mori is built in three phases:
 - [x] `mori agent context` returns structured JSON
 - [x] `mori automate ingest git` populates event store
 - [x] `mori automate run` executes matching reactions
+- [x] `mori automate daemon` runs multi-repo automation
+- [x] `mori workflow list/status/trace` provides workflow observability
+- [x] `mori reaction list/show` provides reaction observability
 - [ ] All commands work offline (no network required)
-- [ ] Test coverage > 80%
+- [ ] Test coverage > 80% (currently 425 tests passing)
 - [ ] Documentation complete
 
 ### Phase 2 Complete When

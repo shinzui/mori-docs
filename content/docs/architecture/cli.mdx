@@ -12,13 +12,17 @@ The goal of this document is to:
 * define their intent and behavior
 * lock in naming and semantics before implementation
 
+---
+
 ## CLI Design Principles
 
-1. **Single binary** -- `mori`
-2. **Local-first** -- works without a registry
-3. **Registry-enhanced** -- global discovery when available
-4. **Explicit side effects** -- no background mutation
-5. **Explainable behavior** -- every decision can be inspected
+1. **Single binary** – `mori`
+2. **Local-first** – works without a registry
+3. **Registry-enhanced** – global discovery when available
+4. **Explicit side effects** – no background mutation
+5. **Explainable behavior** – every decision can be inspected
+
+---
 
 ## Command Groups
 
@@ -34,9 +38,13 @@ The CLI is organized into clear domains:
 * Standards
 * Config
 * Automation
+* Reactions
+* Workflows
 * Diagnostics
 
 Each command must be deterministic and scriptable.
+
+---
 
 ## Core Commands
 
@@ -54,6 +62,8 @@ Behavior:
 * creates directory layout (`mori/`)
 * optionally prompts for standards
 * never overwrites existing files without confirmation
+
+---
 
 ### `mori validate`
 
@@ -74,6 +84,8 @@ Exit codes:
 * `0` valid
 * `1` invalid
 
+---
+
 ### `mori show`
 
 Render evaluated Mori metadata.
@@ -82,6 +94,8 @@ Render evaluated Mori metadata.
 mori show
 mori show --json
 ```
+
+---
 
 ## Registry Commands
 
@@ -96,7 +110,7 @@ mori register
 Behavior:
 
 * validates Mori
-* evaluates Dhall to canonical JSON
+* evaluates Dhall → canonical JSON
 * uploads metadata
 * records registration receipt
 
@@ -105,7 +119,9 @@ Flags:
 * `--dry-run`
 * `--explain`
 * `--force`
-* `--local` -- register in local registry only (no global upload)
+* `--local` – register in local registry only (no global upload)
+
+---
 
 ### `mori search`
 
@@ -117,6 +133,8 @@ mori search --type library
 mori search --language haskell
 ```
 
+---
+
 ### `mori registry status`
 
 Check registry connectivity and authentication.
@@ -124,6 +142,8 @@ Check registry connectivity and authentication.
 ```bash
 mori registry status
 ```
+
+---
 
 ### `mori registry sync`
 
@@ -142,8 +162,10 @@ Behavior:
 
 Flags:
 
-* `--full` -- full resync (not incremental)
-* `--dry-run` -- show what would be synced
+* `--full` – full resync (not incremental)
+* `--dry-run` – show what would be synced
+
+---
 
 ## Navigation Commands
 
@@ -160,6 +182,8 @@ Rules:
 * prefers existing local checkout
 * prompts before cloning
 
+---
+
 ### `mori open`
 
 Open documentation or source.
@@ -168,6 +192,8 @@ Open documentation or source.
 mori open streamly:folds
 mori open api:MLS\ Public\ API
 ```
+
+---
 
 ## Authoring Commands
 
@@ -179,6 +205,8 @@ Add project metadata fields interactively.
 mori add project
 ```
 
+---
+
 ### `mori add package`
 
 Add a package definition.
@@ -186,6 +214,8 @@ Add a package definition.
 ```bash
 mori add package <name>
 ```
+
+---
 
 ### `mori add dependency`
 
@@ -195,6 +225,8 @@ Add a dependency using registry metadata.
 mori add dependency <name>
 ```
 
+---
+
 ### `mori add api`
 
 Add an API definition.
@@ -203,6 +235,8 @@ Add an API definition.
 mori add api <name>
 ```
 
+---
+
 ### `mori add standard`
 
 Declare adherence to a standard project.
@@ -210,6 +244,8 @@ Declare adherence to a standard project.
 ```bash
 mori add standard backend-architecture
 ```
+
+---
 
 ## Dependency Commands
 
@@ -222,6 +258,8 @@ mori deps resolve
 mori deps resolve --explain
 ```
 
+---
+
 ### `mori deps explain`
 
 Explain how a dependency was resolved.
@@ -229,6 +267,8 @@ Explain how a dependency was resolved.
 ```bash
 mori deps explain streamly
 ```
+
+---
 
 ### `mori deps locate`
 
@@ -251,6 +291,8 @@ Resolution order:
 2. Global registry (if online)
 3. Not found
 
+---
+
 ### `mori introspect`
 
 Inspect build files for dependencies.
@@ -259,6 +301,8 @@ Inspect build files for dependencies.
 mori introspect
 mori introspect cabal
 ```
+
+---
 
 ## API Commands
 
@@ -270,6 +314,8 @@ Render API dependency graph.
 mori api graph
 ```
 
+---
+
 ### `mori api impact`
 
 Show impact of API changes.
@@ -278,6 +324,8 @@ Show impact of API changes.
 mori api impact <api>
 ```
 
+---
+
 ### `mori api update-plan`
 
 Generate an update plan.
@@ -285,6 +333,8 @@ Generate an update plan.
 ```bash
 mori api update-plan <api>
 ```
+
+---
 
 ## Agent Commands
 
@@ -296,6 +346,8 @@ List agent roles.
 mori agent list
 ```
 
+---
+
 ### `mori agent context`
 
 Generate agent context.
@@ -303,6 +355,8 @@ Generate agent context.
 ```bash
 mori agent context <role>
 ```
+
+---
 
 ## Standards Commands
 
@@ -314,6 +368,8 @@ List applicable standards.
 mori standards list
 ```
 
+---
+
 ### `mori standards show`
 
 Show standard details.
@@ -321,6 +377,8 @@ Show standard details.
 ```bash
 mori standards show backend-architecture
 ```
+
+---
 
 ## Config Commands
 
@@ -332,6 +390,8 @@ List required config.
 mori config list <package>
 ```
 
+---
+
 ### `mori config validate`
 
 Validate infra config.
@@ -340,6 +400,8 @@ Validate infra config.
 mori config validate
 mori config validate --k8s ./k8s
 ```
+
+---
 
 ## Automation Commands
 
@@ -364,6 +426,8 @@ Behavior:
 * appends to local event store
 * updates cursor position
 
+---
+
 ### `mori automate run`
 
 Execute pending reactions.
@@ -383,9 +447,11 @@ Behavior:
 
 Flags:
 
-* `--once` -- process one batch, then exit
-* `--dry-run` -- show what would run without executing
-* `--explain` -- show matching logic
+* `--once` – process one batch, then exit
+* `--dry-run` – show what would run without executing
+* `--explain` – show matching logic
+
+---
 
 ### `mori automate watch`
 
@@ -401,6 +467,25 @@ Behavior:
 * monitors repositories for new events
 * ingests automatically
 * runs reactions when allowed
+
+---
+
+### `mori automate daemon`
+
+Run multi-repo automation daemon.
+
+```bash
+mori automate daemon
+```
+
+Behavior:
+
+* discovers all registered repos from the registry
+* runs VCS ingestion and automation for each repo
+* concurrent subscription workers per repo
+* shared connection pool
+
+---
 
 ### `mori automate inspect`
 
@@ -418,6 +503,8 @@ Output:
 * execution policy (local/CI)
 * registered event selectors
 
+---
+
 ### `mori automate explain`
 
 Explain why a reaction did or did not run.
@@ -433,6 +520,92 @@ Output:
 * policy resolution trace
 * idempotency status
 
+---
+
+## Reaction Commands
+
+Commands for inspecting reaction execution history.
+
+### `mori reaction list`
+
+List recent reactions.
+
+```bash
+mori reaction list
+mori reaction list --limit 10
+```
+
+Output:
+
+* reaction ID, name, status, timing
+
+---
+
+### `mori reaction show`
+
+Show details of a specific reaction.
+
+```bash
+mori reaction show <REACTION_ID>
+```
+
+Output:
+
+* triggering event, reaction name, actions, status, error (if failed)
+
+---
+
+## Workflow Commands
+
+Commands for cross-repo workflow observability.
+
+See [Cross-Repo Workflows](/docs/guides/cross-repo-workflows) for the workflow design.
+
+### `mori workflow list`
+
+List recent workflows.
+
+```bash
+mori workflow list
+mori workflow list --limit 10
+```
+
+Output:
+
+* workflow ID, signal type, source, targets, status, started time
+
+---
+
+### `mori workflow status`
+
+Show in-progress workflows with step details.
+
+```bash
+mori workflow status
+```
+
+Output:
+
+* active workflows (status != completed/failed)
+* per-workflow step breakdown
+
+---
+
+### `mori workflow trace`
+
+Trace a specific workflow's execution.
+
+```bash
+mori workflow trace <WORKFLOW_ID>
+```
+
+Output:
+
+* workflow metadata (ID, signal, source, targets, status, timing)
+* all steps with status, reaction ID, duration, errors
+
+---
+
 ## Diagnostics & Explainability
 
 ### `mori explain`
@@ -444,6 +617,8 @@ mori explain dependency streamly
 mori explain api MLS\ Public\ API
 ```
 
+---
+
 ### `mori doctor`
 
 Run consistency checks.
@@ -451,6 +626,8 @@ Run consistency checks.
 ```bash
 mori doctor
 ```
+
+---
 
 ## Global Flags
 
@@ -461,6 +638,8 @@ mori doctor
 --registry <name>
 ```
 
+---
+
 ## Exit Code Policy
 
 * `0` success
@@ -468,13 +647,17 @@ mori doctor
 * `2` registry unavailable
 * `3` user abort
 
+---
+
 ## Non-Goals
 
 * Mori will not run builds
 * Mori will not deploy services
 * Mori will not mutate code without explicit request
 
-## CLI Architecture (Implementation)
+---
+
+## CLI Architecture (Implementation-Oriented)
 
 This section defines the **internal architecture** of the Mori CLI. It is written to directly guide implementation (especially in Haskell), not as a conceptual overview.
 
@@ -485,7 +668,9 @@ The architecture is designed to ensure:
 * clear separation of concerns
 * testability
 
-### High-Level Pipeline
+---
+
+## High-Level Pipeline
 
 Every Mori CLI command follows the same conceptual pipeline:
 
@@ -507,9 +692,11 @@ Rendering (human / json)
 
 No command is allowed to skip stages implicitly.
 
-### Core Modules
+---
 
-#### 1. CLI Frontend
+## Core Modules
+
+### 1. CLI Frontend
 
 **Responsibility:**
 
@@ -522,7 +709,9 @@ No command is allowed to skip stages implicitly.
 * no business logic
 * no IO beyond argument parsing
 
-#### 2. Execution Context
+---
+
+### 2. Execution Context
 
 **Responsibility:**
 
@@ -542,7 +731,9 @@ ExecutionContext
   }
 ```
 
-#### 3. Mori Loader
+---
+
+### 3. Mori Loader
 
 **Responsibility:**
 
@@ -560,7 +751,9 @@ Example modules:
 * `Mori.Loader`
 * `Mori.Schema`
 
-#### 4. Resolution Engine
+---
+
+### 4. Resolution Engine
 
 **Responsibility:**
 
@@ -585,7 +778,9 @@ Example modules:
 * `Mori.Resolve.Dependencies`
 * `Mori.Resolve.Standards`
 
-#### 5. Registry Client
+---
+
+### 5. Registry Client
 
 **Responsibility:**
 
@@ -602,7 +797,9 @@ Example modules:
 
 * `Mori.Registry.Client`
 
-#### 6. Planning Layer
+---
+
+### 6. Planning Layer
 
 **Responsibility:**
 
@@ -621,7 +818,9 @@ Plans are **data**, not actions.
 plan :: ResolvedModel -> Plan
 ```
 
-#### 7. Rendering Layer
+---
+
+### 7. Rendering Layer
 
 **Responsibility:**
 
@@ -638,7 +837,9 @@ Example modules:
 * `Mori.Render.Text`
 * `Mori.Render.JSON`
 
-### Explainability (First-Class)
+---
+
+## Explainability (First-Class)
 
 Every decision-making stage must emit structured explanations.
 
@@ -651,6 +852,8 @@ ResolveTrace
 
 The `mori explain` command is simply a **view** over this trace.
 
+---
+
 ## Error Model
 
 Errors are categorized and surfaced consistently:
@@ -662,6 +865,8 @@ Errors are categorized and surfaced consistently:
 
 Errors must never be stringly-typed.
 
+---
+
 ## Testing Strategy
 
 * Resolution engine: pure unit tests
@@ -670,12 +875,16 @@ Errors must never be stringly-typed.
 
 Registry client is always mockable.
 
+---
+
 ## Architectural Invariants
 
 * No hidden IO in resolution
 * No registry access without explicit enablement
 * No mutation without explicit command
 * All decisions explainable
+
+---
 
 ## Mental Model
 
