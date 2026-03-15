@@ -1,0 +1,14 @@
+---
+title: mori explain
+description: Explain Mori decisions
+icon: HelpCircle
+---
+
+Explain Mori decisions with full resolution traces.
+
+```bash
+mori explain dependency streamly
+mori explain api MLS\ Public\ API
+```
+
+Shows the full reasoning behind how Mori resolved a dependency, API relationship, or other decision. This is a view over the internal `ResolveTrace` that every decision-making stage emits.

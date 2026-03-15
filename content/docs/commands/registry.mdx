@@ -1,0 +1,37 @@
+---
+title: mori registry
+description: Registry status and sync operations
+icon: Database
+---
+
+Commands for managing registry connectivity and cache.
+
+## `mori registry status`
+
+Check registry connectivity and authentication.
+
+```bash
+mori registry status
+```
+
+## `mori registry sync`
+
+Sync local registry cache from global registry.
+
+```bash
+mori registry sync
+mori registry sync --full
+```
+
+### Behavior
+
+- Pulls updated metadata from global registry
+- Updates local SQLite cache
+- Does not modify project files
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--full` | Full resync (not incremental) |
+| `--dry-run` | Show what would be synced |

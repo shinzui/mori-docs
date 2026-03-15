@@ -1,0 +1,114 @@
+---
+title: mori automate
+description: VCS event ingestion and reactive automation
+icon: Zap
+---
+
+Commands for VCS event ingestion and reactive automation.
+
+See [Automation Configuration](/docs/concepts/automation-configuration) for the automation layer design.
+
+## `mori automate ingest`
+
+Ingest VCS events into the local event store.
+
+```bash
+mori automate ingest git
+mori automate ingest jj
+mori automate ingest --repo /path/to/repo --vcs git
+```
+
+### Behavior
+
+- Scans VCS history for new events
+- Normalizes to canonical event format
+- Appends to local event store
+- Updates cursor position
+
+## `mori automate run`
+
+Execute pending reactions.
+
+```bash
+mori automate run
+mori automate run --once
+mori automate run --dry-run
+```
+
+### Behavior
+
+- Evaluates event selectors against pending events
+- Checks policy resolution
+- Executes allowed reactions
+- Records execution for idempotency
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--once` | Process one batch, then exit |
+| `--dry-run` | Show what would run without executing |
+| `--explain` | Show matching logic |
+
+## `mori automate watch`
+
+Watch repositories for VCS events continuously.
+
+```bash
+mori automate watch
+mori automate watch --repos /path/a,/path/b
+```
+
+### Behavior
+
+- Monitors repositories for new events
+- Ingests automatically
+- Runs reactions when allowed
+
+## `mori automate daemon`
+
+Run multi-repo automation daemon.
+
+```bash
+mori automate daemon
+```
+
+### Behavior
+
+- Discovers all registered repos from the registry
+- Runs VCS ingestion and automation for each repo
+- Concurrent subscription workers per repo
+- Shared connection pool
+
+See [Automation Daemon](/docs/guides/automation-daemon) for details.
+
+## `mori automate inspect`
+
+Inspect automation configuration.
+
+```bash
+mori automate inspect
+mori automate inspect --json
+```
+
+### Output
+
+- Automation config status
+- Config hash
+- Execution policy (local/CI)
+- Registered event selectors
+
+## `mori automate explain`
+
+Explain why a reaction did or did not run.
+
+```bash
+mori automate explain event <event-id>
+mori automate explain reaction <reaction-name>
+```
+
+### Output
+
+- Event matching details
+- Policy resolution trace
+- Idempotency status

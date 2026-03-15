@@ -1,0 +1,45 @@
+---
+title: mori deps
+description: Resolve, explain, and locate dependencies
+icon: GitFork
+---
+
+Commands for working with project dependencies.
+
+## `mori deps resolve`
+
+Resolve dependency metadata.
+
+```bash
+mori deps resolve
+mori deps resolve --explain
+```
+
+## `mori deps explain`
+
+Explain how a dependency was resolved.
+
+```bash
+mori deps explain streamly
+```
+
+## `mori deps locate`
+
+Locate a dependency on the local filesystem.
+
+```bash
+mori deps locate streamly
+mori deps locate streamly --json
+```
+
+### Output
+
+- Filesystem path to registered project
+- Documentation paths
+- Package bundle info (if applicable)
+
+### Resolution Order
+
+1. Local registry
+2. Global registry (if online)
+3. Not found

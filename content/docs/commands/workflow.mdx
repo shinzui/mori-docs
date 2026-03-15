@@ -1,0 +1,48 @@
+---
+title: mori workflow
+description: Cross-repo workflow observability
+icon: GitPullRequest
+---
+
+Commands for cross-repo workflow observability.
+
+See [Cross-Repo Workflows](/docs/guides/cross-repo-workflows) for the workflow design.
+
+## `mori workflow list`
+
+List recent workflows.
+
+```bash
+mori workflow list
+mori workflow list --limit 10
+```
+
+### Output
+
+- Workflow ID, signal type, source, targets, status, started time
+
+## `mori workflow status`
+
+Show in-progress workflows with step details.
+
+```bash
+mori workflow status
+```
+
+### Output
+
+- Active workflows (status != completed/failed)
+- Per-workflow step breakdown
+
+## `mori workflow trace`
+
+Trace a specific workflow's execution.
+
+```bash
+mori workflow trace <WORKFLOW_ID>
+```
+
+### Output
+
+- Workflow metadata (ID, signal, source, targets, status, timing)
+- All steps with status, reaction ID, duration, errors

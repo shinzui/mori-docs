@@ -1,0 +1,27 @@
+---
+title: mori register
+description: Register the current project in the Mori registry
+icon: Upload
+---
+
+Register the current project in the Mori registry.
+
+```bash
+mori register
+```
+
+## Behavior
+
+- Validates Mori
+- Evaluates Dhall to canonical JSON
+- Uploads metadata
+- Records registration receipt
+
+## Flags
+
+| Flag | Description |
+|------|-------------|
+| `--dry-run` | Show what would happen without making changes |
+| `--explain` | Show decision reasoning |
+| `--force` | Force re-registration |
+| `--local` | Register in local registry only (no global upload) |

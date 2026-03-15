@@ -1,0 +1,34 @@
+---
+title: mori reaction
+description: Inspect reaction execution history
+icon: History
+---
+
+Commands for inspecting reaction execution history.
+
+## `mori reaction list`
+
+List recent reactions.
+
+```bash
+mori reaction list
+mori reaction list --limit 10
+```
+
+### Output
+
+- Reaction ID, name, status, timing
+
+## `mori reaction show`
+
+Show details of a specific reaction.
+
+```bash
+mori reaction show <REACTION_ID>
+```
+
+### Output
+
+- Triggering event, reaction name, actions, status, error (if failed)
+
+See [Reaction History](/docs/guides/reaction-history) for more details.

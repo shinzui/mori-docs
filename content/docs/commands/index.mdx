@@ -1,0 +1,104 @@
+---
+title: Commands
+description: Complete reference for all mori CLI commands
+icon: SquareTerminal
+---
+
+Complete reference for all `mori` CLI commands, organized by domain.
+
+## Core
+
+| Command | Description |
+|---------|-------------|
+| [init](/docs/commands/init) | Initialize Mori in a repository |
+| [validate](/docs/commands/validate) | Validate the current Mori configuration |
+| [show](/docs/commands/show) | Render evaluated Mori metadata |
+
+## Registry
+
+| Command | Description |
+|---------|-------------|
+| [register](/docs/commands/register) | Register a project in the Mori registry |
+| [search](/docs/commands/search) | Search the Mori registry |
+| [registry](/docs/commands/registry) | Registry status and sync operations |
+
+## Navigation
+
+| Command | Description |
+|---------|-------------|
+| [cd](/docs/commands/cd) | Navigate to a registered project |
+| [open](/docs/commands/open) | Open documentation or source |
+
+## Authoring
+
+| Command | Description |
+|---------|-------------|
+| [add](/docs/commands/add) | Add project metadata, packages, dependencies, APIs, and standards |
+
+## Dependencies
+
+| Command | Description |
+|---------|-------------|
+| [deps](/docs/commands/deps) | Resolve, explain, and locate dependencies |
+| [introspect](/docs/commands/introspect) | Inspect build files for dependencies |
+
+## APIs
+
+| Command | Description |
+|---------|-------------|
+| [api](/docs/commands/api) | API dependency graph, impact analysis, and update plans |
+
+## Agents
+
+| Command | Description |
+|---------|-------------|
+| [agent](/docs/commands/agent) | List agent roles and generate agent context |
+
+## Standards
+
+| Command | Description |
+|---------|-------------|
+| [standards](/docs/commands/standards) | List and inspect applicable standards |
+
+## Config
+
+| Command | Description |
+|---------|-------------|
+| [config](/docs/commands/config) | List and validate configuration |
+
+## Automation
+
+| Command | Description |
+|---------|-------------|
+| [automate](/docs/commands/automate) | VCS event ingestion and reactive automation |
+| [reaction](/docs/commands/reaction) | Inspect reaction execution history |
+| [workflow](/docs/commands/workflow) | Cross-repo workflow observability |
+
+## Diagnostics
+
+| Command | Description |
+|---------|-------------|
+| [explain](/docs/commands/explain) | Explain Mori decisions |
+| [doctor](/docs/commands/doctor) | Run consistency checks |
+
+---
+
+## Global Flags
+
+All commands support these global flags:
+
+```text
+--json       Output in JSON format
+--explain    Show decision reasoning
+--offline    Disable registry access
+--registry   Select registry by name
+```
+
+## Exit Code Policy
+
+| Code | Meaning |
+|------|---------|
+| `0` | Success |
+| `1` | Validation error |
+| `2` | Registry unavailable |
+| `3` | User abort |

@@ -1,0 +1,26 @@
+{
+	"title": "Commands",
+	"pages": [
+		"index",
+		"init",
+		"validate",
+		"show",
+		"register",
+		"search",
+		"registry",
+		"cd",
+		"open",
+		"add",
+		"deps",
+		"introspect",
+		"api",
+		"agent",
+		"standards",
+		"config",
+		"automate",
+		"reaction",
+		"workflow",
+		"explain",
+		"doctor"
+	]
+}
