@@ -309,11 +309,11 @@ Mori is built in three phases:
 - [ ] Trust level verification
 - [ ] Automation allow/deny lists
 
-### 3.3 Cross-Repo Workflows
+### 3.3 Advanced Cross-Repo Features
 
-- [ ] EmitEvent across repositories
-- [ ] Workflow orchestration
-- [ ] Dependency update propagation
+- [ ] Advanced workflow orchestration patterns
+- [ ] Dependency update propagation automation
+- [ ] Cross-org workflow policies
 
 ### 3.4 Event Versioning
 
@@ -374,6 +374,7 @@ Mori is built in three phases:
 | Worker process model | Long-running `mori automate run` with 5 concurrent subscriptions (registry, config-observation, automation, reaction-executor, workflow) |
 | Cross-repo communication | Signal-based dispatch with workflow tracking |
 | Multi-repo automation | `mori automate daemon` discovers registered repos |
+| Daemon registration | Event-driven via AutomationRegistration aggregate (not filesystem polling) |
 
 ### Still Open
 

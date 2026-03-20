@@ -1,37 +1,125 @@
 ---
 title: mori registry
-description: Registry status and sync operations
+description: Query and manage the local registry
 icon: Database
 ---
 
-Commands for managing registry connectivity and cache.
+Commands for querying and managing the local project registry.
 
-## `mori registry status`
+## `mori registry list`
 
-Check registry connectivity and authentication.
-
-```bash
-mori registry status
-```
-
-## `mori registry sync`
-
-Sync local registry cache from global registry.
+List all registered projects.
 
 ```bash
-mori registry sync
-mori registry sync --full
+mori registry list
+mori registry list --json
+mori registry list --type library
+mori registry list --origin ThirdParty
+mori registry list --namespace shinzui
+mori registry list --docs-only
 ```
-
-### Behavior
-
-- Pulls updated metadata from global registry
-- Updates local SQLite cache
-- Does not modify project files
 
 ### Flags
 
 | Flag | Description |
 |------|-------------|
-| `--full` | Full resync (not incremental) |
-| `--dry-run` | Show what would be synced |
+| `--json` | JSON output |
+| `--type` | Filter by project type |
+| `--origin` | Filter by origin (`Own`, `ThirdParty`, `Fork`, `Vendored`) |
+| `--namespace`, `-n` | Filter by namespace |
+| `--docs-only` | Show only docs-only projects (no packages) |
+
+## `mori registry show`
+
+Show details of a registered project.
+
+```bash
+mori registry show <project>
+mori registry show <project> --json
+mori registry show <project> --full
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--json` | JSON output |
+| `--full` | Show full details including packages, dependencies, bundles, and docs |
+
+## `mori registry search`
+
+Search the local registry.
+
+```bash
+mori registry search <query>
+mori registry search <query> --json
+```
+
+Matches against project name, namespace, and package names.
+
+## `mori registry docs`
+
+List documentation for a project.
+
+```bash
+mori registry docs <project>
+mori registry docs <project> --kind reference
+mori registry docs <project> --audience user
+mori registry docs <project> --package <pkg>
+mori registry docs <project> --json
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--json` | JSON output |
+| `--kind` | Filter by doc kind (`reference`, `guide`, `cookbook`, `spec`, `runbook`, `notes`) |
+| `--audience` | Filter by audience (`module`, `user`, `api`, `internal`) |
+| `--package` | Filter by package name |
+
+## `mori registry reregister`
+
+Force re-register all registered projects.
+
+```bash
+mori registry reregister
+mori registry reregister --dry-run
+mori registry reregister --type library
+mori registry reregister --namespace shinzui
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--dry-run` | Show what would be re-registered without doing it |
+| `--type` | Filter by project type |
+| `--namespace`, `-n` | Filter by namespace |
+
+## `mori registry remove`
+
+Remove a project from the local registry.
+
+```bash
+mori registry remove <project>
+mori registry remove <project> --force
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--force`, `-f` | Skip confirmation prompt |
+
+## `mori registry open-doc`
+
+Open a project doc in your editor. Supports fzf-based interactive project and doc selection.
+
+```bash
+mori registry open-doc
+mori registry open-doc <project>
+mori registry open-doc <project> <doc-key>
+```
+
+Uses `$EDITOR` (or `$VISUAL`, falling back to `vi`). URLs are opened with the system `open` command.

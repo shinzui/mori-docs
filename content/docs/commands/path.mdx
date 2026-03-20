@@ -1,0 +1,36 @@
+---
+title: mori path
+description: Print local path for a project, package, or doc
+icon: MapPin
+---
+
+Print local path for a project with optional package or doc subpath.
+
+## Usage
+
+```bash
+mori path <project>
+mori path <project> --package <pkg>
+mori path <project> --doc <doc-key>
+```
+
+Supports both bare names and namespace-qualified names (`namespace/name`).
+
+## Flags
+
+| Flag | Description |
+|------|-------------|
+| `--package`, `-p` | Print path to a package (interactive fzf selection if name omitted) |
+| `--doc`, `-d` | Print location of a doc (interactive fzf selection if key omitted) |
+
+## Behavior
+
+- Resolves project from the local registry
+- Checks that the path exists on disk before printing
+- For packages, resolves the relative path against the project root
+- For docs, resolves local paths against project root; URLs are printed as-is
+- Ambiguous bare names produce a disambiguation prompt
+
+## Interactive Selection
+
+When `--package` or `--doc` is used without a name, fzf is launched for interactive selection. Install fzf for this feature.

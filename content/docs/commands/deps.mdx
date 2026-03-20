@@ -21,6 +21,7 @@ Explain how a dependency was resolved.
 
 ```bash
 mori deps explain streamly
+mori deps explain hasql:hasql-pool
 ```
 
 ## `mori deps locate`
@@ -29,6 +30,7 @@ Locate a dependency on the local filesystem.
 
 ```bash
 mori deps locate streamly
+mori deps locate hasql:hasql-pool
 mori deps locate streamly --json
 ```
 
@@ -43,3 +45,22 @@ mori deps locate streamly --json
 1. Local registry
 2. Global registry (if online)
 3. Not found
+
+## `mori deps tree`
+
+Show transitive dependency tree.
+
+```bash
+mori deps tree
+mori deps tree --max-depth 2
+mori deps tree --project @acme/payments
+mori deps tree --json
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--max-depth` | Maximum depth to display (default: unlimited) |
+| `--project` | Show tree for a specific project |
+| `--json` | JSON output |

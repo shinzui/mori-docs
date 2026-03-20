@@ -9,6 +9,54 @@ features, commands, and schema changes.
 
 ---
 
+## 2026-03-19
+
+### Event-driven daemon registration
+- **AutomationRegistration aggregate** — daemon now uses event-driven registration instead of filesystem polling
+- `mori automate register`, `deregister`, `update`, `list`, `migrate` commands for managing automation configs
+- Daemon subscribes to `automationRegistration` category for live config updates
+
+### Registry open-doc command
+- **`mori registry open-doc`** — open project docs in your editor with fzf-based interactive selection
+- Supports project and doc selection via fzf with bat-powered previews
+- Uses `$EDITOR` / `$VISUAL` for local files, system `open` for URLs
+
+### Claude agent sessions
+- **`mori agent claude`** — start a Claude session with full project context, skills, and subagents
+- Loads skills and subagents from `~/.config/mori/agents/` and `.mori/agents/` via `--add-dir`
+- Context caching for faster subsequent launches
+
+---
+
+## 2026-03-17 – 2026-03-18
+
+### Package-qualified dependency syntax
+- Colon syntax for targeting specific packages: `mori deps explain hasql:hasql-pool`
+- Works with `deps locate`, `deps explain`, and dependency declarations
+
+### Cross-repo automation help
+- `mori help cross-repo-automation` topic covering signals, workflows, and tracing
+
+### Workflow decider pattern
+- Workflow aggregate now follows full decider pattern with command/event separation
+- Daemon runs registry and workflow subscriptions even without automation configs
+
+---
+
+## 2026-03-15
+
+### Tech radar extension
+- **`mori tech-radar list`** — list recommended packages by language and category
+- **`mori tech-radar show`** — show adoption level and alternatives for a package
+- Dhall schema for tech radar config (`mori/tech-radar.dhall`)
+- Four adoption levels: `Adopt`, `Trial`, `Assess`, `Hold`
+
+### Agent claude command
+- **`mori agent claude`** — start a Claude session with mori project context for this project
+- Cached dependency resolution for faster startup
+
+---
+
 ## 2026-03-14
 
 ### Multi-repo automation daemon

@@ -1,18 +1,18 @@
 ---
 title: mori doctor
-description: Run consistency checks
+description: Check system health
 icon: Stethoscope
 ---
 
-Run consistency checks on the current Mori setup.
+Check system health.
 
 ```bash
 mori doctor
 ```
 
-Checks for common issues including:
+Runs the following checks:
 
-- Configuration validity
-- Registry connectivity
-- Schema integrity
-- Missing or stale references
+- **PostgreSQL connection** — verifies database connectivity via `MORI_PG_CONNECTION_STRING`
+- **MessageDB installation** — verifies the MessageDB event store schema is present
+
+Displays version information and reports pass/fail status for each check.

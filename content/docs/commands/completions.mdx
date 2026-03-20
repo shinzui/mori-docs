@@ -1,0 +1,35 @@
+---
+title: mori completions
+description: Generate shell completion scripts
+icon: SquareTerminal
+---
+
+Generate shell completion scripts.
+
+```bash
+mori completions bash
+mori completions zsh
+mori completions fish
+```
+
+Outputs a completion script for the specified shell. Pipe to a file or source directly.
+
+## Setup
+
+### Zsh
+
+```bash
+mori completions zsh > ~/.zsh/completions/_mori
+```
+
+### Bash
+
+```bash
+mori completions bash > /etc/bash_completion.d/mori
+```
+
+### Fish
+
+```bash
+mori completions fish > ~/.config/fish/completions/mori.fish
+```

@@ -14,7 +14,6 @@ Ingest VCS events into the local event store.
 
 ```bash
 mori automate ingest git
-mori automate ingest jj
 mori automate ingest --repo /path/to/repo --vcs git
 ```
 
@@ -27,43 +26,28 @@ mori automate ingest --repo /path/to/repo --vcs git
 
 ## `mori automate run`
 
-Execute pending reactions.
+Run single-repo automation (ingest + subscriptions).
 
 ```bash
 mori automate run
-mori automate run --once
-mori automate run --dry-run
+mori automate run --config path/to/config.dhall
+mori automate run --path /path/to/repo
+mori automate run --register
 ```
 
 ### Behavior
 
-- Evaluates event selectors against pending events
-- Checks policy resolution
-- Executes allowed reactions
-- Records execution for idempotency
+- Loads automation config from disk
+- Ingests VCS events, then runs all subscriptions concurrently
+- Matches events against selectors, triggers and executes reactions
 
 ### Flags
 
 | Flag | Description |
 |------|-------------|
-| `--once` | Process one batch, then exit |
-| `--dry-run` | Show what would run without executing |
-| `--explain` | Show matching logic |
-
-## `mori automate watch`
-
-Watch repositories for VCS events continuously.
-
-```bash
-mori automate watch
-mori automate watch --repos /path/a,/path/b
-```
-
-### Behavior
-
-- Monitors repositories for new events
-- Ingests automatically
-- Runs reactions when allowed
+| `--config`, `-c` | Path to automation config (default: `mori.automation.dhall`) |
+| `--path` | Repository path (default: current directory) |
+| `--register` | Also register with the daemon via event store |
 
 ## `mori automate daemon`
 
@@ -75,12 +59,83 @@ mori automate daemon
 
 ### Behavior
 
-- Discovers all registered repos from the registry
-- Runs VCS ingestion and automation for each repo
-- Concurrent subscription workers per repo
-- Shared connection pool
+- Bootstraps config registry from `automation_registrations` projection
+- Subscribes to `automationRegistration` category for live config updates
+- Routes repository events to registered repos' automation configs
+- Concurrent subscription workers (automation, executor, registry, workflow, registration)
+- Fully event-driven — no filesystem polling
 
 See [Automation Daemon](/docs/guides/automation-daemon) for details.
+
+## `mori automate register`
+
+Register the current repo's automation config with the daemon.
+
+```bash
+mori automate register
+mori automate register --config path/to/config.dhall
+mori automate register --path /path/to/repo
+```
+
+### Behavior
+
+- Loads and validates automation config
+- Writes `AutomationRegistered` event to the event store
+- Idempotent — registering twice is a no-op
+
+## `mori automate deregister`
+
+Remove automation registration for a repo.
+
+```bash
+mori automate deregister
+mori automate deregister --path /path/to/repo
+```
+
+### Behavior
+
+- Writes `AutomationDeregistered` event
+- Daemon stops processing events for this repo
+- Idempotent — deregistering an unregistered repo is a no-op
+
+## `mori automate update`
+
+Update a registered automation config after editing the config file.
+
+```bash
+mori automate update
+mori automate update --config path/to/config.dhall
+```
+
+### Behavior
+
+- Re-reads config from disk, computes new hash
+- Writes `AutomationConfigUpdated` event if hash differs
+- Daemon picks up changes live (no restart needed)
+- Idempotent — updating with same config is a no-op
+
+## `mori automate list`
+
+List all registered automation configs.
+
+```bash
+mori automate list
+mori automate list --json
+```
+
+## `mori automate migrate`
+
+One-time migration: discover all projects with automation configs and register them.
+
+```bash
+mori automate migrate
+```
+
+### Behavior
+
+- Scans all registered projects for `mori.automation.dhall`
+- Registers each discovered config via the event store
+- Idempotent — safe to run multiple times
 
 ## `mori automate inspect`
 
@@ -93,22 +148,32 @@ mori automate inspect --json
 
 ### Output
 
-- Automation config status
-- Config hash
+- Automation config status and hash
 - Execution policy (local/CI)
 - Registered event selectors
 
 ## `mori automate explain`
 
-Explain why a reaction did or did not run.
+Explain why a reaction did or did not run for a specific event.
 
 ```bash
-mori automate explain event <event-id>
-mori automate explain reaction <reaction-name>
+mori automate explain <global-position>
+mori automate explain <global-position> --config path/to/config.dhall
+mori automate explain <global-position> --json
 ```
 
-### Output
+### Flags
 
-- Event matching details
-- Policy resolution trace
-- Idempotency status
+| Flag | Description |
+|------|-------------|
+| `--config`, `-c` | Path to automation config |
+| `--json` | JSON output |
+
+## `mori automate generate`
+
+Generate automation config templates.
+
+```bash
+mori automate generate <template>
+mori automate generate <template> --output path/to/output.dhall
+```

@@ -1,0 +1,60 @@
+---
+title: mori schema
+description: Schema management commands
+icon: FileCode
+---
+
+Commands for managing the Mori Dhall schema.
+
+## `mori schema upgrade`
+
+Upgrade `mori.dhall` to the latest schema version.
+
+```bash
+mori schema upgrade
+mori schema upgrade --latest
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--latest` | Resolve from the mori-schema GitHub repo instead of the pinned version |
+
+## `mori schema print`
+
+Print schema type reference.
+
+```bash
+mori schema print
+mori schema print --for-agent
+mori schema print --category types
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--for-agent` | Output in compact format optimized for LLM context |
+| `--category` | Filter by category: `types`, `records`, `automation`, `root` |
+
+## `mori schema migrate`
+
+Check or apply schema migrations to an existing `mori.dhall`.
+
+```bash
+mori schema migrate
+mori schema migrate --apply
+mori schema migrate --dry-run
+mori schema migrate --file path/to/mori.dhall
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--apply` | Apply migrations (default: check-only) |
+| `--dry-run` | Preview changes without writing |
+| `--file` | Target file (default: `mori.dhall`) |
+
+See [Schema Migrations](/docs/guides/schema-migrations) for details.

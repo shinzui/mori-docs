@@ -1,23 +1,96 @@
 ---
 title: mori agent
-description: List agent roles and generate agent context
+description: Agent context, AI-assisted sessions, and project bootstrapping
 icon: Bot
 ---
 
-Commands for working with AI agent roles.
+Commands for working with AI agent roles and launching Claude sessions.
 
 ## `mori agent list`
 
-List agent roles.
+List configured agent roles.
 
 ```bash
 mori agent list
+mori agent list --json
 ```
 
 ## `mori agent context`
 
-Generate agent context for a specific role.
+Generate agent context for a specific role as JSON.
 
 ```bash
 mori agent context <role>
 ```
+
+See [Agent Context](/docs/concepts/agent-context) for details.
+
+## `mori agent assist`
+
+Start a Claude session with mori project context.
+
+```bash
+mori agent assist
+mori agent assist --debug
+```
+
+Loads the project config, resolves dependencies from the registry, and launches Claude with a system prompt containing project metadata. The `--debug` flag prints the prompt instead of starting a session.
+
+## `mori agent bootstrap`
+
+Start a Claude session to bootstrap a new mori project.
+
+```bash
+mori agent bootstrap
+mori agent bootstrap --namespace shinzui --name my-project
+mori agent bootstrap --corpus --upstream owner
+mori agent bootstrap --debug
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--namespace`, `-n` | Pre-seed the project namespace |
+| `--name` | Pre-seed the project name |
+| `--corpus` | Bootstrap a corpus project (wraps third-party repos) |
+| `--upstream`, `-u` | Pre-seed the upstream GitHub owner (corpus mode) |
+| `--debug` | Print the system prompt instead of starting a session |
+
+## `mori agent schema-migrate`
+
+Start a Claude session to migrate and fix `mori.dhall` schema.
+
+```bash
+mori agent schema-migrate
+mori agent schema-migrate --file path/to/mori.dhall
+mori agent schema-migrate --debug
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--file` | Target file to migrate (default: `mori.dhall`) |
+| `--debug` | Print the system prompt instead of starting a session |
+
+## `mori agent claude`
+
+Start a Claude session with full project context, skills, and subagents.
+
+```bash
+mori agent claude
+mori agent claude --debug
+```
+
+Loads project config, resolves dependencies, and launches Claude with:
+- Project metadata (name, language, type, packages, docs)
+- Resolved dependency context with local paths
+- Skills and subagents from `~/.config/mori/agents/` and `.mori/agents/`
+- Context caching for faster subsequent launches
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--debug` | Print the system prompt and cache state instead of starting a session |

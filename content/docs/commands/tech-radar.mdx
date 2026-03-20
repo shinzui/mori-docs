@@ -1,0 +1,43 @@
+---
+title: mori tech-radar
+description: Tech radar recommendations by language
+icon: Radar
+---
+
+Commands for managing tech radar recommendations.
+
+Config file: `mori/tech-radar.dhall` (default).
+
+## `mori tech-radar list`
+
+List tech radar recommendations.
+
+```bash
+mori tech-radar list
+mori tech-radar list --language Haskell
+mori tech-radar list --category Database
+mori tech-radar list --config path/to/tech-radar.dhall
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--language` | Filter by language (e.g., `Haskell`, `TypeScript`) |
+| `--category` | Filter by category (e.g., `Database`, `Cryptography`) |
+| `--config` | Path to tech-radar config file |
+
+## `mori tech-radar show`
+
+Show recommendation details for a package.
+
+```bash
+mori tech-radar show <package>
+mori tech-radar show <package> --config path/to/tech-radar.dhall
+```
+
+### Output
+
+- Package name, language, category
+- Adoption level (`Adopt`, `Trial`, `Assess`, `Hold`)
+- Reason and alternatives

@@ -1,27 +1,27 @@
 ---
 title: mori register
-description: Register the current project in the Mori registry
+description: Register the current project in the local registry
 icon: Upload
 ---
 
-Register the current project in the Mori registry.
+Register the current project in the local registry.
 
 ```bash
 mori register
+mori register --local
+mori register --dir /path/to/project
 ```
 
 ## Behavior
 
-- Validates Mori
-- Evaluates Dhall to canonical JSON
-- Uploads metadata
-- Records registration receipt
+- Loads and validates `mori.dhall`
+- Writes `ProjectRegistered` event to the event store
+- If project already exists, emits granular update events
+- Inline projection populates the read model immediately
 
 ## Flags
 
 | Flag | Description |
 |------|-------------|
-| `--dry-run` | Show what would happen without making changes |
-| `--explain` | Show decision reasoning |
-| `--force` | Force re-registration |
-| `--local` | Register in local registry only (no global upload) |
+| `--local` | Register in local registry only |
+| `--dir` | Project directory (default: current directory) |

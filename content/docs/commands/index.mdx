@@ -18,81 +18,63 @@ Complete reference for all `mori` CLI commands, organized by domain.
 
 | Command | Description |
 |---------|-------------|
-| [register](/docs/commands/register) | Register a project in the Mori registry |
-| [search](/docs/commands/search) | Search the Mori registry |
-| [registry](/docs/commands/registry) | Registry status and sync operations |
+| [register](/docs/commands/register) | Register a project in the local registry |
+| [registry](/docs/commands/registry) | Query and manage the local registry (list, show, search, docs, reregister, remove, open-doc) |
 
 ## Navigation
 
 | Command | Description |
 |---------|-------------|
 | [cd](/docs/commands/cd) | Navigate to a registered project |
-| [open](/docs/commands/open) | Open documentation or source |
+| [path](/docs/commands/path) | Print local path for a project, package, or doc |
 
-## Authoring
+## Schema
 
 | Command | Description |
 |---------|-------------|
-| [add](/docs/commands/add) | Add project metadata, packages, dependencies, APIs, and standards |
+| [schema](/docs/commands/schema) | Schema management (upgrade, print, migrate) |
 
 ## Dependencies
 
 | Command | Description |
 |---------|-------------|
-| [deps](/docs/commands/deps) | Resolve, explain, and locate dependencies |
-| [introspect](/docs/commands/introspect) | Inspect build files for dependencies |
-
-## APIs
-
-| Command | Description |
-|---------|-------------|
-| [api](/docs/commands/api) | API dependency graph, impact analysis, and update plans |
+| [deps](/docs/commands/deps) | Resolve, explain, locate, and visualize dependencies |
 
 ## Agents
 
 | Command | Description |
 |---------|-------------|
-| [agent](/docs/commands/agent) | List agent roles and generate agent context |
-
-## Standards
-
-| Command | Description |
-|---------|-------------|
-| [standards](/docs/commands/standards) | List and inspect applicable standards |
-
-## Config
-
-| Command | Description |
-|---------|-------------|
-| [config](/docs/commands/config) | List and validate configuration |
+| [agent](/docs/commands/agent) | Agent context, AI-assisted sessions, and project bootstrapping |
 
 ## Automation
 
 | Command | Description |
 |---------|-------------|
-| [automate](/docs/commands/automate) | VCS event ingestion and reactive automation |
+| [automate](/docs/commands/automate) | VCS event ingestion, reactive automation, and daemon management |
 | [reaction](/docs/commands/reaction) | Inspect reaction execution history |
 | [workflow](/docs/commands/workflow) | Cross-repo workflow observability |
+
+## Tech Radar
+
+| Command | Description |
+|---------|-------------|
+| [tech-radar](/docs/commands/tech-radar) | Tech radar recommendations by language |
+
+## Shell
+
+| Command | Description |
+|---------|-------------|
+| [alias](/docs/commands/alias) | Manage command aliases |
+| [completions](/docs/commands/completions) | Generate shell completion scripts |
+| [help](/docs/commands/help) | Show help topics |
 
 ## Diagnostics
 
 | Command | Description |
 |---------|-------------|
-| [explain](/docs/commands/explain) | Explain Mori decisions |
-| [doctor](/docs/commands/doctor) | Run consistency checks |
+| [doctor](/docs/commands/doctor) | Check system health |
 
 ---
-
-## Global Flags
-
-All commands support these global flags:
-
-```text
---json       Output in JSON format
---explain    Show decision reasoning
---offline    Disable registry access
---registry   Select registry by name
-```
 
 ## Exit Code Policy
 

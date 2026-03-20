@@ -6,30 +6,29 @@ icon: Activity
 
 The automation daemon manages automation for all registered repos from a
 single long-running process. Instead of running `mori automate run` in each
-repo, the daemon discovers repos from the project registry, loads their
+repo, the daemon discovers repos from the event store, loads their
 automation configs, and routes events to the correct repo automatically.
 
 ## Usage
 
 ```bash
-mori automate daemon [--refresh-interval SECONDS]
+mori automate daemon
 ```
-
-### Options
-
-| Option | Description | Default |
-|---|---|---|
-| `--refresh-interval SECONDS` | Interval between config refresh cycles | `60` |
 
 ## How It Works
 
-1. On startup the daemon queries the project registry (populated by
-   `mori register --local`) and scans each project's directory for a
-   `mori.automation.dhall` config and a `mori/repo-id` file.
+1. On startup the daemon bootstraps its config registry from the
+   `automation_registrations` projection table (populated by
+   `mori automate register`).
 
 2. Configs are loaded into a TVar-based ConfigRegistry keyed by RepoId.
 
-3. A message-db subscription on the repository event category receives
+3. The daemon subscribes to the `automationRegistration` category for
+   live config updates. When repos register, deregister, or update their
+   automation configs, the daemon picks up changes automatically —
+   fully event-driven with no filesystem polling.
+
+4. A message-db subscription on the repository event category receives
    all repository events. For each event the daemon:
    - Extracts the RepoId from the event payload
    - Looks up the matching RepoConfig in the registry
@@ -37,45 +36,60 @@ mori automate daemon [--refresh-interval SECONDS]
    - Triggers reactions with `workingDir` automatically set to the
      repo's path (so `RunCommand` actions execute in the right directory)
 
-4. A periodic refresh loop re-scans the project registry at the
-   configured interval. Newly registered repos are picked up, removed
-   repos are dropped, and config changes are detected via hash comparison
-   — all without restarting the daemon.
+5. The daemon runs five concurrent subscription workers: automation,
+   executor, registry, workflow, and registration projection.
 
-5. The daemon also runs the executor, registry, workflow, and scheduled
-   action subscriptions, just like `mori automate run`.
+## Registering with the Daemon
+
+Use the `automate register` family of commands to manage daemon registration:
+
+```bash
+# Register current repo's automation config
+mori automate register
+
+# Update after editing config
+mori automate update
+
+# Remove registration
+mori automate deregister
+
+# List all registered configs
+mori automate list
+
+# One-time migration: discover and register all existing configs
+mori automate migrate
+```
 
 ## Prerequisites
 
-- Repos must be registered with `mori register --local` so they appear
+- Repos must be registered with `mori register` so they appear
   in the project registry.
 - Each repo needs a `mori/repo-id` file (created automatically by
   `mori automate ingest`).
 - Each repo needs a `mori.automation.dhall` config defining its event
   selectors and reactions.
+- Automation config must be registered with `mori automate register`
+  (or use `mori automate run --register` for single-repo mode).
 
 ## Comparison with `mori automate run`
 
 | Mode | Description |
 |---|---|
-| `mori automate run` | Single-repo mode. Reads config from the current directory (or `--config` path). Must be started separately for each repo. |
-| `mori automate daemon` | Multi-repo mode. Discovers all registered repos and manages them in one process. Automatically picks up new repos and config changes. |
+| `mori automate run` | Single-repo mode. Reads config from the current directory (or `--config` path). Must be started separately for each repo. Use `--register` to also register with the daemon. |
+| `mori automate daemon` | Multi-repo mode. Event-driven discovery of registered automation configs. Manages all repos in one process with live config updates. |
 
 ## Signal Handling
 
-The daemon handles `SIGINT` and `SIGTERM` for graceful shutdown. The schedule
-worker drains in-progress jobs before exiting.
+The daemon handles `SIGINT` and `SIGTERM` for graceful shutdown with a
+TVar-based broadcast for fast drain and shorter timeout.
 
 ## Example
 
 ```bash
-# Register your repos first
-cd ~/projects/my-app && mori register --local
-cd ~/projects/my-lib && mori register --local
+# Register your repos and their automation configs
+cd ~/projects/my-app && mori register && mori automate register
+cd ~/projects/my-lib && mori register && mori automate register
 
 # Start the daemon (manages both repos)
 mori automate daemon
-
-# With a faster refresh cycle (check for new repos every 30s)
-mori automate daemon --refresh-interval 30
 ```
