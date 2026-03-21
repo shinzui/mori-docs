@@ -59,6 +59,10 @@ PostgreSQL
     ├── repository_stream_day
     ├── workflows
     ├── workflow_steps
+    ├── automation_registrations
+    ├── skills
+    ├── subagents
+    ├── project_extensions
     └── checkpoints
 ```
 
@@ -236,7 +240,7 @@ data WorkflowSignalReceivedData = WorkflowSignalReceivedData
   }
 ```
 
-### Project Events (11 types)
+### Project Events (22 types)
 
 Defined in `Mori.Modules.Project.Domain.Event`. Uses granular events (no monolithic `ProjectUpdated`):
 
@@ -253,6 +257,20 @@ data ProjectEvent
   | ProjectBundleAdded !ProjectBundleAddedData
   | ProjectBundleRemoved !ProjectBundleRemovedData
   | ProjectBundleUpdated !ProjectBundleUpdatedData
+  | ProjectDocAdded !ProjectDocAddedData
+  | ProjectDocRemoved !ProjectDocRemovedData
+  | ProjectDocUpdated !ProjectDocUpdatedData
+  | -- Skill changes
+    ProjectSkillAdded !ProjectSkillAddedData
+  | ProjectSkillRemoved !ProjectSkillRemovedData
+  | ProjectSkillUpdated !ProjectSkillUpdatedData
+  | -- Subagent changes
+    ProjectSubagentAdded !ProjectSubagentAddedData
+  | ProjectSubagentRemoved !ProjectSubagentRemovedData
+  | ProjectSubagentUpdated !ProjectSubagentUpdatedData
+  | -- Extension changes
+    ProjectExtensionSet !ProjectExtensionSetData
+  | ProjectExtensionRemoved !ProjectExtensionRemovedData
 
 data ProjectRegisteredData = ProjectRegisteredData
   { projectId    :: !ProjectId
@@ -263,7 +281,60 @@ data ProjectRegisteredData = ProjectRegisteredData
   , packages     :: ![PackageInfo]
   , bundles      :: ![BundleInfo]
   , dependencies :: ![Text]
+  , docs         :: ![DocInfo]
+  , skills       :: ![SkillInfo]
+  , subagents    :: ![SubagentInfo]
+  , extensions   :: !(Map Text Value)  -- Extension data (opaque JSONB)
   , registeredAt :: !UTCTime
+  }
+
+data ProjectSkillAddedData = ProjectSkillAddedData
+  { projectId :: !ProjectId
+  , skill     :: !SkillInfo
+  , updatedAt :: !UTCTime
+  }
+
+data ProjectSkillRemovedData = ProjectSkillRemovedData
+  { projectId :: !ProjectId
+  , skillName :: !Text
+  , updatedAt :: !UTCTime
+  }
+
+data ProjectSkillUpdatedData = ProjectSkillUpdatedData
+  { projectId :: !ProjectId
+  , skill     :: !SkillInfo
+  , updatedAt :: !UTCTime
+  }
+
+data ProjectSubagentAddedData = ProjectSubagentAddedData
+  { projectId :: !ProjectId
+  , subagent  :: !SubagentInfo
+  , updatedAt :: !UTCTime
+  }
+
+data ProjectSubagentRemovedData = ProjectSubagentRemovedData
+  { projectId    :: !ProjectId
+  , subagentName :: !Text
+  , updatedAt    :: !UTCTime
+  }
+
+data ProjectSubagentUpdatedData = ProjectSubagentUpdatedData
+  { projectId :: !ProjectId
+  , subagent  :: !SubagentInfo
+  , updatedAt :: !UTCTime
+  }
+
+data ProjectExtensionSetData = ProjectExtensionSetData
+  { projectId     :: !ProjectId
+  , extensionName :: !Text
+  , extensionData :: !Value      -- Opaque JSONB blob
+  , updatedAt     :: !UTCTime
+  }
+
+data ProjectExtensionRemovedData = ProjectExtensionRemovedData
+  { projectId     :: !ProjectId
+  , extensionName :: !Text
+  , updatedAt     :: !UTCTime
   }
 ```
 
@@ -448,7 +519,7 @@ If projections need rebuilding (schema change, corruption):
 
 ### Registry Subscription (`mori-registry`)
 
-Subscribes to the `project` category. Updates registry projection tables (`projects`, `packages`, `dependencies`, `bundles`) from project events. Handles all 11 granular project event types with targeted updates and single-item deletes.
+Subscribes to the `project` category. Updates registry projection tables (`projects`, `packages`, `dependencies`, `bundles`, `skills`, `subagents`, `project_extensions`) from project events. Handles all 22 granular project event types with targeted updates and single-item deletes.
 
 Defined in `Mori.Modules.Project.Subscription.RegistryHandler`.
 

@@ -15,8 +15,10 @@ mori register --dir /path/to/project
 ## Behavior
 
 - Loads and validates `mori.dhall`
-- Writes `ProjectRegistered` event to the event store
-- If project already exists, emits granular update events
+- Queries the extension catalog and loads any `mori/<extension>.dhall` files for active extensions
+- Extracts skills and subagents from the config
+- Writes `ProjectRegistered` event to the event store (including skills, subagents, and extension data)
+- If project already exists, emits granular update events (diffing skills, subagents, and extensions)
 - Inline projection populates the read model immediately
 
 ## Flags

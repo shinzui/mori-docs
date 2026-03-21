@@ -56,7 +56,7 @@ Four phases run in order:
 | TypeID functions | UUIDv7 generation, base32 encoding for type-safe IDs |
 | MessageDB schema | `message_store` schema and event store tables |
 | PGMQ schema | Queue infrastructure for scheduled actions |
-| Application tables | `mori` schema with 10 SQL migration scripts |
+| Application tables | `mori` schema with 14 SQL migration scripts |
 
 A final migration sets the PostgreSQL `search_path` to `public, message_store, mori`
 so queries can reference tables without schema prefixes.
@@ -166,6 +166,65 @@ CREATE TABLE mori.reaction_history (
 );
 ```
 
+### skills
+
+Per-project skill definitions (from the agentskills.io spec).
+
+```sql
+CREATE TABLE mori.skills (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES mori.projects(id),
+  name TEXT NOT NULL,
+  description TEXT,
+  message_position BIGINT NOT NULL DEFAULT 0
+);
+```
+
+### subagents
+
+Per-project subagent definitions with provider, model, and tool configuration.
+
+```sql
+CREATE TABLE mori.subagents (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES mori.projects(id),
+  name TEXT NOT NULL,
+  description TEXT,
+  provider TEXT,
+  model TEXT,
+  message_position BIGINT NOT NULL DEFAULT 0
+);
+```
+
+### project_extensions
+
+Per-project extension data stored as opaque JSONB. GIN index on the data column
+for containment queries.
+
+```sql
+CREATE TABLE mori.project_extensions (
+  project_id TEXT NOT NULL REFERENCES mori.projects(id),
+  extension_name TEXT NOT NULL,
+  data JSONB NOT NULL,
+  message_position BIGINT NOT NULL DEFAULT 0,
+  PRIMARY KEY (project_id, extension_name)
+);
+```
+
+### extension_catalog
+
+Tracks known extension types (not event-sourced, direct SQL).
+
+```sql
+CREATE TABLE mori.extension_catalog (
+  name TEXT PRIMARY KEY,
+  description TEXT,
+  schema_ref TEXT,
+  active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
 ### checkpoints
 
 Tracks subscription progress. Each named subscription stores the last global
@@ -216,6 +275,17 @@ All events are written to streams named `project-{namespace}:{name}` under the
 | `ProjectBundleAdded` | New bundle not in current state |
 | `ProjectBundleRemoved` | Bundle in current state not in new config |
 | `ProjectBundleUpdated` | Bundle exists but fields changed |
+| `ProjectDocAdded` | New doc not in current state |
+| `ProjectDocRemoved` | Doc in current state not in new config |
+| `ProjectDocUpdated` | Doc exists but fields changed |
+| `ProjectSkillAdded` | New skill not in current state |
+| `ProjectSkillRemoved` | Skill in current state not in new config |
+| `ProjectSkillUpdated` | Skill exists but fields changed |
+| `ProjectSubagentAdded` | New subagent not in current state |
+| `ProjectSubagentRemoved` | Subagent in current state not in new config |
+| `ProjectSubagentUpdated` | Subagent exists but fields changed |
+| `ProjectExtensionSet` | Extension data added or changed |
+| `ProjectExtensionRemoved` | Extension data removed |
 
 ## Subscriptions and Projections
 
@@ -231,9 +301,9 @@ subscriptions start concurrently:
 The registry handler parses each event and performs the corresponding database
 operation:
 
-- **Registered** → upsert project + all packages, dependencies, bundles
+- **Registered** → upsert project + all packages, dependencies, bundles, docs, skills, subagents, extensions
 - **Changed/Updated** → targeted `UPDATE` of the specific column
-- **Added** → `INSERT` into the relevant table
+- **Added/Set** → `INSERT` (or upsert for extensions) into the relevant table
 - **Removed** → `DELETE` from the relevant table
 
 All operations are idempotent — the handler checks `message_position` ordering

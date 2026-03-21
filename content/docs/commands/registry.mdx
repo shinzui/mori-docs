@@ -31,12 +31,13 @@ mori registry list --docs-only
 
 ## `mori registry show`
 
-Show details of a registered project.
+Show details of a registered project. The `--full` flag displays all project data including packages, dependencies, bundles, docs, skills, subagents, and extensions.
 
 ```bash
 mori registry show <project>
 mori registry show <project> --json
 mori registry show <project> --full
+mori registry show <project> --full --json
 ```
 
 ### Flags
@@ -44,7 +45,7 @@ mori registry show <project> --full
 | Flag | Description |
 |------|-------------|
 | `--json` | JSON output |
-| `--full` | Show full details including packages, dependencies, bundles, and docs |
+| `--full` | Show full details including packages, dependencies, bundles, docs, skills, subagents, and extensions |
 
 ## `mori registry search`
 

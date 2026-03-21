@@ -9,6 +9,29 @@ features, commands, and schema changes.
 
 ---
 
+## 2026-03-21
+
+### Dynamic extension registry
+- **`mori extension define`** — define extension types in a catalog for schema extensions
+- **`mori extension list`** — list active extensions
+- **`mori extension retire`** — soft-delete an extension (preserves existing data)
+- **`mori extension query`** — query extension data across all projects
+- Extension data flows through the Project aggregate event-sourcing pipeline
+- Stored as JSONB in `mori.project_extensions` with GIN indexing
+- Compile-time loader registry maps extension names to typed Haskell loaders (tech-radar is the first adapter)
+- `mori help extensions` topic documenting the extension system
+- `mori registry show --full` now includes extension data
+
+### Skills and subagents in registry
+- Skills and subagents from `mori.dhall` now persist through the full event-sourcing pipeline
+- 6 new granular event types: `ProjectSkillAdded`/`Removed`/`Updated`, `ProjectSubagentAdded`/`Removed`/`Updated`
+- `mori.skills` and `mori.subagents` database tables with subscription projection
+- `mori register` extracts skills/subagents from config and diffs against current state
+- `mori registry show --full` displays skills and subagents (text + JSON output)
+- Project events now at 22 types (was 11)
+
+---
+
 ## 2026-03-19
 
 ### Event-driven daemon registration

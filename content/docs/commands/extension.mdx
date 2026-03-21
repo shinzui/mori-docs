@@ -1,0 +1,81 @@
+---
+title: mori extension
+description: Manage the extension catalog — define, list, retire, and query extension types
+icon: Puzzle
+---
+
+Manage the extension catalog — define, list, retire, and query extension types.
+
+Extensions let any schema extension contribute data to the registry through the
+event-sourcing pipeline. Extension data is stored as JSONB in a shared table
+(`mori.project_extensions`) with GIN indexing.
+
+## `mori extension define`
+
+Define a new extension type in the catalog.
+
+```bash
+mori extension define tech-radar --description "Technology Radar recommendations"
+```
+
+Defining is idempotent — running it again updates the description and
+re-activates a retired extension.
+
+## `mori extension list`
+
+List active extensions in the catalog.
+
+```bash
+mori extension list
+```
+
+## `mori extension retire`
+
+Retire an extension (soft-delete). Existing project data is preserved.
+
+```bash
+mori extension retire tech-radar
+```
+
+## `mori extension query`
+
+Query extension data across all projects.
+
+```bash
+mori extension query tech-radar
+mori extension query tech-radar --json
+```
+
+## How Extension Data Flows
+
+1. Define an extension in the catalog (one-time setup)
+2. In your project directory, create `mori/<extension-name>.dhall` (e.g., `mori/tech-radar.dhall`)
+3. Run `mori register` — the registration flow:
+   - Queries the catalog for active extensions
+   - Checks if `mori/<name>.dhall` exists for each active extension
+   - Loads and validates via the typed Haskell loader
+   - Serializes to JSON and includes in the command
+   - The decider diffs old vs new extension data
+   - Emits `ProjectExtensionSet` or `ProjectExtensionRemoved` events
+   - The subscription handler projects JSONB into `project_extensions`
+
+## Viewing Extension Data
+
+Per-project extension data is included in `mori registry show --full`:
+
+```bash
+mori registry show --full namespace/name
+mori registry show --full --json namespace/name
+```
+
+## Adding a New Extension Type
+
+To add a new extension type to mori, you need:
+
+1. Dhall schema in `schema/extensions/<name>/`
+2. Haskell types in `Mori.Extensions.<Name>.Types` with `ToJSON`/`FromJSON`
+3. Dhall decoder in `Mori.Extensions.<Name>.Dhall`
+4. File loader in `Mori.Extensions.<Name>.Load`
+5. One entry in `extensionLoaders` (`Mori.Extensions.Loader`)
+
+No database changes, no new tables, no new events required.
