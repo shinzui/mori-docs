@@ -4,7 +4,7 @@ description: Show help topics
 icon: CircleHelp
 ---
 
-Show help topics with detailed reference information.
+Show help topics with detailed reference information. Topics are grouped by audience.
 
 ```bash
 mori help
@@ -13,17 +13,35 @@ mori help <topic>
 
 ## Available Topics
 
+### Getting Started
+
+| Topic | Description |
+|-------|-------------|
+| `project-config` | Root Project type structure and fields |
+| `corpus-learning` | Leverage corpus projects for debugging, API discovery, and best practices |
+| `aliases` | How to configure and use command aliases |
+
+### Schema
+
 | Topic | Description |
 |-------|-------------|
 | `schema-types` | All Dhall union types with constructors |
 | `schema-records` | All Dhall record types with fields |
 | `schema-modification` | How to edit mori.dhall (Dhall syntax guide) |
-| `project-config` | Root Project type structure and fields |
+| `extensions` | Dynamic schema extensions (define, query, add new) |
+
+### Automation
+
+| Topic | Description |
+|-------|-------------|
 | `automation-config` | Automation type structure (events, reactions, policies) |
-| `automation-daemon` | Multi-repo automation daemon usage and architecture |
 | `reaction-history` | Reaction execution history (list, show, filtering) |
-| `aliases` | How to configure and use command aliases |
 | `cross-repo-automation` | Cross-repo signals, workflows, and tracing |
-| `extensions` | Dynamic schema extensions and the extension catalog |
+
+### Operations
+
+| Topic | Description |
+|-------|-------------|
+| `automation-daemon` | Multi-repo automation daemon usage and architecture |
 
 Use `mori <command> --help` for command-specific help.

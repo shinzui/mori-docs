@@ -9,6 +9,7 @@
 		"registry",
 		"cd",
 		"path",
+		"browse",
 		"schema",
 		"deps",
 		"agent",

@@ -17,7 +17,8 @@ mori deps resolve --explain
 
 ## `mori deps explain`
 
-Explain how a dependency was resolved.
+Explain how a dependency was resolved. With package-qualified names, shows only
+the target package.
 
 ```bash
 mori deps explain streamly
@@ -26,12 +27,14 @@ mori deps explain hasql:hasql-pool
 
 ## `mori deps locate`
 
-Locate a dependency on the local filesystem.
+Locate a dependency on the local filesystem. Supports package-qualified names
+with colon syntax (`project:package`).
 
 ```bash
 mori deps locate streamly
-mori deps locate hasql:hasql-pool
 mori deps locate streamly --json
+mori deps locate hasql:hasql-pool
+mori deps locate shinzui/hasql:hasql-pool
 ```
 
 ### Output
