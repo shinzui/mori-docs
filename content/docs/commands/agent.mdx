@@ -86,6 +86,7 @@ mori agent claude --debug
 Loads project config, resolves dependencies, and launches Claude with:
 - Project metadata (name, language, type, packages, docs)
 - Resolved dependency context with local paths
+- Cookbook catalog entries (if `mori/cookbook.dhall` exists)
 - Skills and subagents from `~/.config/mori/agents/` and `.mori/agents/`
 - Context caching for faster subsequent launches
 
@@ -94,3 +95,22 @@ Loads project config, resolves dependencies, and launches Claude with:
 | Flag | Description |
 |------|-------------|
 | `--debug` | Print the system prompt and cache state instead of starting a session |
+
+## `mori agent automate`
+
+Start a Claude session specialized for automation config authoring and debugging.
+
+```bash
+mori agent automate
+mori agent automate --debug
+```
+
+Provides context about the automation system including event selectors, reaction
+types, trailer matching, and event-data interpolation. Useful for creating or
+troubleshooting `mori.automation.dhall` configurations.
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--debug` | Print the system prompt instead of starting a session |

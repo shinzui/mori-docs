@@ -27,15 +27,15 @@ Print schema type reference.
 
 ```bash
 mori schema print
-mori schema print --for-agent
 mori schema print --category types
+mori schema print --category records
+mori schema print --category automation
 ```
 
 ### Flags
 
 | Flag | Description |
 |------|-------------|
-| `--for-agent` | Output in compact format optimized for LLM context |
 | `--category` | Filter by category: `types`, `records`, `automation`, `root` |
 
 ## `mori schema migrate`

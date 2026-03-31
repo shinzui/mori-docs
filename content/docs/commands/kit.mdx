@@ -1,0 +1,79 @@
+---
+title: mori kit
+description: Manage Claude Code skills and subagents
+icon: Package
+---
+
+Manage distributable Claude Code skills and subagents. Skills and subagents
+declared in `mori.dhall` can be installed to your local environment for use
+with `mori agent claude` sessions.
+
+## `mori kit list`
+
+List available skills and subagents from the current project.
+
+```bash
+mori kit list
+```
+
+## `mori kit install`
+
+Install a skill or subagent.
+
+```bash
+mori kit install <NAME>
+mori kit install <NAME> --project
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--project` | Install to project scope (`.mori/agents/`) instead of user scope |
+
+By default, skills and subagents are installed to the user-level directory
+(`~/.config/mori/agents/`). Use `--project` to install to the current
+project's `.mori/agents/` directory instead.
+
+## `mori kit update`
+
+Update installed skills and subagents.
+
+```bash
+mori kit update
+mori kit update <NAME>
+```
+
+Without a name argument, updates all installed items.
+
+## `mori kit uninstall`
+
+Uninstall a skill or subagent.
+
+```bash
+mori kit uninstall <NAME>
+mori kit uninstall <NAME> --project
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--project` | Uninstall from project scope (`.mori/agents/`) |
+
+## `mori kit status`
+
+Show installed skills and subagents.
+
+```bash
+mori kit status
+```
+
+## Relationship to Agent Sessions
+
+Installed skills and subagents are automatically loaded into Claude sessions
+started via `mori agent claude`. User-level and project-level items are
+both included via `--add-dir` flags.
+
+See [Agent Context](/docs/concepts/agent-context) for how skills and subagents
+integrate with the agent context system.

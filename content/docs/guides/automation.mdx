@@ -151,6 +151,7 @@ Matches `ChangesetObserved` events (commits ingested via `mori automate ingest g
 | `paths` | `List Text` | Glob patterns for touched file paths. Empty = match all. |
 | `branches` | `List Text` | Branch name patterns. Empty = match all. |
 | `messagePatterns` | `List Text` | Commit message patterns. Empty = match all. |
+| `trailerPatterns` | `List { mapKey, mapValue }` | Git trailer key/value patterns. Empty = match all. |
 
 ### RefSelector
 
@@ -176,6 +177,63 @@ Examples:
 | `*.cabal` | `mori.cabal` | `src/mori.cabal` |
 | `src/*.hs` | `src/Main.hs` | `src/Mori/Core.hs` |
 | `release/*` | `release/v1.0` | `release/v1/patch` |
+
+### Trailer matching
+
+The `trailerPatterns` field matches commits by git trailer key/value pairs.
+Each entry requires the trailer key to be present and its value to match the
+glob pattern. All entries must match (conjunction). Empty = match all.
+
+```haskell
+EventSelector.ChangesetSelector
+  { name = "intention-commits"
+  , paths = [] : List Text
+  , branches = [ "main" ]
+  , messagePatterns = [] : List Text
+  , trailerPatterns = [ { mapKey = "Intention", mapValue = "intention_*" } ]
+  }
+```
+
+This matches any commit on `main` with an `Intention` trailer whose value
+starts with `intention_`.
+
+### Event-data interpolation
+
+Action fields support `{{variable}}` template syntax. Templates are expanded
+at trigger time before the reaction is written to the event store, so resolved
+values appear in reaction history.
+
+| Variable | Source |
+|----------|--------|
+| `{{changeset.id}}` | Commit hash |
+| `{{changeset.subject}}` | First line of commit message |
+| `{{changeset.body}}` | Full body (empty if None) |
+| `{{changeset.timestamp}}` | Committer timestamp (ISO 8601) |
+| `{{changeset.author.name}}` | Author name |
+| `{{changeset.author.email}}` | Author email |
+| `{{changeset.committer.name}}` | Committer name |
+| `{{changeset.committer.email}}` | Committer email |
+| `{{trailer.<Key>}}` | Trailer value (e.g., `{{trailer.Intention}}`) |
+| `{{meta.<Key>}}` | Event metadata value |
+| `{{ref.name}}` | Ref name (for RefObserved) |
+| `{{ref.target}}` | Target object ID (for RefObserved) |
+
+Unknown variables are left as-is. Empty optional values expand to empty string.
+
+Example using interpolation with trailer matching:
+
+```haskell
+ReactionAction.RunCommand
+  { command = "rei"
+  , args = [ "action", "record", "--at", "{{changeset.timestamp}}", "--intention", "{{trailer.Intention}}" ]
+  , workingDir = None Text
+  , timeout = Some +60
+  , env =
+    [ { mapKey = "COMMIT_SHA", mapValue = "{{changeset.id}}" }
+    , { mapKey = "COMMIT_AUTHOR", mapValue = "{{changeset.author.name}}" }
+    ]
+  }
+```
 
 ## Reactions
 

@@ -1,0 +1,140 @@
+---
+title: mori app
+description: Manage Mori Apps — webhook receivers for event delivery
+icon: Webhook
+---
+
+Manage Mori Apps — external applications that receive structured webhook
+notifications about repository events across all registered repos.
+
+Apps use Standard Webhooks v1 HMAC-SHA256 signing and reuse the existing
+`EventSelector` system for subscriptions.
+
+## `mori app register`
+
+Register a new Mori App.
+
+```bash
+mori app register --name my-app --url https://example.com/webhook --selectors selectors.dhall
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--name` | App name (required) |
+| `--url` | Webhook URL (required) |
+| `--selectors` | Path to event selectors Dhall file (required) |
+
+## `mori app list`
+
+List registered apps.
+
+```bash
+mori app list
+mori app list --json
+```
+
+## `mori app show`
+
+Show app details.
+
+```bash
+mori app show <APP_ID>
+mori app show <APP_ID> --json
+```
+
+## `mori app update`
+
+Update app configuration.
+
+```bash
+mori app update <APP_ID> --name new-name
+mori app update <APP_ID> --url https://new-url.example.com/webhook
+mori app update <APP_ID> --selectors new-selectors.dhall
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--name` | New app name |
+| `--url` | New webhook URL |
+| `--selectors` | New selectors Dhall file |
+
+## `mori app rotate-secret`
+
+Rotate the HMAC signing secret for an app.
+
+```bash
+mori app rotate-secret <APP_ID>
+```
+
+## `mori app suspend`
+
+Suspend an app (stops webhook delivery).
+
+```bash
+mori app suspend <APP_ID>
+```
+
+## `mori app activate`
+
+Re-activate a suspended app.
+
+```bash
+mori app activate <APP_ID>
+```
+
+## `mori app delete`
+
+Delete an app permanently.
+
+```bash
+mori app delete <APP_ID>
+```
+
+## `mori app deliveries`
+
+List webhook deliveries for an app.
+
+```bash
+mori app deliveries <APP_ID>
+mori app deliveries <APP_ID> --status failed
+mori app deliveries <APP_ID> --json
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--status` | Filter by delivery status |
+| `--json` | JSON output |
+
+## `mori app retry`
+
+Retry failed deliveries.
+
+```bash
+mori app retry <APP_ID> <DELIVERY_ID>
+mori app retry <APP_ID> --all-failed
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--all-failed` | Retry all failed deliveries |
+
+## Delivery Behavior
+
+- Exponential backoff retries: 5s to 24h over 10 attempts
+- Durable queue via pgmq with visibility timeout
+- Apps returning HTTP 410 Gone are automatically suspended
+- Delivery history is queryable and retryable
+
+## Integration with Daemon
+
+Apps are delivered events by the automation daemon. The daemon fans out matching
+events to all registered apps based on their event selectors. See
+[Automation Daemon](/docs/guides/automation-daemon) for details.

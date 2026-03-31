@@ -1,0 +1,103 @@
+---
+title: mori cookbook
+description: Cookbook catalog — classified code examples, patterns, and guides
+icon: BookText
+---
+
+The cookbook command queries the local cookbook catalog, a schema extension that
+classifies code examples, patterns, and guides with rich metadata. The catalog
+is defined in `mori/cookbook.dhall`.
+
+## `mori cookbook list`
+
+List cookbook entries with optional filtering.
+
+```bash
+mori cookbook list
+mori cookbook list --content-type sample-code
+mori cookbook list --topic database
+mori cookbook list --package hasql
+mori cookbook list --language haskell
+mori cookbook list --config path/to/cookbook.dhall
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--content-type` | Filter by content type (e.g., `sample-code`, `instructions`, `pattern`) |
+| `--topic` | Filter by topic (e.g., `database`, `testing`, `effects`) |
+| `--package` | Filter by related package (e.g., `hasql`, `effectful`) |
+| `--language` | Filter by language (e.g., `Haskell`, `Nix`) |
+| `--config` | Path to cookbook config file (default: `mori/cookbook.dhall`) |
+
+Filters combine with AND logic and are case-insensitive.
+
+## `mori cookbook show`
+
+Show details for a cookbook entry.
+
+```bash
+mori cookbook show <KEY>
+mori cookbook show <KEY> --config path/to/cookbook.dhall
+```
+
+## `mori cookbook print-schema`
+
+Print the cookbook extension Dhall schema.
+
+```bash
+mori cookbook print-schema
+```
+
+## Content Types
+
+| Type | Description |
+|------|-------------|
+| `SampleCode` | Working code example |
+| `Instructions` | Step-by-step instructions |
+| `Pattern` | Reusable design pattern |
+| `Configuration` | Configuration example |
+| `Template` | Project or file template |
+
+## Topics
+
+| Topic | Description |
+|------|-------------|
+| `Database` | Database access and queries |
+| `API` | API design and integration |
+| `Testing` | Test patterns and frameworks |
+| `ErrorHandling` | Error handling strategies |
+| `Deployment` | Deployment and infrastructure |
+| `Security` | Security patterns |
+| `Performance` | Performance optimization |
+| `Streaming` | Streaming data processing |
+| `Effects` | Effect system patterns |
+| `Migration` | Data and schema migration |
+| `Observability` | Logging, tracing, metrics |
+
+## Relationship to DocRef Cookbooks
+
+The cookbook extension supplements (not replaces) `DocRef` entries with
+`kind = Cookbook` in `mori.dhall`. DocRef cookbooks are unstructured file
+references; cookbook extension entries carry typed metadata (content type,
+topics, related packages, language) that enables richer filtering and
+agent context integration.
+
+## Agent Context
+
+Cookbook entries are included in `mori agent context` output, giving AI agents
+structured access to classified code examples and patterns for the current
+project and its dependencies.
+
+## Cross-Project Queries
+
+Use `mori extension query cookbook` to query cookbook data across all
+registered projects:
+
+```bash
+mori extension query cookbook
+mori extension query cookbook --project namespace/name
+mori extension query cookbook --topic database
+mori extension query cookbook --content-type pattern
+```

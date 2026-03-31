@@ -31,10 +31,15 @@ mori registry list --docs-only
 
 ## `mori registry show`
 
-Show details of a registered project. The `--full` flag displays all project data including packages, dependencies, bundles, docs, skills, subagents, and extensions.
+Show details of a registered project. Accepts a project name, `namespace/name`,
+or `project:package` for package-qualified lookup. The `--full` flag displays
+all project data including packages, dependencies, bundles, docs, skills,
+subagents, extensions, and cookbook entries.
 
 ```bash
 mori registry show <project>
+mori registry show <namespace/name>
+mori registry show <project:package>
 mori registry show <project> --json
 mori registry show <project> --full
 mori registry show <project> --full --json
@@ -45,7 +50,7 @@ mori registry show <project> --full --json
 | Flag | Description |
 |------|-------------|
 | `--json` | JSON output |
-| `--full` | Show full details including packages, dependencies, bundles, docs, skills, subagents, and extensions |
+| `--full` | Show full details including packages, dependencies, bundles, docs, skills, subagents, extensions, and cookbook entries |
 
 ## `mori registry search`
 
@@ -100,11 +105,14 @@ mori registry reregister --namespace shinzui
 
 ## `mori registry remove`
 
-Remove a project from the local registry.
+Remove a project from the local registry. Cleans up all associated data
+including package dependencies. Warns if other projects depend on the one being
+removed.
 
 ```bash
 mori registry remove <project>
 mori registry remove <project> --force
+mori registry remove <project> --dry-run
 ```
 
 ### Flags
@@ -112,6 +120,7 @@ mori registry remove <project> --force
 | Flag | Description |
 |------|-------------|
 | `--force`, `-f` | Skip confirmation prompt |
+| `--dry-run` | Preview what would be removed without doing it |
 
 ## `mori registry open-doc`
 

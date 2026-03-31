@@ -104,6 +104,9 @@ dependencies, and configuration.
 | `description` | `Optional Text` | Brief description |
 | `visibility` | `Visibility` | Access scope |
 | `runtime` | `Runtime` | Runtime characteristics |
+| `lifecycle` | `Lifecycle` | Package lifecycle stage (`Active`, `Experimental`, `Deprecated`, `Archived`) |
+| `runtimeEnvironment` | `Optional RuntimeEnvironment` | Runtime execution environment |
+| `apiSource` | `Optional ApiSource` | API source for Client-type packages |
 | `dependencies` | `List Dependency` | Package-level dependencies |
 | `docs` | `List DocRef` | Package-specific documentation |
 | `config` | `List ConfigItem` | Configuration requirements |
@@ -132,6 +135,29 @@ dependencies, and configuration.
 |-------|------|-------|
 | `deployable` | `Bool` | Produces a deployable artifact |
 | `exposesApi` | `Bool` | Exposes an API |
+
+### ApiSource
+
+Declares which API a Client-type package was generated from. The `project`
+field must appear in the project-level `dependencies` list — `mori validate`
+enforces this invariant.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `project` | `Text` | Qualified project name (e.g., `"tan/mls-service-v2"`) |
+| `api` | `Optional Text` | API name within source project (for multi-API projects) |
+| `specPath` | `Optional Text` | Path to spec file in source project |
+
+```haskell
+{ apiSource = Some
+    { project = "tan/mls-service-v2"
+    , api = None Text
+    , specPath = Some "openapi.json"
+    }
+}
+```
+
+Displayed in `mori show --full` and `mori registry show --full`.
 
 ### Dependency
 
@@ -487,7 +513,7 @@ Default | AcceptEdits | DontAsk | BypassPermissions | Plan
 Selects which VCS events trigger reactions (used in `mori.automation.dhall`):
 
 ```
-ChangesetSelector : { name, paths, branches, messagePatterns }
+ChangesetSelector : { name, paths, branches, messagePatterns, trailerPatterns }
 RefSelector : { name, refPatterns, kinds }
 ```
 

@@ -8,6 +8,7 @@ Validate the current Mori configuration.
 
 ```bash
 mori validate
+mori validate --check-deps
 ```
 
 ## Checks
@@ -15,6 +16,25 @@ mori validate
 - Dhall type-checking
 - Schema compatibility
 - Internal reference integrity
+- `apiSource.project` must appear in project-level `dependencies`
+
+### `--check-deps`
+
+Validate declared dependencies against the local registry. Requires a database
+connection.
+
+```bash
+mori validate --check-deps
+```
+
+This checks that all dependency names (both project-level and package-level)
+resolve to registered projects in the local registry.
+
+## Flags
+
+| Flag | Description |
+|------|-------------|
+| `--check-deps` | Validate dependencies against the local registry |
 
 ## Exit Codes
 

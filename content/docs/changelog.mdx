@@ -9,6 +9,77 @@ features, commands, and schema changes.
 
 ---
 
+## 2026-03-31
+
+### Cookbook extension
+- **`mori cookbook list`** — list classified code examples, patterns, and guides with filtering
+- **`mori cookbook show`** — show details for a cookbook entry
+- **`mori cookbook print-schema`** — print the cookbook Dhall schema
+- **`mori extension query cookbook`** — cross-project cookbook queries with `--project`, `--topic`, `--content-type` filters
+- Cookbook catalog included in `mori agent context` output for AI agent access
+- Rich structured cookbook entries in `mori registry show --full`
+- `mori/cookbook.dhall` config file with content types (SampleCode, Instructions, Pattern, Configuration, Template) and topics (Database, API, Testing, Effects, etc.)
+
+### Mori Apps (webhook delivery)
+- **`mori app register`** — register webhook receivers for event delivery
+- **`mori app list`**, **`show`**, **`update`** — manage app lifecycle
+- **`mori app rotate-secret`** — rotate HMAC signing secret
+- **`mori app suspend`** / **`activate`** — pause and resume delivery
+- **`mori app delete`** — remove an app
+- **`mori app deliveries`** — view delivery history with status filtering
+- **`mori app retry`** — retry failed deliveries
+- Standard Webhooks v1 HMAC-SHA256 signing
+- Exponential backoff retries (5s to 24h, 10 attempts)
+- Durable queue via pgmq, automatic 410 Gone suspension
+
+### Kit command
+- **`mori kit list`** — list available skills and subagents
+- **`mori kit install`** — install to user or project scope
+- **`mori kit update`** — update installed items
+- **`mori kit uninstall`** — remove skills/subagents
+- **`mori kit status`** — show installed status
+- Skills and subagents automatically loaded into `mori agent claude` sessions
+
+### Trailer matching and event-data interpolation
+- `trailerPatterns` field on `ChangesetSelector` — match commits by git trailer key/value pairs
+- `{{variable}}` template syntax for action fields — expanded at trigger time
+- Variables: `{{changeset.id}}`, `{{changeset.subject}}`, `{{trailer.<Key>}}`, `{{ref.name}}`, etc.
+- Resolved values appear in reaction history
+
+### apiSource field
+- New `apiSource` field on Package records for Client-type packages
+- Declares which API a client was generated from (`project`, `api`, `specPath`)
+- Displayed in `mori show --full` and `mori registry show --full`
+- Validation: `apiSource.project` must appear in project-level `dependencies`
+
+### Agent automate command
+- **`mori agent automate`** — AI-assisted automation config authoring and debugging
+
+### Registry enhancements
+- **`mori registry remove --dry-run`** — preview removal before executing
+- `registry remove` now cleans up package_dependencies and warns about dependents
+- Package-qualified show: `mori registry show project:package`
+- Project and package descriptions in `registry show --full`
+
+### Validate improvements
+- **`mori validate --check-deps`** — validate dependencies against the local registry
+- `apiSource.project` must appear in project-level dependencies
+
+### Extension enhancements
+- `mori extension query` now supports `--project`, `--topic`, `--content-type` filters
+- **`mori tech-radar print-schema`** — print tech-radar Dhall schema
+- Auto-register extensions during project registration
+- Removed `--for-agent` flag from `mori schema print`
+
+### Browse extended
+- `mori browse` now accepts `project:package` syntax for package-qualified lookups
+
+### Interactive selection
+- fzf interactive project selection for `mori cd` and `mori path`
+- fzf interactive topic selection for `mori help`
+
+---
+
 ## 2026-03-21
 
 ### Dynamic extension registry

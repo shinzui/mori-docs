@@ -39,12 +39,25 @@ mori extension retire tech-radar
 
 ## `mori extension query`
 
-Query extension data across all projects.
+Query extension data across all projects. Supports filtering by project, topic,
+and content type (filters are extension-specific).
 
 ```bash
 mori extension query tech-radar
 mori extension query tech-radar --json
+mori extension query cookbook --project namespace/name
+mori extension query cookbook --topic database
+mori extension query cookbook --content-type pattern
 ```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--json` | JSON output |
+| `--project`, `-p` | Filter to a specific project (name or `namespace/name`) |
+| `--topic` | Filter by topic (cookbook extension) |
+| `--content-type` | Filter by content type (cookbook extension) |
 
 ## How Extension Data Flows
 
