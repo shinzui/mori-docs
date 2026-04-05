@@ -4,15 +4,40 @@ description: Navigate to a registered project
 icon: FolderOpen
 ---
 
-Navigate to a registered project.
+Resolve a project name to its filesystem path and print it to stdout. Designed
+for shell integration.
 
 ```bash
 mori cd <project>
+mori cd <namespace>/<project>
+mori cd                          # interactive fzf selection
 ```
 
-## Rules
+## Project Resolution
 
-- Prefers existing local checkout
-- Prompts before cloning
+| Input | Resolution |
+|-------|-----------|
+| `namespace/name` | Exact match by qualified name |
+| `name` | Searches all projects — succeeds only if unambiguous |
 
-See [Shell Integration](/docs/guides/shell-integration) for setup instructions.
+If a bare name matches multiple projects, mori prints the candidates and exits
+with an error.
+
+## Interactive Selection
+
+Without arguments, `mori cd` launches [fzf](https://github.com/junegunn/fzf) for project selection:
+
+```bash
+cd $(mori cd)
+```
+
+## Shell Integration
+
+A subprocess cannot change the parent shell's directory. Use a shell wrapper:
+
+```bash
+mcd() { cd "$(mori cd "$@")" }
+```
+
+See [Shell Integration](/docs/guides/shell-integration) for full setup and
+[Navigation](/docs/guides/navigation) for usage patterns with `path` and `browse`.

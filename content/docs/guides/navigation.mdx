@@ -1,0 +1,175 @@
+---
+title: Navigation
+description: Navigate to projects, locate packages and docs, and open repos in the browser
+icon: Compass
+---
+
+Mori provides commands for navigating to registered projects, locating packages
+and documentation, and opening repositories in the browser.
+
+## Prerequisites
+
+- Projects registered in the local registry (`mori register --local`)
+- For interactive selection: [fzf](https://github.com/junegunn/fzf) installed
+
+## Quick Reference
+
+| Command | Purpose |
+|---------|---------|
+| `mori cd <project>` | Print project path (for shell navigation) |
+| `mori path <project>` | Print project, package, or doc path |
+| `mori browse <project>` | Open repository in browser |
+
+## cd — Navigate to a Project
+
+`mori cd` resolves a project name to its filesystem path and prints it to
+stdout. This is designed for shell integration:
+
+```bash
+cd $(mori cd my-project)
+cd $(mori cd my-namespace/my-project)
+```
+
+### Interactive selection
+
+Without arguments, `mori cd` launches fzf for project selection:
+
+```bash
+cd $(mori cd)
+```
+
+### Project resolution
+
+| Input | Resolution |
+|-------|-----------|
+| `namespace/name` | Exact match by qualified name |
+| `name` | Searches all projects — succeeds only if unambiguous |
+
+If a bare name matches multiple projects, mori prints the candidates and exits
+with an error:
+
+```
+Multiple projects match 'my-lib':
+  team-a/my-lib
+  team-b/my-lib
+```
+
+## path — Locate Projects, Packages, and Docs
+
+`mori path` prints absolute paths for projects, packages, or documentation
+entries. All paths are verified to exist on disk before printing.
+
+### Project root
+
+```bash
+mori path my-project
+mori path my-namespace/my-project
+mori path              # interactive project selection
+```
+
+### Package path
+
+```bash
+mori path my-project --package core       # specific package
+mori path my-project --package            # interactive package selection
+mori path my-project -p core              # short flag
+```
+
+```
+/home/dev/projects/my-project/packages/core
+```
+
+If a package has no distinct path (lives at the project root), mori prints the
+project root with a warning on stderr.
+
+### Documentation path
+
+```bash
+mori path my-project --doc api-reference   # specific doc
+mori path my-project --doc                 # interactive doc selection
+mori path my-project -d api-reference      # short flag
+```
+
+For URL-type docs, the URL is printed to stdout with a warning on stderr.
+
+### Interactive mode
+
+When `--package` or `--doc` is used without a value, fzf launches showing
+available items for the resolved project:
+
+```bash
+mori path my-project -p    # pick a package
+mori path my-project -d    # pick a doc
+mori path -p               # pick a project, then pick a package
+```
+
+## browse — Open Repository in Browser
+
+`mori browse` opens the project's repository URL in the default browser.
+
+```bash
+mori browse my-project
+mori browse my-namespace/my-project
+```
+
+### Package-qualified references
+
+Use colon syntax to hint which repository to open (useful for multi-repo
+projects):
+
+```bash
+mori browse my-project:core-package
+```
+
+### Selecting a repository
+
+For projects with multiple repositories, use `--repo`:
+
+```bash
+mori browse my-project --repo backend
+```
+
+Without `--repo`, mori tries to match the package name to a repository name,
+then falls back to the first repository.
+
+### Supported repository types
+
+| Repository type | URL pattern |
+|----------------|-------------|
+| GitHub | `https://github.com/{owner}/{repo}` |
+| GitLab | `https://gitlab.com/{owner}/{repo}` |
+| Generic Git | URL as configured |
+
+## Shell Integration Tips
+
+### Shell alias for cd
+
+Add to your `.zshrc` or `.bashrc`:
+
+```bash
+mcd() { cd "$(mori cd "$@")" }
+```
+
+Then use `mcd my-project` to navigate directly.
+
+### Editor integration
+
+Open a project in your editor:
+
+```bash
+code $(mori path my-project)
+vim $(mori path my-project -p core)/src/Main.hs
+```
+
+### Open documentation
+
+```bash
+open $(mori path my-project -d api-reference)
+```
+
+## Related
+
+- [Shell Integration](/docs/guides/shell-integration) — full shell wrapper setup for `mori cd`
+- [Getting Started](/docs/getting-started) — CLI usage and project configuration
+- [Local Registry](/docs/concepts/local-registry) — registering projects
+- [Schema Reference](/docs/guides/schema-reference) — repository and package configuration

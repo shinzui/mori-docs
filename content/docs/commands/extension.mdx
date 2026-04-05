@@ -81,6 +81,20 @@ mori registry show --full namespace/name
 mori registry show --full --json namespace/name
 ```
 
+## Registration
+
+Extensions are auto-detected during `mori register --local`. The output shows
+which extensions were found:
+
+```bash
+mori register --local
+```
+
+```
+Registered: my-namespace/my-project
+  Extensions: cookbook, tech-radar
+```
+
 ## Adding a New Extension Type
 
 To add a new extension type to mori, you need:
@@ -92,3 +106,8 @@ To add a new extension type to mori, you need:
 5. One entry in `extensionLoaders` (`Mori.Extensions.Loader`)
 
 No database changes, no new tables, no new events required.
+
+## See Also
+
+See [Extensions guide](/docs/guides/extensions) for comprehensive documentation
+on tech radar, cookbook, configuration examples, and cross-project queries.

@@ -1,0 +1,165 @@
+---
+title: Mori Apps
+description: Webhook receivers that subscribe to repository events
+icon: Webhook
+---
+
+Mori Apps are webhook receivers that subscribe to repository events. When an
+event matches an app's selectors, mori delivers a signed webhook to the app's
+URL. This enables external services to react to VCS events without polling.
+
+## Prerequisites
+
+- Database set up and migrations run (see [Local Registry](/docs/concepts/local-registry))
+- The automation daemon running (`mori automate daemon`) to process deliveries
+- Event selectors defined in a Dhall file
+
+## Registering an App
+
+```bash
+mori app register --name "CI Trigger" --url https://ci.example.com/webhook --selectors selectors.dhall
+```
+
+| Flag | Required | Purpose |
+|------|----------|---------|
+| `--name` | Yes | Human-readable app name |
+| `--url` | Yes | Webhook delivery URL |
+| `--selectors` | Yes | Path to Dhall file defining event selectors |
+
+On success, mori outputs the app ID and a signing secret:
+
+```
+App registered.
+  App ID:  app_01h455vb4pex5vsknk084sn02q
+  Secret:  whsec_dGhpcyBpcyBhIHNlY3JldA==
+
+Save the secret — it will not be shown again.
+```
+
+The secret is used to verify webhook signatures. Store it securely.
+
+## Listing Apps
+
+```bash
+mori app list
+mori app list --json
+```
+
+```
+ID                                    NAME          URL                              STATUS
+app_01h455vb4pex5vsknk084sn02q        CI Trigger    https://ci.example.com/webhook   active
+app_01h456abc7def8ghij9k0l1m2n        Slack Bot     https://slack.example.com/hook    suspended
+```
+
+## Showing App Details
+
+```bash
+mori app show app_01h455vb4pex5vsknk084sn02q
+mori app show app_01h455vb4pex5vsknk084sn02q --json
+```
+
+## Updating an App
+
+Update any combination of name, URL, or selectors:
+
+```bash
+mori app update app_01h455vb4pex5vsknk084sn02q --name "CI Trigger v2"
+mori app update app_01h455vb4pex5vsknk084sn02q --url https://ci-v2.example.com/webhook
+mori app update app_01h455vb4pex5vsknk084sn02q --selectors new-selectors.dhall
+```
+
+Unspecified fields remain unchanged.
+
+## Rotating Secrets
+
+Generate a new signing secret (the old secret becomes invalid immediately):
+
+```bash
+mori app rotate-secret app_01h455vb4pex5vsknk084sn02q
+```
+
+```
+Secret rotated.
+  New secret: whsec_bmV3IHNlY3JldCBoZXJl
+
+Save the secret — it will not be shown again.
+```
+
+## Suspending and Activating
+
+Suspend an app to stop webhook delivery without deleting it:
+
+```bash
+mori app suspend app_01h455vb4pex5vsknk084sn02q
+mori app activate app_01h455vb4pex5vsknk084sn02q
+```
+
+## Deleting an App
+
+Permanently remove an app and all its delivery history:
+
+```bash
+mori app delete app_01h455vb4pex5vsknk084sn02q
+```
+
+## Webhook Deliveries
+
+### Viewing delivery history
+
+```bash
+mori app deliveries app_01h455vb4pex5vsknk084sn02q
+mori app deliveries app_01h455vb4pex5vsknk084sn02q --status failed
+mori app deliveries app_01h455vb4pex5vsknk084sn02q --json
+```
+
+```
+DELIVERY_ID                           EVENT                STATUS     ATTEMPTS
+del_01h457xyz...                      ChangesetObserved    delivered  1
+del_01h458abc...                      RefObserved          failed     3
+```
+
+Results are limited to the most recent 100 deliveries.
+
+### Retrying failed deliveries
+
+Retry a specific delivery:
+
+```bash
+mori app retry app_01h455vb4pex5vsknk084sn02q del_01h458abc...
+```
+
+Retry all failed deliveries for an app:
+
+```bash
+mori app retry app_01h455vb4pex5vsknk084sn02q --all-failed
+```
+
+Retried deliveries are re-queued with status "pending".
+
+## Event Flow
+
+```
+VCS events (via mori automate ingest)
+    │
+    ▼
+mori automate daemon
+    │
+    ├─ matches events against app selectors
+    │
+    ▼
+webhook delivery
+    │
+    ├─ POST to app URL with signed payload
+    ├─ records delivery status
+    └─ retries on failure
+```
+
+The daemon handles app event fan-out — when an event matches an app's selectors,
+it queues a webhook delivery. The app registration subscription keeps the
+in-memory app registry in sync with new registrations and updates.
+
+## Related
+
+- [Automation](/docs/guides/automation) — VCS event ingestion and reactions
+- [Cross-Repo Workflows](/docs/guides/cross-repo-workflows) — signal dispatch across repositories
+- [Local Registry](/docs/concepts/local-registry) — database setup and projections

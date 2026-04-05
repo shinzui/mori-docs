@@ -1,0 +1,118 @@
+---
+title: Kit
+description: Manage Claude Code skills and subagents with mori kit
+icon: Package
+---
+
+Mori Kit manages Claude Code skills and subagents — reusable prompt modules
+that teach Claude how to perform mori-specific tasks. Skills and agents are
+distributed via the [mori-kit](https://github.com/shinzui/mori-kit) repository
+and installed into your Claude Code configuration.
+
+## How It Works
+
+The kit system:
+
+1. Clones the mori-kit repository (cached at `~/.cache/mori/kit/`)
+2. Reads a `kit.json` manifest listing available skills and agents
+3. Installs items by copying files into your Claude Code agent directories
+
+**Skills** are multi-file directories (e.g., `SKILL.md` + supporting files)
+installed to `.claude/skills/{name}/`.
+
+**Agents** are single markdown files installed to `.claude/agents/{name}.md`.
+
+## Installation Scopes
+
+| Scope | Path | Purpose |
+|-------|------|---------|
+| User (default) | `~/.config/mori/agents/.claude/` | Available in all projects |
+| Project | `.mori/agents/.claude/` | Available only in the current project |
+
+Use `--project` to install at project scope.
+
+## Listing Available Items
+
+```bash
+mori kit list
+```
+
+```
+Skills
+  exec-plan       Create and implement execution plans
+  kit-skill       Create new mori-kit skills
+
+Agents
+  mori-assist     General mori project assistance
+```
+
+This fetches the latest manifest from the mori-kit repository.
+
+## Installing
+
+```bash
+mori kit install exec-plan                # user scope (default)
+mori kit install exec-plan --project      # project scope
+```
+
+```
+Installed skill 'exec-plan' to user scope.
+```
+
+## Updating
+
+Update all installed items:
+
+```bash
+mori kit update
+```
+
+Update a specific item:
+
+```bash
+mori kit update exec-plan
+```
+
+```
+Kit repository updated.
+Updated 'exec-plan' (user)
+Updated 2 item(s).
+```
+
+Updates pull the latest mori-kit repository and reinstall items in both scopes
+where they are currently installed.
+
+## Uninstalling
+
+```bash
+mori kit uninstall exec-plan                # user scope (default)
+mori kit uninstall exec-plan --project      # project scope
+```
+
+## Checking Status
+
+```bash
+mori kit status
+```
+
+```
+NAME          TYPE     SCOPE
+exec-plan     skill    user
+kit-skill     skill    user
+mori-assist   agent    project
+```
+
+Shows all installed items across both scopes.
+
+## How Agent Sessions Use Kit
+
+The `mori agent claude` and `mori agent assist` commands automatically load
+installed skills and agents by passing the agent directories to Claude via
+`--add-dir`. Both user-scope and project-scope directories are included when
+available.
+
+## Related
+
+- [Agent Sessions](/docs/guides/agent-sessions) — Claude sessions that load kit items
+- [Agent Context](/docs/concepts/agent-context) — structured context for AI agents
+- [Getting Started](/docs/getting-started) — CLI usage and project configuration

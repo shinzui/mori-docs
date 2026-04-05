@@ -4,9 +4,10 @@ description: Manage Claude Code skills and subagents
 icon: Package
 ---
 
-Manage distributable Claude Code skills and subagents. Skills and subagents
-declared in `mori.dhall` can be installed to your local environment for use
-with `mori agent claude` sessions.
+Manage Claude Code skills and subagents — reusable prompt modules distributed
+via the [mori-kit](https://github.com/shinzui/mori-kit) repository. The kit
+system clones mori-kit (cached at `~/.cache/mori/kit/`), reads a `kit.json`
+manifest, and installs items into your Claude Code agent directories.
 
 ## `mori kit list`
 
@@ -69,11 +70,18 @@ Show installed skills and subagents.
 mori kit status
 ```
 
+## Installation Scopes
+
+| Scope | Path | Purpose |
+|-------|------|---------|
+| User (default) | `~/.config/mori/agents/.claude/` | Available in all projects |
+| Project | `.mori/agents/.claude/` | Available only in the current project |
+
 ## Relationship to Agent Sessions
 
 Installed skills and subagents are automatically loaded into Claude sessions
 started via `mori agent claude`. User-level and project-level items are
 both included via `--add-dir` flags.
 
-See [Agent Context](/docs/concepts/agent-context) for how skills and subagents
-integrate with the agent context system.
+See [Kit guide](/docs/guides/kit) for the full documentation and
+[Agent Sessions](/docs/guides/agent-sessions) for how sessions load kit items.

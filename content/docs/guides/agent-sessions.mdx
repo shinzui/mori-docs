@@ -1,0 +1,158 @@
+---
+title: Agent Sessions
+description: Launch Claude Code sessions pre-loaded with project context and specialized prompts
+icon: Bot
+---
+
+Mori can launch Claude Code sessions pre-loaded with project context,
+dependency knowledge, and specialized prompts. These sessions go beyond the
+static JSON output of `mori agent context` — they start an interactive Claude
+session with appropriate tools and permissions.
+
+## Prerequisites
+
+- Claude Code CLI (`claude`) installed and authenticated
+- A `mori.dhall` config in the current directory (for most session types)
+- Dependencies registered in the local registry (for `assist` and `claude`)
+
+## Session Types
+
+| Command | Purpose | Needs `mori.dhall` | Needs DB |
+|---------|---------|--------------------|----------|
+| `mori agent assist` | General development with project context | Yes | Yes |
+| `mori agent claude` | Full project context with skills and subagents | Yes | Yes |
+| `mori agent bootstrap` | Scaffold a new mori project | No | Yes |
+| `mori agent schema-migrate` | Fix or migrate `mori.dhall` | No | No |
+| `mori agent automate` | Author/debug automation configs | Yes | No |
+
+All sessions accept `--debug` to print the system prompt instead of launching
+Claude (useful for inspecting what context is provided).
+
+## assist — Development Session
+
+Starts a Claude session loaded with your project configuration and resolved
+dependencies:
+
+```bash
+mori agent assist
+mori agent assist --debug    # print prompt, don't launch
+```
+
+The session includes:
+- Project metadata from `mori.dhall`
+- Resolved dependency paths and documentation
+- Tools for building, testing, and navigating the project (`cabal`, `nix`, `git`, `mori`)
+
+Dependencies that fail to resolve are skipped with a warning.
+
+## claude — Full Project Session
+
+Like `assist`, but also loads installed [Kit](/docs/guides/kit) skills and subagents:
+
+```bash
+mori agent claude
+mori agent claude --debug
+```
+
+Additional features:
+- Loads skills from `~/.config/mori/agents/` (user scope) and `.mori/agents/` (project scope)
+- Adds `Read` permissions for each dependency path
+- Caches resolved dependencies keyed by a fingerprint of `mori.dhall` and `mori/` — subsequent launches skip resolution if nothing changed
+
+The cache is invalidated when `mori.dhall` or any file in `mori/` changes.
+
+## bootstrap — New Project Session
+
+Launches a guided Claude session for scaffolding a new mori project:
+
+```bash
+mori agent bootstrap
+mori agent bootstrap --namespace my-team --name my-service
+mori agent bootstrap --corpus --upstream owner/repo
+```
+
+| Flag | Purpose |
+|------|---------|
+| `--namespace` / `-n` | Pre-seed project namespace |
+| `--name` | Pre-seed project name |
+| `--corpus` | Bootstrap as a corpus project (wraps third-party repos as git subtrees) |
+| `--upstream` / `-u` | Pre-seed GitHub upstream owner for corpus mode |
+| `--debug` | Print prompt instead of launching |
+
+The session queries the registry for existing projects and packages to provide
+context about the workspace. Pre-seeded values skip the corresponding prompts
+during the interactive session.
+
+### Corpus mode
+
+With `--corpus`, the session uses a specialized template for creating corpus
+projects — wrapper projects that embed third-party repositories as git
+subtrees. The session includes `just` commands for subtree management.
+
+## schema-migrate — Schema Migration Session
+
+Launches Claude to fix or migrate an existing `mori.dhall`:
+
+```bash
+mori agent schema-migrate
+mori agent schema-migrate --file path/to/mori.dhall
+```
+
+| Flag | Default | Purpose |
+|------|---------|---------|
+| `--file` | `mori.dhall` | Target file to migrate |
+| `--debug` | — | Print prompt instead of launching |
+
+The session includes the current schema reference so Claude can update the file
+to match the latest schema version.
+
+## automate — Automation Config Session
+
+Launches Claude specialized for authoring and debugging automation
+configurations:
+
+```bash
+mori agent automate
+mori agent automate --debug
+```
+
+The session includes:
+- Project metadata from `mori.dhall`
+- Current `mori.automation.dhall` contents (if present)
+- Tools for building and validating configs
+
+This is useful for iterating on event selectors and reactions with Claude's help.
+
+## Common Behavior
+
+### Tool permissions
+
+All sessions run with `--permission-mode acceptEdits` and share a common set of
+allowed tools:
+
+- File operations: `Read`, `Edit`, `Write`
+- Shell: `mori`, `git`, `dhall`, `ls`, `mkdir`, `cat`, `tree`, `find`, `grep`, `rg`
+- Web: Hackage and Hoogle lookups
+
+Session-specific tools are added on top (e.g., `cabal` for `assist`, `just` for
+corpus `bootstrap`).
+
+### Agent directories
+
+Sessions automatically discover and load agent directories:
+- **User scope:** `~/.config/mori/agents/`
+- **Project scope:** `.mori/agents/`
+
+Missing directories are silently skipped.
+
+### Signal handling
+
+SIGINT and SIGTERM are forwarded to the Claude process, allowing graceful
+interruption.
+
+## Related
+
+- [Agent Context](/docs/concepts/agent-context) — static JSON context for programmatic use
+- [Kit](/docs/guides/kit) — installing skills and subagents
+- [Automation](/docs/guides/automation) — VCS event reactions and config authoring
+- [Getting Started](/docs/getting-started) — CLI usage and project configuration

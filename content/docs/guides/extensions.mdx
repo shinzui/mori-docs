@@ -1,0 +1,299 @@
+---
+title: Extensions
+description: Attach structured metadata to projects with the extension system
+icon: Puzzle
+---
+
+Mori's extension system lets you attach structured metadata to projects beyond
+what the core schema provides. Extensions are project-scoped Dhall configs
+stored in the `mori/` directory and registered alongside the project in the
+local registry. Two built-in extensions — **tech radar** and **cookbook** — ship
+with the CLI.
+
+## How Extensions Work
+
+An extension is a named metadata type registered in the event store. Projects
+opt in by placing a Dhall config file in `mori/` (e.g., `mori/tech-radar.dhall`,
+`mori/cookbook.dhall`). When you run `mori register --local`, extension data is
+automatically detected and registered alongside the project.
+
+## Managing Extension Types
+
+### Define an extension
+
+```bash
+mori extension define tech-radar \
+  --description "Preferred packages by language and category" \
+  --schema-ref schema/extensions/tech-radar/
+```
+
+| Flag | Required | Purpose |
+|------|----------|---------|
+| `--description` / `-d` | Yes | Human-readable description |
+| `--schema-ref` | No | Path to the extension's Dhall schema directory |
+
+### List active extensions
+
+```bash
+mori extension list
+```
+
+```
+Extensions
+NAME          DESCRIPTION                                    SCHEMA REF
+tech-radar    Preferred packages by language and category     schema/extensions/tech-radar/
+cookbook       Code examples, patterns, and guides             schema/extensions/cookbook/
+```
+
+### Retire an extension
+
+```bash
+mori extension retire tech-radar
+mori extension retire tech-radar --force   # skip confirmation
+```
+
+Retiring soft-deletes the extension type. Existing data remains in the event
+store but is no longer queryable.
+
+### Query extension data
+
+Query extension entries across all registered projects:
+
+```bash
+mori extension query cookbook
+mori extension query cookbook --project my-service
+mori extension query cookbook --topic database --content-type sample-code
+mori extension query cookbook --json
+```
+
+| Flag | Purpose |
+|------|---------|
+| `--project` / `-p` | Filter to a specific project (name or namespace/name) |
+| `--topic` | Filter cookbook entries by topic |
+| `--content-type` | Filter cookbook entries by content type |
+| `--json` | JSON output |
+
+Filters are case-insensitive. Content type filters normalize hyphens and
+underscores (`sample-code` and `samplecode` both work).
+
+---
+
+## Tech Radar
+
+The tech radar extension captures preferred packages by language and category,
+with adoption levels (Adopt, Trial, Assess, Hold) and optional alternatives.
+
+### Configuration
+
+Create `mori/tech-radar.dhall` in your project:
+
+```haskell
+let TechRadar = ./schema/extensions/tech-radar/package.dhall
+
+in  { recommendations =
+      [ { package = "effectful"
+        , language = TechRadar.Language.Haskell
+        , category = TechRadar.Category.Effects
+        , level = TechRadar.AdoptionLevel.Adopt
+        , reason = Some "Production-ready, good performance, extensible"
+        , alternatives = [ "polysemy", "fused-effects" ]
+        }
+      , { package = "aeson"
+        , language = TechRadar.Language.Haskell
+        , category = TechRadar.Category.Serialization
+        , level = TechRadar.AdoptionLevel.Hold
+        , reason = Some "Moving to json-syntax for better error messages"
+        , alternatives = [ "json-syntax" ]
+        }
+      ]
+    }
+```
+
+### List recommendations
+
+```bash
+mori tech-radar list
+mori tech-radar list --language Haskell
+mori tech-radar list --category Database
+mori tech-radar list --config path/to/tech-radar.dhall
+```
+
+```
+Tech Radar
+LANGUAGE    CATEGORY        PACKAGE       LEVEL
+Haskell     Effects         effectful     Adopt
+Haskell     Serialization   aeson         Hold
+```
+
+Adoption levels are color-coded: Adopt (green), Trial (yellow), Assess (blue),
+Hold (red).
+
+| Flag | Default | Purpose |
+|------|---------|---------|
+| `--config` | `mori/tech-radar.dhall` | Config file path |
+| `--language` | (all) | Filter by language |
+| `--category` | (all) | Filter by category |
+
+### Show package details
+
+```bash
+mori tech-radar show effectful
+```
+
+```
+Tech Radar Recommendation
+  Package:       effectful
+  Language:       Haskell
+  Category:       Effects
+  Level:          Adopt
+  Reason:         Production-ready, good performance, extensible
+  Alternatives:   polysemy, fused-effects
+```
+
+### Print schema
+
+```bash
+mori tech-radar print-schema
+```
+
+Outputs the Dhall type definitions for the tech-radar extension (TechRadar,
+Recommendation, AdoptionLevel, Category).
+
+---
+
+## Cookbook
+
+The cookbook extension provides structured metadata for code examples, patterns,
+and guides. It enriches the basic `DocRef` cookbooks with content types, topics,
+related packages, and language tags so agents can find relevant material without
+reading every file.
+
+### Configuration
+
+Create `mori/cookbook.dhall` in your project:
+
+```haskell
+let Cookbook = ./schema/extensions/cookbook/package.dhall
+
+in  { entries =
+      [ { key = "hasql-queries"
+        , title = "How to Write Hasql Queries"
+        , contentType = Cookbook.ContentType.SampleCode
+        , topics = [ Cookbook.Topic.Database ]
+        , packages = [ "hasql", "hasql-pool" ]
+        , language = Cookbook.Language.Haskell
+        , audience = Cookbook.Audience.Module
+        , location = Cookbook.Location.LocalFile "docs/hasql-queries.md"
+        , description = Some "Query patterns, connection management, transactions"
+        }
+      , { key = "effectful-patterns"
+        , title = "Effectful Patterns"
+        , contentType = Cookbook.ContentType.Pattern
+        , topics = [ Cookbook.Topic.Effects ]
+        , packages = [ "effectful" ]
+        , language = Cookbook.Language.Haskell
+        , audience = Cookbook.Audience.Module
+        , location = Cookbook.Location.LocalFile "docs/effectful-patterns.md"
+        , description = Some "Effect definitions, interpreters, testing"
+        }
+      ]
+    }
+```
+
+### List entries
+
+```bash
+mori cookbook list
+mori cookbook list --topic database
+mori cookbook list --content-type sample-code
+mori cookbook list --package hasql
+mori cookbook list --language Haskell
+```
+
+```
+Cookbook Catalog
+KEY                  TYPE          TOPICS       PACKAGES
+hasql-queries        SampleCode    Database     hasql, hasql-pool
+effectful-patterns   Pattern       Effects      effectful
+```
+
+All filters use AND logic — an entry must match every provided filter. Within
+`--topic` and `--package`, matches are OR (any topic/package in the entry).
+
+| Flag | Default | Purpose |
+|------|---------|---------|
+| `--config` | `mori/cookbook.dhall` | Config file path |
+| `--content-type` | (all) | Filter by type (sample-code, instructions, pattern, configuration, template) |
+| `--topic` | (all) | Filter by topic (database, api, testing, effects, etc.) |
+| `--package` | (all) | Filter by related package |
+| `--language` | (all) | Filter by language |
+
+### Show entry details
+
+```bash
+mori cookbook show hasql-queries
+```
+
+```
+Cookbook Entry
+  Key:           hasql-queries
+  Title:         How to Write Hasql Queries
+  Content Type:  SampleCode
+  Topics:        Database
+  Packages:      hasql, hasql-pool
+  Language:       Haskell
+  Audience:       Module
+  Location:       docs/hasql-queries.md
+  Description:    Query patterns, connection management, transactions
+```
+
+### Print schema
+
+```bash
+mori cookbook print-schema
+```
+
+Outputs the Dhall type definitions for the cookbook extension (CookbookCatalog,
+CookbookEntry, ContentType, Topic).
+
+### Cookbook vs. DocRef cookbooks
+
+The `docs` field in `mori.dhall` supports `kind = Cookbook` entries (DocRef
+cookbooks). These are simple path references. The cookbook extension adds
+structured classification. Both coexist — simple projects can use DocRef alone;
+projects needing richer metadata use the extension.
+
+## Registration
+
+Extensions are auto-detected during `mori register --local`. The output shows
+which extensions were found:
+
+```bash
+mori register --local
+```
+
+```
+Registered: my-namespace/my-project
+  Extensions: cookbook, tech-radar
+```
+
+## Cross-Project Queries
+
+Use `mori extension query` to search extension data across all registered
+projects. This is useful for finding cookbook entries or tech radar
+recommendations across your workspace:
+
+```bash
+# Find all cookbook entries about database patterns
+mori extension query cookbook --topic database
+
+# Find tech radar recommendations in a specific project
+mori extension query tech-radar --project my-service
+```
+
+## Related
+
+- [Getting Started](/docs/getting-started) — CLI usage and project configuration
+- [Schema Guide](/docs/schema-guide) — `mori.dhall` configuration concepts
+- [Agent Context](/docs/concepts/agent-context) — how cookbook data flows into agent context
+- [Local Registry](/docs/concepts/local-registry) — database setup and projections

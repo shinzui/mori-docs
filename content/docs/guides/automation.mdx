@@ -354,13 +354,14 @@ mori automate ingest git --path /path/to/repo
 mori automate run
 ```
 
-This starts a long-running process with three concurrent subscriptions:
+This starts a long-running process with four concurrent subscriptions:
 
 | Subscription | Listens to | Purpose |
 |-------------|------------|---------|
 | `mori-automation` | `repository` events | Match selectors, trigger reactions |
 | `mori-reaction-executor` | `reaction` events | Execute triggered actions |
 | `mori-registry` | `project` events | Populate registry read model |
+| `mori-workflow` | `workflow` events | Maintain workflow projections |
 
 Plus a shibuya worker that processes scheduled actions from the pgmq queue.
 

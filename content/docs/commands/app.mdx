@@ -133,8 +133,27 @@ mori app retry <APP_ID> --all-failed
 - Apps returning HTTP 410 Gone are automatically suspended
 - Delivery history is queryable and retryable
 
+## Event Flow
+
+```
+VCS events (via mori automate ingest)
+    │
+    ▼
+mori automate daemon
+    │
+    ├─ matches events against app selectors
+    │
+    ▼
+webhook delivery
+    │
+    ├─ POST to app URL with signed payload
+    ├─ records delivery status
+    └─ retries on failure
+```
+
 ## Integration with Daemon
 
 Apps are delivered events by the automation daemon. The daemon fans out matching
 events to all registered apps based on their event selectors. See
-[Automation Daemon](/docs/guides/automation-daemon) for details.
+[Automation Daemon](/docs/guides/automation-daemon) for details and
+[Apps guide](/docs/guides/apps) for the full documentation.

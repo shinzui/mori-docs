@@ -580,10 +580,11 @@ The engine:
 
 1. Loads and observes the automation config (emitting a `MoriAutomationObserved` event with a content hash)
 2. Creates pgmq queues for scheduled actions
-3. Starts three concurrent subscriptions:
+3. Starts four concurrent subscriptions:
    - **Automation subscription** — matches repository events against selectors and triggers reactions
    - **Executor subscription** — executes the triggered reaction actions
    - **Registry subscription** — projects project events into the read model
+   - **Workflow subscription** — maintains workflow projections
 4. Starts a shibuya worker for processing scheduled actions
 
 To use a custom config path:
@@ -908,15 +909,50 @@ mori automate explain 15
 | `mori doctor` | Check PostgreSQL and MessageDB | Yes |
 | `mori init [--name NAME]` | Create `mori.dhall` scaffold | No |
 | `mori validate` | Type-check `mori.dhall` | No |
-| `mori show [--json]` | Display project summary | No |
+| `mori show [--json] [--full]` | Display project summary | No |
 | `mori register [--local]` | Register in local registry | Yes |
 | `mori deps resolve [--json]` | Check dependency resolution | Yes |
 | `mori deps locate NAME [--json]` | Find a dependency | Yes |
 | `mori deps explain NAME [--json]` | Full resolution trace | Yes |
+| `mori deps tree [--depth N] [--json]` | Show dependency tree | Yes |
 | `mori agent list [--json]` | List agent roles | No |
 | `mori agent context ROLE` | Generate agent context JSON | Yes |
+| `mori agent assist` | Start Claude session with project context | Yes |
+| `mori agent claude` | Full Claude session with skills/subagents | Yes |
+| `mori agent bootstrap` | Scaffold a new mori project with Claude | Yes |
+| `mori cd [PROJECT]` | Print project path (for shell nav) | Yes |
+| `mori path [PROJECT] [-p PKG] [-d DOC]` | Locate project/package/doc path | Yes |
+| `mori browse PROJECT` | Open repository in browser | Yes |
 | `mori automate ingest git [--path PATH]` | Ingest git history | Yes |
-| `mori automate run [-c PATH] [--path PATH]` | Start reactive engine | Yes |
+| `mori automate run [-c PATH] [--register]` | Start reactive engine | Yes |
+| `mori automate daemon` | Run multi-repo automation daemon | Yes |
 | `mori automate inspect [-c PATH] [--json]` | Config summary + stats | Yes |
-| `mori schema migrate [--apply] [--dry-run]` | Check or apply schema migrations | No |
 | `mori automate explain POS [-c PATH] [--json]` | Explain event matching | Yes |
+| `mori reaction list [--status S] [--name N]` | List recent reactions | Yes |
+| `mori reaction show ID` | Show reaction details | Yes |
+| `mori schema migrate [--apply] [--dry-run]` | Check or apply schema migrations | No |
+| `mori extension list` | List active extension types | Yes |
+| `mori extension query NAME [--project P]` | Query extension data across projects | Yes |
+| `mori tech-radar list [--language L]` | List tech radar recommendations | No |
+| `mori cookbook list [--topic T]` | List cookbook entries | No |
+| `mori app list` | List registered webhook apps | Yes |
+| `mori kit list` | List available skills/subagents | No |
+| `mori kit install NAME [--project]` | Install a skill or subagent | No |
+| `mori help [TOPIC]` | Browse help topics | No |
+
+---
+
+## Related Documentation
+
+- [Schema Guide](/docs/schema-guide) — conceptual guide to `mori.dhall` configuration
+- [Schema Reference](/docs/guides/schema-reference) — complete field reference
+- [Schema Migrations](/docs/guides/schema-migrations) — migrating `mori.dhall` after schema changes
+- [Local Registry](/docs/concepts/local-registry) — database architecture and projections
+- [Automation](/docs/guides/automation) — VCS event reactions and multi-repo daemon
+- [Cross-Repo Workflows](/docs/guides/cross-repo-workflows) — signal dispatch across repositories
+- [Extensions](/docs/guides/extensions) — tech radar, cookbook, and custom extension types
+- [Mori Apps](/docs/guides/apps) — webhook receivers for external integrations
+- [Agent Context](/docs/concepts/agent-context) — structured JSON context for AI agents
+- [Agent Sessions](/docs/guides/agent-sessions) — interactive Claude sessions with project context
+- [Kit](/docs/guides/kit) — Claude Code skills and subagent management
+- [Navigation](/docs/guides/navigation) — cd, path, browse commands

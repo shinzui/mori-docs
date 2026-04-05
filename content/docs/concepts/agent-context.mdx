@@ -520,6 +520,8 @@ cd ~/oss/hasql-project && mori register --local
 
 Note: No `localPath` declarations for dependencies. The registry resolves them. Cookbooks are modeled as `docs` entries with `kind = Cookbook`.
 
+For richer cookbook classification, projects can add a `mori/cookbook.dhall` file using the cookbook schema extension. When present, `mori agent context` includes a `cookbookCatalog` field with structured metadata — content type, topics, related packages, and language — so agents can select the right cookbook without reading every file. See [Extensions](/docs/guides/extensions) for details.
+
 ### Step 3: Agent Queries Context
 
 ```bash
@@ -582,6 +584,19 @@ Output:
   "cookbooks": [
     { "name": "db-patterns", "path": "/Users/dev/services/payment-service/docs/db-patterns.md" },
     { "name": "effect-patterns", "path": "/Users/dev/services/payment-service/docs/effects.md" }
+  ],
+
+  "cookbookCatalog": [
+    {
+      "name": "db-patterns",
+      "path": "/Users/dev/services/payment-service/docs/db-patterns.md",
+      "title": "Database Access Patterns",
+      "contentType": "SampleCode",
+      "topics": ["Database"],
+      "packages": ["hasql", "hasql-pool"],
+      "language": "Haskell",
+      "description": "Hasql query patterns, connection management, and transaction handling"
+    }
   ]
 }
 ```
