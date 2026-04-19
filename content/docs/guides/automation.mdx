@@ -23,18 +23,21 @@ Mori supports two ways to organize automation configs:
 Create `mori.automation.dhall` in your project root. The file has three
 top-level sections: event selectors, reactions, and an execution policy.
 
-```haskell
-let EventSelector = ./schema/automation/EventSelector.dhall
-let Reaction = ./schema/automation/Reaction.dhall
+```dhall
+let Schema = ./schema/package.dhall
 
-in  { events = [] : List EventSelector
-    , reactions = [] : List Reaction
-    , execution =
-        { allowLocal = True
-        , allowCI = False
-        , maxConcurrency = None Integer
-        }
-    }
+in  Schema.Automation::{=}
+```
+
+Every field of `Schema.Automation.default` (`events = [] : List EventSelector`,
+`reactions = [] : List Reaction.Type`, `execution = ExecutionPolicy.default`)
+flows from the bundle, so the empty completion is already a complete, valid
+config. Override any field by adding it to the completion:
+
+```dhall
+Schema.Automation::{
+  reactions = [ Schema.Reaction::{ name = "tests", on = [ "src" ], actions = [ … ] } ]
+}
 ```
 
 ### Config directory (multiple files)
@@ -86,55 +89,57 @@ config directory.
 
 ### Full example
 
-```haskell
-let EventSelector = ./schema/automation/EventSelector.dhall
-let ReactionAction = ./schema/automation/ReactionAction.dhall
+Every record in `mori.automation.dhall` publishes the
+`{ Input, Type, default, mk }` bundle. Prefer the `Schema.<Name>::{ … }`
+completion form so additive schema upgrades upstream stay non-breaking — every
+defaulted field flows from `default`.
 
-in  { events =
-      [ EventSelector.ChangesetSelector
-          { name = "core-changes"
+```dhall
+let Schema = ./schema/package.dhall
+
+in  Schema.Automation::{
+      events =
+        [ Schema.EventSelector.ChangesetSelector Schema.ChangesetSelector::{
+            name = "core-changes"
           , paths = [ "payments-core/**" ]
           , branches = [ "main" ]
-          , messagePatterns = [] : List Text
           }
-      , EventSelector.RefSelector
-          { name = "release-tags"
+        , Schema.EventSelector.RefSelector Schema.RefSelector::{
+            name = "release-tags"
           , refPatterns = [ "release/*" ]
           , kinds = [ "tag" ]
           }
-      ]
+        ]
     , reactions =
-      [ { name = "test-on-core-change"
-        , on = [ "core-changes" ]
-        , actions =
-          [ ReactionAction.RunCommand
-              { command = "cabal"
-              , args = [ "test", "payments-core" ]
-              , workingDir = None Text
-              , timeout = Some +120
-              , env = [] : List { mapKey : Text, mapValue : Text }
-              }
-          ]
-        }
-      , { name = "notify-release"
-        , on = [ "release-tags" ]
-        , actions =
-          [ ReactionAction.Notify
-              { url = "https://hooks.example.com/releases"
-              , method = None Text
-              , headers = [] : List { mapKey : Text, mapValue : Text }
-              , bodyTemplate = Some "New release tag created"
-              }
-          ]
-        }
-      ]
-    , execution =
-      { allowLocal = True
-      , allowCI = False
-      , maxConcurrency = None Integer
-      }
+        [ Schema.Reaction::{
+            name = "test-on-core-change"
+          , on = [ "core-changes" ]
+          , actions =
+              [ Schema.ReactionAction.RunCommand Schema.RunCommandAction::{
+                  command = "cabal"
+                , args = [ "test", "payments-core" ]
+                , timeout = Some +120
+                }
+              ]
+          }
+        , Schema.Reaction::{
+            name = "notify-release"
+          , on = [ "release-tags" ]
+          , actions =
+              [ Schema.ReactionAction.Notify Schema.NotifyAction::{
+                  url = "https://hooks.example.com/releases"
+                , bodyTemplate = Some "New release tag created"
+                }
+              ]
+          }
+        ]
     }
 ```
+
+`execution` is omitted because `Schema.ExecutionPolicy.default`
+(`allowLocal = True, allowCI = False, maxConcurrency = None Integer`) matches
+what we want. An automation file with no overrides at all is a single line:
+`Schema.Automation::{=}`.
 
 ## Event Selectors
 
@@ -184,14 +189,12 @@ The `trailerPatterns` field matches commits by git trailer key/value pairs.
 Each entry requires the trailer key to be present and its value to match the
 glob pattern. All entries must match (conjunction). Empty = match all.
 
-```haskell
-EventSelector.ChangesetSelector
-  { name = "intention-commits"
-  , paths = [] : List Text
-  , branches = [ "main" ]
-  , messagePatterns = [] : List Text
-  , trailerPatterns = [ { mapKey = "Intention", mapValue = "intention_*" } ]
-  }
+```dhall
+Schema.EventSelector.ChangesetSelector Schema.ChangesetSelector::{
+  name = "intention-commits"
+, branches = [ "main" ]
+, trailerPatterns = [ { mapKey = "Intention", mapValue = "intention_*" } ]
+}
 ```
 
 This matches any commit on `main` with an `Intention` trailer whose value
@@ -222,17 +225,16 @@ Unknown variables are left as-is. Empty optional values expand to empty string.
 
 Example using interpolation with trailer matching:
 
-```haskell
-ReactionAction.RunCommand
-  { command = "rei"
-  , args = [ "action", "record", "--at", "{{changeset.timestamp}}", "--intention", "{{trailer.Intention}}" ]
-  , workingDir = None Text
-  , timeout = Some +60
-  , env =
+```dhall
+Schema.ReactionAction.RunCommand Schema.RunCommandAction::{
+  command = "rei"
+, args = [ "action", "record", "--at", "{{changeset.timestamp}}", "--intention", "{{trailer.Intention}}" ]
+, timeout = Some +60
+, env =
     [ { mapKey = "COMMIT_SHA", mapValue = "{{changeset.id}}" }
     , { mapKey = "COMMIT_AUTHOR", mapValue = "{{changeset.author.name}}" }
     ]
-  }
+}
 ```
 
 ## Reactions
@@ -240,8 +242,9 @@ ReactionAction.RunCommand
 Reactions bind selectors to actions. When any selector listed in `on` matches an
 event, all `actions` execute.
 
-```haskell
-{ name = "test-on-change"
+```dhall
+Schema.Reaction::{
+  name = "test-on-change"
 , on = [ "core-changes", "api-changes" ]    -- triggers on either selector
 , actions = [ ... ]                          -- all actions run
 }
@@ -253,14 +256,14 @@ event, all `actions` execute.
 
 Execute a shell command.
 
-```haskell
-ReactionAction.RunCommand
-  { command = "make"
-  , args = [ "test" ]
-  , workingDir = Some "./packages/core"
-  , timeout = Some +300              -- seconds
-  , env = [ { mapKey = "CI", mapValue = "true" } ]
-  }
+```dhall
+Schema.ReactionAction.RunCommand Schema.RunCommandAction::{
+  command = "make"
+, args = [ "test" ]
+, workingDir = Some "./packages/core"
+, timeout = Some +300              -- seconds
+, env = [ { mapKey = "CI", mapValue = "true" } ]
+}
 ```
 
 | Field | Type | Notes |
@@ -275,43 +278,40 @@ ReactionAction.RunCommand
 
 Write an event to a MessageDB stream.
 
-```haskell
-ReactionAction.EmitEvent
-  { eventType = "DeployRequested"
-  , streamName = "deployment-staging"
-  , eventData = [ { mapKey = "env", mapValue = "staging" } ]
-  }
+```dhall
+Schema.ReactionAction.EmitEvent Schema.EmitEventAction::{
+  eventType = "DeployRequested"
+, streamName = "deployment-staging"
+, eventData = [ { mapKey = "env", mapValue = "staging" } ]
+}
 ```
 
 ### Notify
 
 Send an HTTP request (uses `curl` under the hood).
 
-```haskell
-ReactionAction.Notify
-  { url = "https://hooks.slack.com/services/..."
-  , method = Some "POST"
-  , headers = [ { mapKey = "Content-Type", mapValue = "application/json" } ]
-  , bodyTemplate = Some "{\"text\": \"Build complete\"}"
-  }
+```dhall
+Schema.ReactionAction.Notify Schema.NotifyAction::{
+  url = "https://hooks.slack.com/services/..."
+, method = Some "POST"
+, headers = [ { mapKey = "Content-Type", mapValue = "application/json" } ]
+, bodyTemplate = Some "{\"text\": \"Build complete\"}"
+}
 ```
 
 ### Schedule
 
 Defer an action for later execution via pgmq + shibuya.
 
-```haskell
-ReactionAction.Schedule
-  { delaySeconds = +300
-  , action =
-      (./schema/automation/ReactionAction.dhall).RunCommand
-        { command = "make"
-        , args = [ "deploy", "staging" ]
-        , workingDir = None Text
-        , timeout = Some +600
-        , env = [] : List { mapKey : Text, mapValue : Text }
-        }
+```dhall
+Schema.ReactionAction.Schedule Schema.ScheduleAction::{
+  delaySeconds = +300
+, action = Schema.ScheduledAction.RunCommand Schema.RunCommandAction::{
+    command = "make"
+  , args = [ "deploy", "staging" ]
+  , timeout = Some +600
   }
+}
 ```
 
 Scheduled actions can be `RunCommand`, `EmitEvent`, or `Notify` — but not
@@ -321,12 +321,17 @@ another `Schedule` (no recursive scheduling).
 
 Controls runtime behavior of the automation engine.
 
-```haskell
-{ allowLocal = True           -- run actions on this machine
+```dhall
+Schema.ExecutionPolicy::{
+  allowLocal = True           -- run actions on this machine
 , allowCI = False             -- run actions in CI (Phase 2)
 , maxConcurrency = Some +4    -- max parallel action executions
 }
 ```
+
+`ExecutionPolicy` has no required (`Input`) fields — `allowLocal` and
+`allowCI` default to `True` / `False` and `maxConcurrency` defaults to
+`None Integer`. Override only what differs from the published default.
 
 ## Workflow
 
@@ -347,6 +352,11 @@ To ingest from a different repository path:
 ```bash
 mori automate ingest git --path /path/to/repo
 ```
+
+> **Note:** If you use the daemon (`mori automate daemon`), it auto-ingests
+> all observed projects periodically — you don't need manual `ingest` calls.
+> See the [Automation Daemon](/docs/guides/automation-daemon) guide for the
+> full daemon behavior, including `--ingest-interval`.
 
 ### 2. Start the automation engine
 
@@ -440,13 +450,15 @@ Add `--json` for machine-readable output.
 git commits
     │
     ▼
-mori automate ingest git
+mori automate ingest git          (manual / CI)
+── or ──
+daemon auto-ingest loop           (periodic, every --ingest-interval seconds)
     │
     ▼  ChangesetObserved / RefObserved events
     │  written to repository-{repo_id} stream
     │
     ▼
-mori automate run
+mori automate run / daemon
     │
     ├─ mori-automation subscription
     │  reads repository events

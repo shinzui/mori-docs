@@ -46,6 +46,7 @@ Start a Claude session to bootstrap a new mori project.
 mori agent bootstrap
 mori agent bootstrap --namespace shinzui --name my-project
 mori agent bootstrap --corpus --upstream owner
+mori agent bootstrap --seihou
 mori agent bootstrap --debug
 ```
 
@@ -55,8 +56,9 @@ mori agent bootstrap --debug
 |------|-------------|
 | `--namespace`, `-n` | Pre-seed the project namespace |
 | `--name` | Pre-seed the project name |
-| `--corpus` | Bootstrap a corpus project (wraps third-party repos) |
+| `--corpus` | Bootstrap a corpus project (wraps third-party repos as git subtrees); adds `Bash(just *)` to the session allow-list |
 | `--upstream`, `-u` | Pre-seed the upstream GitHub owner (corpus mode) |
+| `--seihou` | Bootstrap a project that ships seihou templates; adds the `seihou` CLI to the allow-list and injects template authoring guidance into the system prompt |
 | `--debug` | Print the system prompt instead of starting a session |
 
 ## `mori agent schema-migrate`

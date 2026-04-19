@@ -9,6 +9,50 @@ features, commands, and schema changes.
 
 ---
 
+## 2026-04-18
+
+### Schema: mk-pattern refactor
+- Every core schema record is now published as a four-field bundle: `{ Input, Type, default, mk }`
+- User configs are written with Dhall's record-completion operator: `Schema.Project::{ … }`, `Schema.Package::{ … }`, `Schema.Repo::{ … }`, etc.
+- Fields that equal the published default can be **elided**; additive schema changes no longer break existing configs
+- Extension records follow the same convention: `Cookbook.CookbookCatalog::{ … }`, `TechRadar.TechRadar::{ … }`, with per-extension `package.dhall` re-exports under `schema/extensions/<name>/`
+- Automation schema (`Reaction`, `EventSelector`, `ReactionAction`, `ExecutionPolicy`) remains pre-mk for now and is a known gap
+
+### `mori schema migrate`
+- **`rewrite-to-mk-form`** migration — rewrites legacy bare-record `mori.dhall` into `Schema.Project::{ … }`, wraps inner records, elides default-equal fields, and `.Type`-qualifies annotations where needed
+- Handles extension files (`mori/cookbook.dhall`, `mori/tech-radar.dhall`) — detected by path, with per-kind migration pipelines
+- Parse-guarded steps: a step whose output doesn't parse is auto-reverted so later migrations still run
+- Fixed four anchor / scan bugs that corrupted unusual-but-valid Dhall inputs
+
+### `mori registry upgrade-schema` (new)
+- Walks the registry and upgrades all projects whose `schema_hash` diverges from the CLI pin
+- Flags: `--dry-run`, `--filter GLOB`, `--all`, `--commit`, `--allow-dirty`
+- Covers `mori.dhall` **and** known extension files in a single pass
+- One project's failure does not abort the others
+
+### `mori registry` additions
+- **`mori registry templates list/show`** — browse seihou templates across the registry at the *template* grain, with `--tag`, `--namespace`, and three-segment `<namespace>/<name>/<template>` references
+- **`mori registry group create/list/show/add/remove/attach-package/attach-doc/…`** — first-class groups: named, event-sourced collections of projects with optional attached packages, docs, and JSON extension data
+- `registry list` gains `--group`, `--domain`, and `--observed` filters
+- Projects track `schema_url` / `schema_hash` and emit `ProjectSchemaVersionChanged` events
+
+### `mori path`
+- **`--copy` / `-c`** — copy the resolved path to the system clipboard (pbcopy / xclip) in addition to printing it
+
+### `mori agent bootstrap`
+- **`--seihou`** flag — bootstrap a project that ships seihou templates; adds the `seihou` CLI to the session allow-list and injects template authoring guidance into the system prompt
+
+### `mori automate daemon`
+- Periodic **auto-ingest loop** — ingests git history for every observed project (any project with a `repo_id`), independent of whether it has an automation config
+- New `--ingest-interval SECONDS` flag (default: 300, `0` to disable)
+- Daemon now manages six concurrent subscriptions (added app-registration stream)
+
+### Cookbook extension
+- **`CookbookEntry.tags`** — new optional field (`List Text`) for cross-cutting tags
+- `addCookbookEntryTags` migration brings existing catalogs forward
+
+---
+
 ## 2026-03-31
 
 ### Cookbook extension

@@ -13,7 +13,17 @@ automation configs, and routes events to the correct repo automatically.
 
 ```bash
 mori automate daemon
+mori automate daemon --ingest-interval 30      # faster cycle for development
+mori automate daemon --ingest-interval 0       # disable auto-ingest
+mori automate daemon --refresh-interval 120    # config-refresh cycle
 ```
+
+### Flags
+
+| Flag | Default | Purpose |
+|------|---------|---------|
+| `--refresh-interval SECONDS` | 60 | Interval between config-refresh cycles |
+| `--ingest-interval SECONDS` | 300 | Interval between auto-ingest cycles (`0` to disable) |
 
 ## How It Works
 
@@ -36,8 +46,29 @@ mori automate daemon
    - Triggers reactions with `workingDir` automatically set to the
      repo's path (so `RunCommand` actions execute in the right directory)
 
-5. The daemon runs five concurrent subscription workers: automation,
-   executor, registry, workflow, and registration projection.
+5. The daemon runs six concurrent subscription workers:
+
+| Subscription | Purpose |
+|-------------|---------|
+| `mori-automation` (daemon mode) | Route events to per-repo configs + app fan-out |
+| `mori-reaction-executor` | Execute triggered actions |
+| `mori-registry` | Populate registry read model |
+| `mori-workflow` | Maintain workflow projections |
+| Registration subscription | Update in-memory config registry on register/deregister |
+| App registration subscription | Update app registry on app events |
+
+Plus a shibuya worker for scheduled actions, and a periodic **auto-ingest loop**.
+
+## Auto-Ingest
+
+The daemon periodically ingests git history for every **observed** project —
+any project that has been through `mori observe` (i.e., has a `repo_id` in the
+projects table). Auto-ingest runs regardless of whether a project has an
+automation config, so Mori Apps also receive events from observed repos.
+
+Use `--ingest-interval SECONDS` to control the cycle time, or
+`--ingest-interval 0` to disable auto-ingest and rely on manual
+`mori automate ingest git` calls instead.
 
 ## Registering with the Daemon
 

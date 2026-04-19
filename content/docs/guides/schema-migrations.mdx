@@ -21,6 +21,11 @@ Each migration is **content-based**: it checks whether the expected fields are
 already present in your file. There is no version number to track. This makes
 migrations idempotent — running `migrate` twice is always safe.
 
+Each step is **parse-guarded**: after applying a change, the engine re-parses the
+result as Dhall. If the output doesn't parse, the step is automatically reverted
+and reported as `ApplyFailed`, so later migrations still run against un-corrupted
+text.
+
 ---
 
 ## Quick Start
@@ -31,8 +36,7 @@ migrations idempotent — running `migrate` twice is always safe.
 mori schema migrate
 ```
 
-If your `mori.dhall` is missing fields introduced in newer schema versions, you
-will see:
+If your `mori.dhall` needs updates, you will see:
 
 ```
 Schema Migration Check
@@ -40,10 +44,12 @@ Schema Migration Check
 
 Checking mori.dhall...
 
-  ✗ project.origin — required field
-    Default: Schema.Origin.Own
+  ✗ Project schema import is bare — rewrite to Schema.Project::{…}
+    Wraps the root record in the new record-completion form.
+  ✗ Package.apiSource — required field
+    Default: None Schema.ApiSource.Type
 
-1 migration(s) needed.
+2 migration(s) needed.
 
 Run `mori schema migrate --apply` to apply.
 Run `mori schema migrate --dry-run` to preview.
@@ -72,9 +78,10 @@ mori schema migrate --dry-run
 Dry run — no files will be modified.
 
 Would apply to mori.dhall:
-  + project.origin = Schema.Origin.Own
+  + rewrite-to-mk-form
+  + Package.apiSource = None Schema.ApiSource.Type
 
-1 change(s) would be applied.
+2 change(s) would be applied.
 ```
 
 ### Apply changes
@@ -86,9 +93,10 @@ mori schema migrate --apply
 ```
 Applying migrations to mori.dhall...
 
-  ✓ Added project.origin = Schema.Origin.Own
+  ✓ Added rewrite-to-mk-form
+  ✓ Added Package.apiSource = None Schema.ApiSource.Type
 
-1 change(s) applied.
+2 change(s) applied.
 Run `mori validate` to verify.
 ```
 
@@ -110,45 +118,70 @@ the current schema.
 
 ## Current Migrations
 
-### `add-project-origin`
+Migrations run in the order listed below. The mk-form rewrite runs first so that
+subsequent field-level migrations operate on a file already in `::` form.
 
-Adds the `origin` field to the `project` record. This field classifies project
-ownership for agent resolution — whether a project is your own (`Own`), a
-third-party wrapper (`ThirdParty`), a fork (`Fork`), or a vendored dependency
-(`Vendored`).
+### `rewrite-to-mk-form`
 
-**What it does:** inserts `, origin = Schema.Origin.Own` after the `owners`
-field in the `project` record.
+Rewrites a legacy bare-record `mori.dhall` into the `Schema.Project::{…}` form
+using Dhall's record-completion syntax. This is the most important migration:
+once your file uses `::`, additive schema changes are absorbed by
+`Schema.Project.default` and future field additions stop breaking your config.
 
-**Default value:** `Schema.Origin.Own` — appropriate for most projects you
-create and maintain yourself.
+**What it does:**
+
+1. Rewrites `in  {` → `in  Schema.Project::{` at the root.
+2. Wraps inner record literals (e.g. `project = { … }`, each entry in `repos = [ … ]` / `packages = [ … ]`) in the matching `Schema.<Record>::{…}` completion, eliding fields that equal the published default.
+3. Rewrites every `List Schema.<Record>` / `None Schema.<Record>` type annotation for refactored records to its `.Type`-qualified form (e.g. `List Schema.Repo` → `List Schema.Repo.Type`, `None Schema.ApiSource` → `None Schema.ApiSource.Type`).
 
 **Before:**
 
-```haskell
-{ project =
-  { name = "my-project"
-  , namespace = "default"
-  , ...
-  , owners = [] : List Text
-  }
-, ...
-}
+```dhall
+let Schema = https://raw.githubusercontent.com/shinzui/mori-schema/…/package.dhall sha256:…
+
+in  { project = { name = "my-project", … }
+    , repos = [ { name = "main", github = Some "myorg/my-project", … } ]
+    , packages = [ { name = "core", …, docs = [] : List Schema.DocRef } ]
+    , …
+    }
 ```
 
 **After:**
 
-```haskell
-{ project =
-  { name = "my-project"
-  , namespace = "default"
-  , ...
-  , owners = [] : List Text
-  , origin = Schema.Origin.Own
-  }
-, ...
-}
+```dhall
+let Schema = https://raw.githubusercontent.com/shinzui/mori-schema/…/package.dhall sha256:…
+
+in  Schema.Project::{ project = Schema.ProjectIdentity::{ name = "my-project", … }
+    , repos = [ Schema.Repo::{ name = "main", github = Some "myorg/my-project" } ]
+    , packages = [ Schema.Package::{ name = "core" } ]
+    , …
+    }
 ```
+
+See `mori help project-config` for the full mk-pattern reference with more
+examples, and the [Schema Guide](/docs/schema-guide) for details on which fields
+can be elided.
+
+### Field-level migrations
+
+These add required fields introduced in newer schema versions. Each inserts a
+sensible default after a known anchor field; if the field already exists, the
+migration is skipped.
+
+| Migration | Field | Record | Default |
+|-----------|-------|--------|---------|
+| `add-project-origin` | `origin` | Project | `Schema.Origin.Own` |
+| `add-project-skills` | `skills` | Project | `[] : List Schema.Skill.Type` |
+| `add-project-subagents` | `subagents` | Project | `[] : List Schema.Subagent.Type` |
+| `add-package-lifecycle` | `lifecycle` | Package | `None Schema.Lifecycle` |
+| `add-package-runtime-environment` | `runtimeEnvironment` | Package | `None Schema.RuntimeEnvironment` |
+| `add-package-api-source` | `apiSource` | Package | `None Schema.ApiSource.Type` |
+| `add-project-templates` | `templates` | Project | `[] : List Schema.SeihouTemplate.Type` |
+| `add-cookbook-entry-tags` | `tags` | CookbookEntry | `[] : List Text` |
+
+Package-level migrations (`add-package-*`) apply to **every** package in your
+file, not just the first one. The cookbook migration only runs when the target
+is `mori/cookbook.dhall`.
 
 ---
 
@@ -178,7 +211,13 @@ Use `--file` to target a specific config file:
 mori schema migrate --apply --file path/to/project/mori.dhall
 ```
 
-For bulk migration across many projects, combine with standard shell tools:
+For bulk migration across **every** project in your local registry, including
+extension files (`mori/cookbook.dhall`, `mori/tech-radar.dhall`), use
+[`mori registry upgrade-schema`](/docs/commands/registry#mori-registry-upgrade-schema)
+instead. It handles schema-import bumps, migration application, and per-project
+validation in a single pass, with `--dry-run`, `--filter`, and `--commit` flags.
+
+For ad-hoc multi-file runs, shell tools still work:
 
 ```bash
 find ~/projects -name "mori.dhall" -exec mori schema migrate --apply --file {} \;
@@ -190,9 +229,15 @@ find ~/projects -name "mori.dhall" -exec mori schema migrate --apply --file {} \
 
 ### Migration reports "ApplyFailed"
 
-The migration could not locate the anchor field it uses to determine insertion
-position. This can happen if your `mori.dhall` has unusual formatting or is
-missing the expected surrounding fields.
+Two common causes:
+
+1. **Anchor field not found.** The migration could not locate the anchor field
+   it uses to determine insertion position. This happens if your `mori.dhall`
+   has unusual formatting or is missing the expected surrounding fields.
+2. **Step produced unparseable Dhall.** The engine's parse guard detected that a
+   step's output doesn't parse. The step was automatically reverted and later
+   migrations still ran against the un-corrupted text. The error message
+   includes the Dhall parse error to help diagnose the issue.
 
 **Fix:** add the field manually following the guidance in the error message, then
 run `mori validate`.
@@ -208,3 +253,19 @@ the migration reports it as already applied regardless of where it appears.
 The migration inserts fields with sensible defaults, but if your schema import
 is outdated, the new field's type may not exist yet. Run `mori schema upgrade`
 first to update the schema import, then re-validate.
+
+### Type annotations still show `List Schema.Repo` without `.Type`
+
+If the `rewrite-to-mk-form` migration ran but some annotations still lack the
+`.Type` suffix, they reference a type that is not in the refactored-records list
+(e.g. `Lifecycle`, `RuntimeEnvironment`, `Dependency`). Those types are still
+bare in the upstream schema — no `.Type` suffix is needed.
+
+---
+
+## Related Documentation
+
+- `mori help project-config` — canonical mk-pattern reference with `Schema.X::{…}` examples
+- [Schema Guide](/docs/schema-guide) — how to write and maintain `mori.dhall`
+- [Getting Started](/docs/getting-started) — initial project setup
+- [`mori registry upgrade-schema`](/docs/commands/registry#mori-registry-upgrade-schema) — bulk upgrade across the local registry

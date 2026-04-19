@@ -67,30 +67,24 @@ Created mori/ directory
 
 If your repository has a `schema/` directory (e.g., you've cloned the mori schema), the scaffold uses typed imports:
 
-```haskell
+```dhall
 let Schema = ./schema/package.dhall
 
-in  { project =
-      { name = "payments"
+in  Schema.Project::{
+    , project = Schema.ProjectIdentity::{
+      , name = "payments"
       , namespace = "default"
       , type = Schema.PackageType.Application
-      , description = None Text
       , language = Schema.Language.Haskell
-      , lifecycle = Schema.Lifecycle.Active
-      , domains = [] : List Text
-      , owners = [] : List Text
-      , origin = Schema.Origin.Own
       }
-    , repos = [] : List Schema.Repo
-    , packages = [] : List Schema.Package
-    , bundles = [] : List Schema.PackageBundle
-    , dependencies = [] : List Text
-    , apis = [] : List Schema.Api
-    , agents = [] : List Schema.AgentHint
-    , standards = [] : List Text
-    , docs = [] : List Schema.DocRef
     }
 ```
+
+The scaffold uses Dhall's record-completion syntax (`Schema.Project::{ … }`) so
+that fields you don't set fall back to the schema's published defaults — adding
+new optional fields upstream is a no-op for existing configs. Empty list fields
+(`repos`, `packages`, `docs`, …) are omitted rather than spelled as
+`[] : List Schema.<Record>` because the default already supplies an empty list.
 
 Otherwise, the scaffold inlines the full Dhall type definitions.
 
@@ -98,57 +92,49 @@ Otherwise, the scaffold inlines the full Dhall type definitions.
 
 Edit `mori.dhall` to describe your project:
 
-```haskell
+```dhall
 let Schema = ./schema/package.dhall
 
-in  { project =
-      { name = "payments"
+in  Schema.Project::{
+    , project = Schema.ProjectIdentity::{
+      , name = "payments"
       , namespace = "acme"
       , type = Schema.PackageType.Application
       , description = Some "Core payments service"
       , language = Schema.Language.Haskell
-      , lifecycle = Schema.Lifecycle.Active
       , domains = [ "Payments", "Billing" ]
       , owners = [ "fintech-platform" ]
-      , origin = Schema.Origin.Own
       }
     , repos =
-      [ { name = "main"
-        , github = Some "acme/payments"
-        , gitlab = None Text
-        , git = None Text
-        , localPath = None Text
-        }
+      [ Schema.Repo::{ name = "main", github = Some "acme/payments" }
       ]
     , packages =
-      [ { name = "payments-core"
+      [ Schema.Package::{
+        , name = "payments-core"
         , type = Schema.PackageType.Library
         , language = Schema.Language.Haskell
         , path = Some "payments-core"
         , description = Some "Core domain logic"
         , visibility = Schema.Visibility.Internal
-        , runtime = { deployable = False, exposesApi = False }
         , dependencies =
           [ Schema.Dependency.ByName "effectful"
           , Schema.Dependency.ByName "aeson"
           ]
-        , docs = [] : List Schema.DocRef
-        , config = [] : List Schema.ConfigItem
         }
-      , { name = "payments-service"
+      , Schema.Package::{
+        , name = "payments-service"
         , type = Schema.PackageType.Application
         , language = Schema.Language.Haskell
         , path = Some "payments-service"
         , description = Some "HTTP API server"
         , visibility = Schema.Visibility.Internal
-        , runtime = { deployable = True, exposesApi = True }
+        , runtime = Schema.Runtime::{ deployable = True, exposesApi = True }
         , dependencies =
           [ Schema.Dependency.ByName "payments-core" ]
-        , docs = [] : List Schema.DocRef
         , config =
-          [ { key = "DATABASE_URL"
+          [ Schema.ConfigItem::{
+            , key = "DATABASE_URL"
             , type = Schema.ConfigValueType.Url
-            , required = True
             , description = Some "PostgreSQL connection string"
             , sourceHint = Some (Schema.ConfigSourceHint.EnvVar "DATABASE_URL")
             , example = Some "postgres://localhost:5432/payments"
@@ -156,12 +142,7 @@ in  { project =
           ]
         }
       ]
-    , bundles = [] : List Schema.PackageBundle
     , dependencies = [ "effectful", "aeson", "hasql" ]
-    , apis = [] : List Schema.Api
-    , agents = [] : List Schema.AgentHint
-    , standards = [] : List Text
-    , docs = [] : List Schema.DocRef
     }
 ```
 
@@ -772,54 +753,42 @@ mori doctor
 
 Edit `mori.dhall`:
 
-```haskell
+```dhall
 let Schema = ./schema/package.dhall
 
-in  { project =
-      { name = "payments"
+in  Schema.Project::{
+    , project = Schema.ProjectIdentity::{
+      , name = "payments"
       , namespace = "acme"
       , type = Schema.PackageType.Application
       , description = Some "Core payments service"
       , language = Schema.Language.Haskell
-      , lifecycle = Schema.Lifecycle.Active
       , domains = [ "Payments" ]
       , owners = [ "fintech-platform" ]
-      , origin = Schema.Origin.Own
       }
     , repos =
-      [ { name = "main"
-        , github = Some "acme/payments"
-        , gitlab = None Text
-        , git = None Text
-        , localPath = None Text
-        }
+      [ Schema.Repo::{ name = "main", github = Some "acme/payments" }
       ]
     , packages =
-      [ { name = "payments-core"
+      [ Schema.Package::{
+        , name = "payments-core"
         , type = Schema.PackageType.Library
         , language = Schema.Language.Haskell
         , path = Some "payments-core"
         , description = Some "Core domain logic"
         , visibility = Schema.Visibility.Internal
-        , runtime = { deployable = False, exposesApi = False }
         , dependencies = [ Schema.Dependency.ByName "aeson" ]
-        , docs = [] : List Schema.DocRef
-        , config = [] : List Schema.ConfigItem
         }
       ]
-    , bundles = [] : List Schema.PackageBundle
     , dependencies = [ "aeson" ]
-    , apis = [] : List Schema.Api
     , agents =
-      [ { role = "backend"
+      [ Schema.AgentHint::{
+        , role = "backend"
         , description = Some "Backend development"
         , includePaths = [ "payments-core/" ]
-        , excludePaths = [] : List Text
         , relatedPackages = [ "payments-core" ]
         }
       ]
-    , standards = [] : List Text
-    , docs = [] : List Schema.DocRef
     }
 ```
 

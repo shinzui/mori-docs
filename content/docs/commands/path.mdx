@@ -12,6 +12,7 @@ Print local path for a project with optional package or doc subpath.
 mori path <project>
 mori path <project> --package <pkg>
 mori path <project> --doc <doc-key>
+mori path <project> --copy
 ```
 
 Supports both bare names and namespace-qualified names (`namespace/name`).
@@ -22,6 +23,7 @@ Supports both bare names and namespace-qualified names (`namespace/name`).
 |------|-------------|
 | `--package`, `-p` | Print path to a package (interactive fzf selection if name omitted) |
 | `--doc`, `-d` | Print location of a doc (interactive fzf selection if key omitted) |
+| `--copy`, `-c` | Copy the resolved path to the system clipboard (`pbcopy` on macOS, `xclip` on Linux) in addition to printing it |
 
 ## Behavior
 

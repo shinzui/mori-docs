@@ -69,70 +69,70 @@ streamly-project/
 
 #### `streamly-project/mori.dhall`
 
-```haskell
-{ project =
-    { name = "streamly-project"
-    , namespace = "acme"
-    , type = < Library >
-    , description = Some "Streamly ecosystem with curated docs"
-    , language = < Haskell >
-    , lifecycle = < Active >
-    , domains = [ "Streaming" ]
-    , owners = [ "platform-team" ]
+```dhall
+let Schema = ./schema/package.dhall
+
+in  Schema.Project::{
+    , project = Schema.ProjectIdentity::{
+      , name = "streamly-project"
+      , namespace = "acme"
+      , type = Schema.PackageType.Library
+      , description = Some "Streamly ecosystem with curated docs"
+      , language = Schema.Language.Haskell
+      , domains = [ "Streaming" ]
+      , owners = [ "platform-team" ]
+      , origin = Schema.Origin.ThirdParty
+      }
+    , packages =
+      [ Schema.Package::{
+        , name = "streamly"
+        , type = Schema.PackageType.Library
+        , language = Schema.Language.Haskell
+        , path = Some "./streamly"
+        , description = Some "Streaming library"
+        , visibility = Schema.Visibility.Public
+        }
+      , Schema.Package::{
+        , name = "streamly-core"
+        , type = Schema.PackageType.Library
+        , language = Schema.Language.Haskell
+        , path = Some "./streamly-core"
+        , description = Some "Core streaming primitives"
+        , visibility = Schema.Visibility.Public
+        }
+      ]
+    , bundles =
+      [ Schema.PackageBundle::{
+        , name = "streamly"
+        , description = Some "Streamly + streamly-core"
+        , packages = [ "streamly", "streamly-core" ]
+        , primary = "streamly"
+        }
+      ]
+    , docs =
+      [ Schema.DocRef::{
+        , key = "folds-guide"
+        , kind = Schema.DocKind.Guide
+        , audience = Schema.DocAudience.User
+        , description = Some "Deep dive into Streamly folds"
+        , location = Schema.DocLocation.LocalFile "./docs/folds-guide.md"
+        }
+      , Schema.DocRef::{
+        , key = "streaming-patterns"
+        , kind = Schema.DocKind.Cookbook
+        , audience = Schema.DocAudience.User
+        , description = Some "Common streaming patterns"
+        , location = Schema.DocLocation.LocalFile "./docs/streaming-patterns.md"
+        }
+      , Schema.DocRef::{
+        , key = "upstream-docs"
+        , kind = Schema.DocKind.Reference
+        , audience = Schema.DocAudience.User
+        , description = Some "Streamly haddocks"
+        , location = Schema.DocLocation.RepoPath "./streamly/docs"
+        }
+      ]
     }
-
-, repos = []
-
-, packages =
-    [ { name = "streamly"
-      , type = < Library >, language = < Haskell >
-      , path = Some "./streamly"
-      , description = Some "Streaming library"
-      , visibility = < Public >
-      , runtime = { deployable = False, exposesApi = False }
-      , dependencies = [], docs = [], config = []
-      }
-    , { name = "streamly-core"
-      , type = < Library >, language = < Haskell >
-      , path = Some "./streamly-core"
-      , description = Some "Core streaming primitives"
-      , visibility = < Public >
-      , runtime = { deployable = False, exposesApi = False }
-      , dependencies = [], docs = [], config = []
-      }
-    ]
-
-, bundles =
-    [ { name = "streamly"
-      , description = Some "Streamly + streamly-core"
-      , packages = [ "streamly", "streamly-core" ]
-      , primary = "streamly"
-      }
-    ]
-
-, dependencies = []
-, apis = []
-, agents = []
-, standards = []
-
-, docs =
-    [ { key = "folds-guide"
-      , kind = < Guide >, audience = < User >
-      , description = Some "Deep dive into Streamly folds"
-      , location = < LocalFile "./docs/folds-guide.md" >
-      }
-    , { key = "streaming-patterns"
-      , kind = < Cookbook >, audience = < User >
-      , description = Some "Common streaming patterns"
-      , location = < LocalFile "./docs/streaming-patterns.md" >
-      }
-    , { key = "upstream-docs"
-      , kind = < Reference >, audience = < User >
-      , description = Some "Streamly haddocks"
-      , location = < RepoPath "./streamly/docs" >
-      }
-    ]
-}
 ```
 
 #### Register with Local Registry
@@ -465,57 +465,51 @@ cd ~/oss/hasql-project && mori register --local
 
 ### Step 2: Service Declares Dependencies
 
-```haskell
+```dhall
 -- payment-service/mori.dhall
+let Schema = ./schema/package.dhall
 
-{ project =
-    { name = "payment-service"
-    , namespace = "acme"
-    , type = < Application >
-    , description = Some "Core payment processing service"
-    , language = < Haskell >
-    , lifecycle = < Active >
-    , domains = [ "Payments" ]
-    , owners = [ "fintech-platform" ]
+in  Schema.Project::{
+    , project = Schema.ProjectIdentity::{
+      , name = "payment-service"
+      , namespace = "acme"
+      , type = Schema.PackageType.Application
+      , description = Some "Core payment processing service"
+      , language = Schema.Language.Haskell
+      , domains = [ "Payments" ]
+      , owners = [ "fintech-platform" ]
+      }
+    , dependencies =
+      [ "streamly"      -- resolved via registry
+      , "effectful"     -- resolved via registry
+      , "hasql"         -- resolved via registry
+      ]
+    , agents =
+      [ Schema.AgentHint::{
+        , role = "backend-refactor"
+        , description = Some "Refactor Haskell service code"
+        , includePaths = [ "src" ]
+        , excludePaths = [ "dist-newstyle" ]
+        }
+      ]
+    , standards = [ "backend-architecture", "haskell-conventions" ]
+    , docs =
+      [ Schema.DocRef::{
+        , key = "db-patterns"
+        , kind = Schema.DocKind.Cookbook
+        , audience = Schema.DocAudience.Internal
+        , description = Some "Database access patterns"
+        , location = Schema.DocLocation.LocalFile "docs/db-patterns.md"
+        }
+      , Schema.DocRef::{
+        , key = "effect-patterns"
+        , kind = Schema.DocKind.Cookbook
+        , audience = Schema.DocAudience.Internal
+        , description = Some "Effectful patterns"
+        , location = Schema.DocLocation.LocalFile "docs/effects.md"
+        }
+      ]
     }
-
-, repos = []
-
-, packages = []
-  -- For simple single-package services, the project-level fields suffice.
-
-, bundles = []
-
-, dependencies =
-    [ "streamly"      -- resolved via registry
-    , "effectful"     -- resolved via registry
-    , "hasql"         -- resolved via registry
-    ]
-
-, apis = []
-
-, agents =
-    [ { role = "backend-refactor"
-      , description = Some "Refactor Haskell service code"
-      , includePaths = [ "src" ]
-      , excludePaths = [ "dist-newstyle" ]
-      , relatedPackages = []
-      }
-    ]
-
-, standards = [ "backend-architecture", "haskell-conventions" ]
-
-, docs =
-    [ { key = "db-patterns", kind = < Cookbook >, audience = < Internal >
-      , description = Some "Database access patterns"
-      , location = < LocalFile "docs/db-patterns.md" >
-      }
-    , { key = "effect-patterns", kind = < Cookbook >, audience = < Internal >
-      , description = Some "Effectful patterns"
-      , location = < LocalFile "docs/effects.md" >
-      }
-    ]
-}
 ```
 
 Note: No `localPath` declarations for dependencies. The registry resolves them. Cookbooks are modeled as `docs` entries with `kind = Cookbook`.

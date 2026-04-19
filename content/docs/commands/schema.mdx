@@ -40,13 +40,15 @@ mori schema print --category automation
 
 ## `mori schema migrate`
 
-Check or apply schema migrations to an existing `mori.dhall`.
+Check or apply schema migrations to `mori.dhall` or a known extension file (`mori/cookbook.dhall`, `mori/tech-radar.dhall`, `mori.automation.dhall`). The target's file kind is detected by path, and the appropriate migration pipeline is applied — the mk-form rewrite runs first so subsequent field-level migrations operate on a file already in `Schema.<Record>::{…}` form.
 
 ```bash
 mori schema migrate
 mori schema migrate --apply
 mori schema migrate --dry-run
 mori schema migrate --file path/to/mori.dhall
+mori schema migrate --apply --file mori/cookbook.dhall
+mori schema migrate --apply --file mori/tech-radar.dhall
 ```
 
 ### Flags
@@ -57,4 +59,4 @@ mori schema migrate --file path/to/mori.dhall
 | `--dry-run` | Preview changes without writing |
 | `--file` | Target file (default: `mori.dhall`) |
 
-See [Schema Migrations](/docs/guides/schema-migrations) for details.
+For bulk migration across every project in the local registry (including extension files), use [`mori registry upgrade-schema`](/docs/commands/registry#mori-registry-upgrade-schema). See [Schema Migrations](/docs/guides/schema-migrations) for per-migration details and the `rewrite-to-mk-form` migration.

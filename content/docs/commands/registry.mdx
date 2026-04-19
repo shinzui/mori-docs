@@ -16,7 +16,10 @@ mori registry list --json
 mori registry list --type library
 mori registry list --origin ThirdParty
 mori registry list --namespace shinzui
+mori registry list --domain Automation
+mori registry list --group my-group
 mori registry list --docs-only
+mori registry list --observed
 ```
 
 ### Flags
@@ -27,7 +30,10 @@ mori registry list --docs-only
 | `--type` | Filter by project type |
 | `--origin` | Filter by origin (`Own`, `ThirdParty`, `Fork`, `Vendored`) |
 | `--namespace`, `-n` | Filter by namespace |
+| `--domain` | Filter by domain tag (repeatable; AND semantics, case-insensitive) |
+| `--group` | Filter by group membership (single value; see `mori registry group`) |
 | `--docs-only` | Show only docs-only projects (no packages) |
+| `--observed` | Show only projects with a linked repository (`repo_id` set by `mori observe`) |
 
 ## `mori registry show`
 
@@ -102,6 +108,80 @@ mori registry reregister --namespace shinzui
 | `--dry-run` | Show what would be re-registered without doing it |
 | `--type` | Filter by project type |
 | `--namespace`, `-n` | Filter by namespace |
+
+## `mori registry templates`
+
+Browse seihou templates across the registry at the *template* grain — one row per template. Answers cross-project questions like "which projects ship a `haskell`-tagged template?" without scrolling through per-project `show --full` output.
+
+```bash
+mori registry templates list
+mori registry templates list --json
+mori registry templates list --tag haskell
+mori registry templates list -n shinzui
+mori registry templates show <namespace>/<name>/<template>
+mori registry templates show <namespace>/<name>/<template> --json
+```
+
+### Flags (`list`)
+
+| Flag | Description |
+|------|-------------|
+| `--json` | JSON output |
+| `--tag TAG` | Keep templates whose `tags` list contains `TAG` (exact match) |
+| `--namespace`, `-n` | Keep templates whose project is in the given namespace |
+
+`templates show` takes a three-segment reference `<namespace>/<name>/<template>`. The parser requires exactly three non-empty segments and reports a descriptive error otherwise. Non-existent templates exit non-zero with `Template not found:` on stderr.
+
+## `mori registry upgrade-schema`
+
+Walk the registry and upgrade every registered local project whose `schema_hash` diverges from the CLI's pinned schema version. Per project, the driver runs `mori schema upgrade`, then `mori schema migrate --apply` on `mori.dhall` and any known extension files (`mori/cookbook.dhall`, `mori/tech-radar.dhall`), then `mori validate`. One project's failure does not abort the others.
+
+```bash
+mori registry upgrade-schema
+mori registry upgrade-schema --dry-run
+mori registry upgrade-schema --filter "acme/*"
+mori registry upgrade-schema --all
+mori registry upgrade-schema --commit
+mori registry upgrade-schema --allow-dirty
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--dry-run` | Report what would change without touching any files |
+| `--filter GLOB` | Only act on projects whose `<namespace>/<name>` matches `GLOB` (supports `*` and `?`) |
+| `--all` | Include projects already on the current schema (default: only stale) |
+| `--commit` | Create a git commit in each upgraded project (default: leave changes unstaged) |
+| `--allow-dirty` | Upgrade projects even if their working tree has uncommitted changes |
+
+Projects without a `localPath`, or whose path is missing on disk, are reported as skipped. See [Schema Migrations](/docs/guides/schema-migrations) for the per-project migration semantics.
+
+## `mori registry group`
+
+Manage first-class registry **groups** — named, event-sourced collections of projects with optional attached packages, docs, and JSON extension data. Unlike domain tags, groups have their own identity: they can be renamed without re-registering members, and they carry their own metadata.
+
+```bash
+mori registry group create <name> [--description TEXT]
+mori registry group list [--json]
+mori registry group show <name> [--json]
+mori registry group describe <name> [DESCRIPTION]
+mori registry group rename <old> <new>
+mori registry group delete <name>
+
+mori registry group add <name> <project>...
+mori registry group remove <name> <project>...
+mori registry group members <name> [--json]
+
+mori registry group attach-package <name> <project:package>
+mori registry group detach-package <name> <project:package>
+mori registry group attach-doc <name> <project> <doc-path>
+mori registry group detach-doc <name> <project> <doc-path>
+mori registry group set-extension <name> <key> <json-value>
+mori registry group unset-extension <name> <key>
+```
+
+Group membership shows up in `registry show` (as a `Groups:` line / JSON `groups` array) and is filterable via `registry list --group <name>`.
 
 ## `mori registry remove`
 

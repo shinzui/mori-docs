@@ -87,18 +87,21 @@ with adoption levels (Adopt, Trial, Assess, Hold) and optional alternatives.
 
 Create `mori/tech-radar.dhall` in your project:
 
-```haskell
+```dhall
 let TechRadar = ./schema/extensions/tech-radar/package.dhall
 
-in  { recommendations =
-      [ { package = "effectful"
+in  TechRadar.TechRadar::{
+    , recommendations =
+      [ TechRadar.Recommendation::{
+        , package = "effectful"
         , language = TechRadar.Language.Haskell
         , category = TechRadar.Category.Effects
         , level = TechRadar.AdoptionLevel.Adopt
         , reason = Some "Production-ready, good performance, extensible"
         , alternatives = [ "polysemy", "fused-effects" ]
         }
-      , { package = "aeson"
+      , TechRadar.Recommendation::{
+        , package = "aeson"
         , language = TechRadar.Language.Haskell
         , category = TechRadar.Category.Serialization
         , level = TechRadar.AdoptionLevel.Hold
@@ -108,6 +111,11 @@ in  { recommendations =
       ]
     }
 ```
+
+Each extension ships a `package.dhall` re-export with the same `{ Input, Type,
+default, mk }` bundle shape as the core schema, so the same record-completion
+idiom (`TechRadar.Recommendation::{ … }`) applies. Fields that equal the
+published default can be elided.
 
 ### List recommendations
 
@@ -172,11 +180,13 @@ reading every file.
 
 Create `mori/cookbook.dhall` in your project:
 
-```haskell
+```dhall
 let Cookbook = ./schema/extensions/cookbook/package.dhall
 
-in  { entries =
-      [ { key = "hasql-queries"
+in  Cookbook.CookbookCatalog::{
+    , entries =
+      [ Cookbook.CookbookEntry::{
+        , key = "hasql-queries"
         , title = "How to Write Hasql Queries"
         , contentType = Cookbook.ContentType.SampleCode
         , topics = [ Cookbook.Topic.Database ]
@@ -185,8 +195,10 @@ in  { entries =
         , audience = Cookbook.Audience.Module
         , location = Cookbook.Location.LocalFile "docs/hasql-queries.md"
         , description = Some "Query patterns, connection management, transactions"
+        , tags = [ "async", "performance-critical" ]
         }
-      , { key = "effectful-patterns"
+      , Cookbook.CookbookEntry::{
+        , key = "effectful-patterns"
         , title = "Effectful Patterns"
         , contentType = Cookbook.ContentType.Pattern
         , topics = [ Cookbook.Topic.Effects ]
@@ -199,6 +211,17 @@ in  { entries =
       ]
     }
 ```
+
+**New in 2026-04:** the optional `tags` field (`List Text`) captures
+cross-cutting tags independent of the fixed `Topic` enum (e.g., `"async"`,
+`"performance-critical"`). Existing catalogs can be brought forward with:
+
+```bash
+mori schema migrate --apply --file mori/cookbook.dhall
+```
+
+See [Schema Migrations](/docs/guides/schema-migrations) for how the
+per-extension migration pipeline handles additive field changes.
 
 ### List entries
 
