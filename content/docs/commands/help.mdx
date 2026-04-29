@@ -9,15 +9,28 @@ Show help topics with detailed reference information. Topics are grouped by audi
 ```bash
 mori help
 mori help <topic>
+mori help <topic> --width 100
 ```
+
+## Flags
+
+| Flag | Description |
+|------|-------------|
+| `--width N` | Wrap output at N columns (default: terminal width, capped at 140 for readability). Affects both direct topic rendering and the fzf preview. |
 
 ## Available Topics
 
-### Getting Started
+### Project & Dependencies
 
 | Topic | Description |
 |-------|-------------|
 | `project-config` | Root Project type structure and fields |
+| `status` | Project health at a glance: schema pins, registry, observation |
+| `registry-domains` | Tagging and filtering projects by business area |
+| `registry-groups` | First-class project groups (members, packages, docs, extensions) |
+| `registry-templates` | Browse seihou templates across the registry (list, show, filter) |
+| `registry-exec` | Run a command in every registered project, with `--group` filtering |
+| `seihou-templates` | First-class seihou scaffold catalog (declaration, auto-discovery, filter) |
 | `corpus-learning` | Leverage corpus projects for debugging, API discovery, and best practices |
 | `aliases` | How to configure and use command aliases |
 
@@ -29,6 +42,8 @@ mori help <topic>
 | `schema-records` | All Dhall record types with fields |
 | `schema-modification` | How to edit mori.dhall (Dhall syntax guide) |
 | `extensions` | Dynamic schema extensions (define, query, add new) |
+| `cookbook` | Cookbook extension for code examples, patterns, and guides |
+| `checklist` | Checklist extension for structured procedures (install, deploy, monitor, …) |
 
 ### Automation
 
@@ -37,11 +52,14 @@ mori help <topic>
 | `automation-config` | Automation type structure (events, reactions, policies) |
 | `reaction-history` | Reaction execution history (list, show, filtering) |
 | `cross-repo-automation` | Cross-repo signals, workflows, and tracing |
+| `trailer-matching` | Trailer-based matching and event-data interpolation |
 
 ### Operations
 
 | Topic | Description |
 |-------|-------------|
 | `automation-daemon` | Multi-repo automation daemon usage and architecture |
+| `kit` | Managing Claude Code skills and subagents (install, update, status) |
+| `apps` | Mori Apps: webhook delivery to external applications |
 
 Use `mori <command> --help` for command-specific help.

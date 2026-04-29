@@ -10,6 +10,7 @@ Register the current project in the local registry.
 mori register
 mori register --local
 mori register --dir /path/to/project
+mori register --no-seihou-discovery
 ```
 
 ## Behavior
@@ -27,3 +28,8 @@ mori register --dir /path/to/project
 |------|-------------|
 | `--local` | Register in local registry only |
 | `--dir` | Project directory (default: current directory) |
+| `--no-seihou-discovery` | Skip the auto-discovery probe for seihou template manifests. Use when the project root holds a `module.dhall` that isn't a seihou module instance (e.g. a seihou type definition file) and the probe produces a noisy "Missing record field" warning every run |
+
+Internal callers (`mori observe`, `mori automate register`, `mori registry
+reregister`) always run the discovery probe — `--no-seihou-discovery` only
+applies to direct invocations of `mori register`.

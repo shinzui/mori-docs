@@ -90,6 +90,43 @@ mori registry docs <project> --json
 | `--audience` | Filter by audience (`module`, `user`, `api`, `internal`) |
 | `--package` | Filter by package name |
 
+## `mori registry exec`
+
+Run the same command in every project registered in the local registry. Each invocation has its working directory set to the project's local path, so relative arguments behave as if you `cd`'d to the project yourself. Anything after `--` is passed verbatim — mori does not wrap it in `nix develop` and does not interpret it as a shell command.
+
+```bash
+mori registry exec -- git fetch --all
+mori registry exec --group platform -- just lint
+mori registry exec --namespace shinzui -- bun outdated
+mori registry exec --type library -- cabal build all
+mori registry exec --origin own -- just check
+mori registry exec --filter "shinzui/*-kit" -- just lint
+mori registry exec --jobs 4 -- just check
+mori registry exec --fail-fast -- just check
+mori registry exec --dry-run -- anything
+mori registry exec --json -- git rev-parse HEAD | jq '.[0]'
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--group NAME` | Only visit projects that are members of the named registry group |
+| `--namespace NS`, `-n` | Filter by namespace (mirrors `registry list`) |
+| `--type T` | Filter by project type |
+| `--origin O` | Filter by origin (`own`, `third_party`, etc.) |
+| `--filter GLOB` | Match qualified `<namespace>/<name>` (`*` and `?` wildcards) |
+| `--jobs N` | Run up to N project commands concurrently (default 1, streaming) |
+| `--fail-fast` | Abort at the first non-zero project; remaining projects report `not-run` |
+| `--dry-run` | Print the projects the filter set would visit without spawning the command |
+| `--json` | Emit a JSON array of `{project, path, outcome, …}` objects to stdout |
+
+Filters compose: `--group platform --namespace shinzui` visits only the intersection. In parallel mode (`--jobs N`), per-project output blocks are deferred and printed in input order; the summary table follows. `--fail-fast` lets in-flight workers finish but short-circuits unstarted projects to `not-run`.
+
+After every project has been visited, mori prints a summary table with status, exit code, and duration. If any project's command exited non-zero, a "failed" block follows the summary with the tail of each failure's stderr inlined. The mori process itself exits 0 if every executed command succeeded, 1 if any failed — so `mori registry exec -- just lint && echo all green` works as expected.
+
+Projects without a local path, or whose path no longer exists on disk, are reported as `skipped` and do not affect the exit code.
+
 ## `mori registry reregister`
 
 Force re-register all registered projects.

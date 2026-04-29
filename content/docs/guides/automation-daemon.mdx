@@ -72,13 +72,20 @@ Use `--ingest-interval SECONDS` to control the cycle time, or
 
 ## Registering with the Daemon
 
-Use the `automate register` family of commands to manage daemon registration:
+A single `mori automate register` is enough to make a repo receive signals.
+The command both registers the automation config with the daemon **and**
+emits the `ProjectRepoLinked` event that records the repo in the projects
+read model. There is no longer a separate `mori observe` prerequisite.
 
 ```bash
 # Register current repo's automation config
 mori automate register
 
-# Update after editing config
+# Register a different repo (path is authoritative — see below)
+mori automate register --path /path/to/repo
+
+# Update after editing config (also heals missing mori.projects rows from
+# pre-EP-4 register flows by re-emitting ProjectRepoLinked)
 mori automate update
 
 # Remove registration
@@ -91,16 +98,46 @@ mori automate list
 mori automate migrate
 ```
 
+`--path <dir>` is authoritative: the config file is read from `<dir>` (so
+`--config` resolves relative to it) and the repo TypeID is derived from
+`<dir>`. This makes it impossible to silently register repoA's config
+against repoB's id by running from the wrong working directory. The same
+rule applies to `update`, `deregister`, `run`, and `ingest git`.
+
+Use `mori observe` only when you want a project's identity recorded for
+auto-ingest **without** attaching an automation config — it remains
+idempotent against an already-registered repo.
+
 ## Prerequisites
 
-- Repos must be registered with `mori register` so they appear
-  in the project registry.
-- Each repo needs a `mori/repo-id` file (created automatically by
-  `mori automate ingest`).
+- Each repo needs a `mori.dhall` (project identity). If missing,
+  `mori automate register` exits with a clear message pointing at
+  `mori init`.
 - Each repo needs a `mori.automation.dhall` config defining its event
   selectors and reactions.
+- Each repo needs a `flake.nix` at the root with a default devShell — see
+  [Nix devshell requirement](#nix-devshell-requirement) below.
 - Automation config must be registered with `mori automate register`
   (or use `mori automate run --register` for single-repo mode).
+
+## Nix devshell requirement
+
+When the daemon runs under launchd (e.g. via `com.shinzui.mori-automate`),
+the inherited `PATH` is minimal — typically `/usr/bin:/bin:/usr/sbin:/sbin`.
+That path does not include `~/.nix-profile/bin`, `/nix/store/…`, or any
+other directory where a nix-managed binary might live, so spawning `just`,
+`bun`, `direnv`, etc. directly would fail with `posix_spawnp: does not exist`.
+
+Mori automatically wraps every `RunCommand` in
+`nix develop --command <command> <args…>`, so nix-installed binaries are
+found through the **target** repo's devShell rather than through launchd's
+PATH. You do not need to wrap commands in `/bin/bash -lc "cd … && …"`.
+
+If a reaction fails with `error: flake … not found` or `error: unable to
+find attribute 'default' in devShells`, the target repo is missing a
+`flake.nix` with a default devShell. See the [Automation Configuration
+concept](/docs/concepts/automation-configuration#nix-devshell-requirement)
+for the minimal flake template.
 
 ## Comparison with `mori automate run`
 

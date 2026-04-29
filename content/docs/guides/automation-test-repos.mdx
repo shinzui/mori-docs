@@ -1,0 +1,151 @@
+---
+title: Automation Test Repos
+description: Three persistent fixture repos that exercise every cross-repo automation scenario
+icon: TestTube
+---
+
+When you're learning the automation engine — or trying to reproduce a bug —
+you usually need a small graph of cooperating repos: one publisher that
+emits a signal, and at least one consumer that reacts to it. The mori repo
+ships a Justfile target that bootstraps three persistent fixture repos for
+exactly this purpose, so you don't have to scaffold them by hand each time.
+
+## Why these repos exist
+
+Every time someone reproduced an automation bug before, they built a fresh
+git repo in `/tmp`, wrote `mori.dhall` and `mori.automation.dhall` by hand,
+added a `flake.nix`, made a commit or two, ran `mori observe` and
+`mori automate register`, then tore it all down. The waste was not disk
+space — it was cognitive: the same scaffolding, every time, with subtle
+drift between runs. It was also risky: one slip of the
+`MORI_PG_CONNECTION_STRING` and the experiment landed in the global
+registry at `~/.mori/db`, polluting a cluster shared by every mori-aware
+project on the machine.
+
+The three repos described here are re-created from a single idempotent
+script that refuses to run against the global DB, so "I accidentally
+registered a toy repo into production" is mechanically impossible when you
+follow the recipes below.
+
+## The three repos
+
+After running `just bootstrap-test-repos` inside `nix develop`, three
+sibling directories appear next to your `mori/` checkout:
+
+```
+<workspace>/
+├── mori/                       # this checkout
+├── mori-test-source/           # publisher
+├── mori-test-target/           # happy-path consumer
+└── mori-test-target-broken/    # failure-path consumer
+```
+
+Each is a standalone git repo (not a submodule, not a subdirectory of
+`mori/`) with its own initial commit.
+
+### `mori-test-source`
+
+Publishes the signal graph. Declares a package `openapi-schema` in its
+`mori.dhall`. Its `mori.automation.dhall` watches `openapi.json` on `master`
+(a `ChangesetSelector` with `branches = [ "master" ]`) and, when matched,
+emits an `OpenApiSchemaChanged` signal with `targets = [ "*dependents*" ]`
+so the dispatcher expands dynamically.
+
+| File | Purpose |
+|---|---|
+| `flake.nix` | devShell with `just`, `coreutils` |
+| `mori.dhall` | identity + `openapi-schema` package |
+| `mori.automation.dhall` | `ChangesetSelector` → `SignalAction` |
+| `openapi.json` | tiny stub OpenAPI doc (touched to trigger ingest) |
+| `justfile` | `default` help task |
+| `.mori-test-fixture` | bootstrap marker (do not delete) |
+
+### `mori-test-target`
+
+Happy-path consumer. Its `mori.dhall` declares a project-level dependency on
+`openapi-schema`, which makes `getDependentProjectNames("mori-test-source")`
+return this repo and lets `*dependents*` expansion resolve end-to-end. Its
+`mori.automation.dhall` defines a `SignalSelector` with
+`signalTypes = [ "OpenApiSchemaChanged" ]` and
+`sourceProjects = [ "shinzui/mori-test-source" ]`, and a `RunCommand` that
+runs `just rebuild`. The `justfile` defines `rebuild` as `@echo rebuilt`,
+and the devShell includes `just`, so the `RunCommand` succeeds when wrapped
+in `nix develop --command`.
+
+### `mori-test-target-broken`
+
+Failure-path consumer. Same shape as `mori-test-target` but its
+`RunCommand` invokes `nonexistent-binary-xyz`, which is absent from the
+devShell's `nativeBuildInputs`. Every reaction therefore fails — exactly
+the path you need to prove that a failed `RunCommand` is recorded as
+`failed` and does not halt the subscription.
+
+## Creating them
+
+From inside the mori devshell (`cd mori && nix develop`):
+
+```bash
+just bootstrap-test-repos
+```
+
+Re-running is idempotent: each repo is skipped if the marker file
+`.mori-test-fixture` is present and the git repo has at least one commit.
+
+## Dev database only
+
+The bootstrap script enforces that manual repros only target the local dev
+cluster. `nix develop` inside `mori/` exports
+`MORI_PG_CONNECTION_STRING=postgresql:///mori?host=$PWD/db`, which is the
+dev cluster living under `mori/db/`. The global cluster is at
+`$HOME/.mori/db` — a different cluster shared across every mori-aware
+project on the host.
+
+Before doing any filesystem or git work, `bootstrap-test-repos.sh` checks:
+
+1. `$MORI_PG_CONNECTION_STRING` must be set. Exits 1 if not.
+2. `$MORI_PG_CONNECTION_STRING` must not point at `$HOME/.mori/db`. Exits 1
+   if it does.
+
+Both checks happen before any side effects, so the guard is safe to trust.
+
+## What each repo is good for
+
+| Scenario | Use these repos |
+|---|---|
+| Branch / path filter on changeset events | `mori-test-source` (touch `openapi.json` on `master` vs. a feature branch) |
+| Signal `sourceProject` attribution | `mori-test-source` + `mori-test-target` (full publisher → consumer dispatch; inspect `mori workflow list` and the `SOURCE` column) |
+| `--path` authority in `automate` CLI | any fixture; pass `--path` pointing at one repo while CWD is another and confirm the config on disk at `<path>` is what gets read |
+| Register-implies-observe | `mori-test-target` (run `mori automate register --path .` fresh, no prior `observe`; confirm `ProjectRepoLinked` fires and `*dependents*` expansion resolves) |
+| Nix devshell wrapping | `mori-test-target` (register, trigger the signal, confirm `just rebuild` runs through `nix develop --command`) |
+| Executor fault tolerance | `mori-test-target-broken` (register, trigger the signal, confirm the reaction is recorded as failed with stderr captured and the subscription advances) |
+
+The bootstrap script never calls `mori observe`, `mori automate register`,
+or `mori automate ingest git` itself — different scenarios need different
+starting registration states, so you stay in control of the order.
+
+## Cleaning up
+
+To wipe and re-create the three repos:
+
+```bash
+just reset-test-repos
+```
+
+This is always safe. The fixture directories contain no irreplaceable
+state — everything in them is derived from `scripts/bootstrap-test-repos.sh`.
+Data you do want to preserve across resets lives in the mori dev database
+at `mori/db/`, which `reset-test-repos` does not touch.
+
+## Schema pin tracking
+
+The bootstrap script reads the schema URL and `sha256:` hash from
+`mori/mori.dhall` at runtime and substitutes them into each fixture's
+`mori.dhall` and `mori.automation.dhall`. If mori's schema pin changes,
+the next `just reset-test-repos` picks up the new hash automatically.
+There is no separate pin to keep in sync.
+
+## Related Documentation
+
+- [Automation](/docs/guides/automation) — Event selectors, reactions, and the automation engine
+- [Cross-Repo Workflows](/docs/guides/cross-repo-workflows) — Signal dispatch across repositories
+- [Automation Daemon](/docs/guides/automation-daemon) — Multi-repo daemon architecture

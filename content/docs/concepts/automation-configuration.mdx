@@ -156,6 +156,7 @@ Constraints:
 * No shell expansion
 * Arguments are explicit and deterministic
 * Fields support `{{variable}}` event-data interpolation (see [Automation guide](/docs/guides/automation))
+* Every `RunCommand` is spawned as `nix develop --command <command> <args…>` against the **target repo's** flake — write `command = "just"`, `args = ["test"]`, not `/bin/bash -lc "cd … && just test"`. See [Nix devshell requirement](#nix-devshell-requirement) below.
 
 ### EmitEvent
 
@@ -277,3 +278,51 @@ The following design questions have been resolved in the implementation:
 * **Schedule persistence**: Scheduled actions use pgmq (durable PostgreSQL queue) with shibuya workers. Survives restarts.
 * **Idempotency tracking**: Tracked via event stream position and reaction event IDs.
 * **Error handling**: Reactions emit `ReactionCompleted` or `ReactionFailed` events. Visible via `mori reaction list` and `mori reaction show`.
+
+## Nix devshell requirement
+
+Every `RunCommand` action is executed as `nix develop --command CMD ARGS…`
+with cwd set to the target repo root. The **target** repo's flake is
+consulted — not the source repo's, and not mori's own flake.
+
+The target repo must have a `flake.nix` at its root with a default devShell
+(i.e. `devShells.${system}.default`) that provides the binaries your command
+references. Without that, the reaction fails with `error: flake … not found`
+or `error: unable to find attribute 'default' in devShells`.
+
+Minimal `flake.nix` suitable for automation-target repos:
+
+```nix
+{
+  description = "example target repo";
+  inputs.nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
+  inputs.flake-utils.url = "github:numtide/flake-utils";
+  outputs = { self, nixpkgs, flake-utils }:
+    flake-utils.lib.eachDefaultSystem (system:
+      let pkgs = import nixpkgs { inherit system; };
+      in {
+        devShells.default = pkgs.mkShell {
+          nativeBuildInputs = [ pkgs.just pkgs.bun ];
+        };
+      });
+}
+```
+
+Add every binary your `RunCommand` actions invoke to `nativeBuildInputs`.
+
+Why this matters for the daemon: when `mori automate daemon` runs under
+launchd, the inherited `PATH` is minimal (`/usr/bin:/bin:/usr/sbin:/sbin`) —
+nix-installed binaries would not be reachable directly. The devShell wrapper
+sidesteps that, so you do not need to wrap commands in `/bin/bash -lc`.
+
+## Config update propagation
+
+A `ReactionTriggered` event captures the full action payload at trigger
+time. Editing `mori.automation.dhall` mid-flight does not rewrite already-
+triggered reactions — only reactions triggered **after** the daemon
+observes the new config (via the registration subscription, typically
+within seconds) see the edit.
+
+If a reaction fired with a stale payload, fix the config, run `mori
+automate update`, then wait for a fresh event. There is no in-place retry
+with the new payload — the original event is immutable.

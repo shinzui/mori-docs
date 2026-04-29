@@ -899,6 +899,7 @@ mori automate explain 15
 | `mori automate explain POS [-c PATH] [--json]` | Explain event matching | Yes |
 | `mori reaction list [--status S] [--name N]` | List recent reactions | Yes |
 | `mori reaction show ID` | Show reaction details | Yes |
+| `mori reaction recover ID [--retry]` | Unstick a reaction stuck in `triggered` state | Yes |
 | `mori schema migrate [--apply] [--dry-run]` | Check or apply schema migrations | No |
 | `mori extension list` | List active extension types | Yes |
 | `mori extension query NAME [--project P]` | Query extension data across projects | Yes |
@@ -918,6 +919,7 @@ mori automate explain 15
 - [Schema Migrations](/docs/guides/schema-migrations) — migrating `mori.dhall` after schema changes
 - [Local Registry](/docs/concepts/local-registry) — database architecture and projections
 - [Automation](/docs/guides/automation) — VCS event reactions and multi-repo daemon
+- [Automation Test Repos](/docs/guides/automation-test-repos) — three persistent fixture repos for end-to-end repros
 - [Cross-Repo Workflows](/docs/guides/cross-repo-workflows) — signal dispatch across repositories
 - [Extensions](/docs/guides/extensions) — tech radar, cookbook, and custom extension types
 - [Mori Apps](/docs/guides/apps) — webhook receivers for external integrations

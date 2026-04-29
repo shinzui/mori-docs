@@ -91,7 +91,7 @@ in  { events =
       [ EventSelector.SignalSelector
           { name = "schema-updated"
           , signalTypes = [ "SchemaChanged" ]
-          , sourceProjects = [ "schema-repo" ]
+          , sourceProjects = [ "shinzui/schema-repo" ]
           }
       ]
     , reactions =
@@ -118,7 +118,7 @@ The `SignalSelector` fields:
 |-------|------|----------|
 | `name` | `Text` | Unique selector name |
 | `signalTypes` | `List Text` | Signal types to match. Empty = match all. |
-| `sourceProjects` | `List Text` | Source project names to match. Empty = match all. |
+| `sourceProjects` | `List Text` | Source project names to match, qualified as `namespace/name` (e.g., `"shinzui/schema-repo"`). Bare project names will not match. Empty = match all. |
 
 ---
 
@@ -196,10 +196,15 @@ mori workflow list
 ```
 Recent Workflows
 ================
-ID                      SIGNAL          SOURCE        TARGETS  STATUS       STARTED
-wf_01h455vb4pex5vs...  SchemaChanged   schema-repo         2  ✓ completed  2026-03-06 10:15:32 UTC
-wf_01h455vb4pex5vs...  ConfigUpdated   config-repo         1  ✗ failed     2026-03-06 09:30:15 UTC
+ID                      SIGNAL          SOURCE                  REACTION         TARGETS  STATUS       STARTED
+wf_01h455vb4pex5vs...  SchemaChanged   shinzui/schema-repo     notify-clients         2  ✓ completed  2026-03-06 10:15:32 UTC
+wf_01h455vb4pex5vs...  ConfigUpdated   shinzui/config-repo     publish-config         1  ✗ failed     2026-03-06 09:30:15 UTC
 ```
+
+`SOURCE` carries the qualified `namespace/name` of the upstream project that
+emitted the signal. `REACTION` carries the upstream reaction name (the
+reaction in the source repo whose `Signal` action fired) — a separate column
+because the same project commonly hosts multiple signal-emitting reactions.
 
 Limit the number of results:
 
@@ -227,7 +232,8 @@ Workflow Detail
 ===============
 ID:              wf_01h455vb4pex5vsknk084sn02q
 Signal Type:     SchemaChanged
-Source Project:  schema-repo
+Source Project:  shinzui/schema-repo
+Source Reaction: notify-clients
 Source Repo:     repo_01h455vb4pex5vsknk084sn02q
 Status:          ✓ completed
 Targets:         payment-service, billing-service
@@ -240,6 +246,14 @@ Duration:        1253ms
   payment-service   ✓ completed  rxn_01h4...002            1040ms
   billing-service   ✓ completed  rxn_01h4...003            1168ms
 ```
+
+`Source Project` is the qualified upstream project (matching `SOURCE` from
+`mori workflow list`); `Source Reaction` is the reaction in that project
+whose `Signal` action emitted this workflow. `Targets` and the `TARGET`
+column echo back whatever target names the source-repo `Signal` action
+listed — bare names work as long as `mori register` has populated the
+registry, since `targets` is resolved by the dispatcher via the dependency
+graph rather than matched against `sourceProjects`.
 
 ---
 
@@ -289,6 +303,11 @@ If `mori workflow list` returns no results:
 1. Verify the `mori.workflows` table exists (run migrations)
 2. Verify the `mori-workflow` subscription is running (`mori automate run`)
 3. Check that signal dispatch is working — look for `WorkflowSignalEmitted` events in the source repo's stream
+4. Verify the target's `SignalSelector.sourceProjects` filter uses the
+   **qualified** upstream project name (`namespace/name`, e.g.
+   `shinzui/schema-repo`). Bare project names will silently match nothing —
+   `WorkflowSignalReceived` events carry the source project as
+   `namespace/name`, so a bare-name filter has no chance of matching.
 
 ### `*dependents*` resolves to no targets
 

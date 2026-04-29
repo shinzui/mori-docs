@@ -9,6 +9,60 @@ features, commands, and schema changes.
 
 ---
 
+## 2026-04-28
+
+### `mori registry exec` (new)
+- Run the same command in every registered project, with `cwd` set to each project's local path
+- Filters: `--group`, `--namespace`, `--type`, `--origin`, `--filter GLOB` (compose, AND semantics)
+- `--jobs N` for parallel execution; `--fail-fast` to abort at the first failure
+- `--dry-run` and `--json` modes; per-project summary table with status, exit code, and duration
+- Skips projects without a local checkout; exits 0 if every executed command succeeded, 1 otherwise
+
+### `mori reaction recover` (new)
+- Unstick a reaction stuck at `status: triggered` (left over from pre-fix daemon builds that didn't catch executor exceptions)
+- Marks the row `failed`, advances the executor checkpoint past the stuck event
+- `--retry` re-emits a fresh `ReactionTriggered` carrying the original actions under a new reaction ID
+- Refuses to operate on rows already in `completed` or `failed` state
+
+### `mori reaction show`
+- Failed `RunCommand` actions now display dedicated `Stdout:` and `Stderr:` blocks captured from the failed process
+
+### `mori automate register` / `update`
+- One-step registration: a single `mori automate register` emits both `ProjectRepoLinked` and `AutomationRegistered`, so a separate `mori observe` is no longer required to receive signals
+- `mori automate update` heals state from older daemon builds by re-emitting `ProjectRepoLinked` if the projects row is missing
+- `--path <dir>` is authoritative across `register`, `update`, `deregister`, `run`, and `ingest git`: the config file is read from `<dir>` and the repo TypeID is derived from `<dir>`, making it impossible to silently register the wrong repo
+
+### Automation: nix devshell wrapping
+- Every `RunCommand` is now spawned as `nix develop --command <command> <args…>` against the **target** repo's flake
+- Each automation-target repo must have a `flake.nix` exposing a default devShell with the binaries the reaction references on `nativeBuildInputs`
+- Removes the need to wrap commands in `/bin/bash -lc "cd … && …"` to pick up nix-installed tools under launchd
+
+### Automation: executor fault tolerance
+- The executor subscription wraps `executeActions` in an exception boundary; an uncaught error during action execution is recorded as a `ReactionFailed` event instead of halting the subscription
+- Reaction history persists captured stdout/stderr per action result on `mori.reaction_history`
+
+### `mori register --no-seihou-discovery` (new flag)
+- Skip the auto-discovery probe for seihou template manifests when the project root holds a `module.dhall` that isn't a seihou module instance (e.g. a seihou type-definition file) and the probe produces noisy "Missing record field" warnings
+- Internal callers (`mori observe`, `mori automate register`, `mori registry reregister`) keep the previous behavior
+
+### `mori help`
+- New `--width N` flag (with auto-detect, capped at 140) wrapping output for both direct topic rendering and the fzf preview
+
+### Schema: cookbook extension import migration
+- `upgrade-cookbook-extension-import` migration normalizes `let Cookbook = …` bindings to the canonical hashed form pinned in lockstep with the root `Schema`
+- Rewrites un-hashed `let ContentType = …` / `let Topic = …` direct imports (which fail at runtime with `TlsNotSupported`), bumps stale-pinned `Cookbook` bindings, and injects the binding when files use `Schema.{ContentType,Topic}` references the root package never re-exported
+- Runs as part of `mori schema migrate` on `mori/cookbook.dhall` and as part of `mori registry upgrade-schema`'s bulk pipeline
+
+### Test fixtures: automation test repos
+- New `just bootstrap-test-repos` / `just reset-test-repos` recipes generate three persistent sibling repos (publisher, happy-path consumer, failure-path consumer) for end-to-end automation repros
+- Bootstrap script enforces dev-database-only — refuses to run against `~/.mori/db`
+
+### Cross-repo workflows
+- `mori workflow list` / `trace` now display the qualified `namespace/name` source project and the upstream `Source Reaction` whose `Signal` action emitted the workflow
+- `SignalSelector.sourceProjects` requires the qualified `namespace/name` form; bare project names will silently match nothing
+
+---
+
 ## 2026-04-18
 
 ### Schema: mk-pattern refactor

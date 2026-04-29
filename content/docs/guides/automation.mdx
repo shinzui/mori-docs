@@ -13,6 +13,16 @@ long-lived process that continuously processes events from the event store.
 - Database set up and migrations run (see [Local Registry](/docs/concepts/local-registry))
 - A `mori.dhall` project config in the current directory
 - A repository initialized with `mori init` (provides the repo TypeID)
+- A `flake.nix` at the repo root that exposes a default devShell. Mori spawns
+  every `RunCommand` as `nix develop <repoRoot> --command <command> <args…>`,
+  so any binary the reaction needs (`just`, `bun`, `direnv`, …) must be on
+  the devShell's `nativeBuildInputs`. With this in place there's no need to
+  wrap commands in `/bin/bash -lc "cd … && …"` to pick up nix-installed
+  tools — the devShell hands them to the daemon for free.
+
+> **Trying it out?** See [Automation Test Repos](/docs/guides/automation-test-repos)
+> for three ready-made fixture repos (publisher, happy-path consumer,
+> failure-path consumer) you can register against without scaffolding by hand.
 
 ## Configuration
 
@@ -254,7 +264,12 @@ Schema.Reaction::{
 
 ### RunCommand
 
-Execute a shell command.
+Execute a shell command. Every `RunCommand` is spawned as
+`nix develop <repoRoot> --command <command> <args…>` against the target
+repo's flake — so the command runs inside the project's devShell and any
+binary on that devShell's `nativeBuildInputs` is reachable. This is why
+every target repo must have a `flake.nix` exposing a default devShell (see
+[Prerequisites](#prerequisites)).
 
 ```dhall
 Schema.ReactionAction.RunCommand Schema.RunCommandAction::{
@@ -268,9 +283,9 @@ Schema.ReactionAction.RunCommand Schema.RunCommandAction::{
 
 | Field | Type | Notes |
 |-------|------|-------|
-| `command` | `Text` | Executable name or path |
+| `command` | `Text` | Executable name or path. Resolved inside the devShell, not the daemon's PATH. |
 | `args` | `List Text` | Command arguments |
-| `workingDir` | `Optional Text` | Working directory (default: project root) |
+| `workingDir` | `Optional Text` | Working directory. When absent, defaults to the repo root (the directory passed to `mori automate register --path …`). When set, resolves relative to that root. |
 | `timeout` | `Optional Integer` | Timeout in seconds |
 | `env` | `List { mapKey, mapValue }` | Extra environment variables |
 
@@ -477,3 +492,124 @@ mori automate run / daemon
     └─ shibuya worker
        processes delayed Schedule actions from pgmq
 ```
+
+## Multi-Repo Automation
+
+Single-repo mode (`mori automate run`) processes events for one repository.
+For workspaces with many projects, the [automation daemon](/docs/guides/automation-daemon)
+runs a single process that routes events to all registered repos.
+
+### Registering with the daemon
+
+A single `mori automate register` is enough to make a repo receive signals.
+The command both registers the automation config with the daemon **and**
+emits the `ProjectRepoLinked` event that records the repo in the projects
+read model. There is no longer a separate `mori observe` prerequisite.
+
+```bash
+mori automate register                              # uses mori.automation.dhall
+mori automate register -c path/to/config.dhall      # custom config path
+mori automate register --path /path/to/repo         # different repo
+```
+
+`--path <dir>` is the authoritative repo root: the config file is read from
+`<dir>` (so `--config` resolves relative to it), and the repo TypeID is
+derived from `<dir>`. This makes it impossible to silently register repoA's
+config against repoB's id by running from the wrong working directory.
+
+Running `mori observe` against an already-registered repo is a no-op rather
+than a duplicate write; it remains the right command when you want to record
+a repo's identity *without* attaching an automation config (e.g., so the
+daemon's auto-ingest loop will pick up its commits).
+
+### Updating after edits
+
+```bash
+mori automate update
+```
+
+`update` heals state left over from older daemon builds: if a registered
+repo is missing its `mori.projects` row (an artifact of pre-EP-4 register
+flows), `update` re-emits `ProjectRepoLinked` so the row appears.
+
+## Troubleshooting Failed Reactions
+
+### Inspecting a failed reaction
+
+When a reaction fails (non-zero exit, missing binary, unreachable notify URL,
+or any other runtime error in the executor), `mori reaction list` shows the
+row with `status: failed`. Drill in with `mori reaction show <id>`:
+
+```
+  Status: ✗ failed
+  Started At: 2026-04-24 15:05:22.12345 UTC
+  Completed At: 2026-04-24 15:05:22.93821 UTC
+  Duration: 816ms
+
+  Error:
+    Command failed (exit 127): spawn failed: /usr/local/bin/just: …
+
+  Stdout:
+    compiling src/main.c
+
+  Stderr:
+    error: unknown type 'foo'
+```
+
+The `Stdout:` and `Stderr:` blocks carry whatever the failing `RunCommand`
+wrote to those streams before it exited. Non-command actions (`EmitEvent`,
+`Notify`, `Schedule`, `Signal`) leave both blocks empty. The `Error:` field
+is the high-level summary — `Command failed (exit N): <stderr text>` for
+bad commands, `Notification failed (HTTP M)` for notify failures.
+
+### Why config edits don't fix an already-triggered reaction
+
+When a reaction is triggered, the executor freezes a full snapshot of the
+reaction's `actions` into the `ReactionTriggered` event. The subscription
+then reads that event back to run the actions. Editing
+`mori.automation.dhall` and reloading the daemon **does not** change a
+reaction that has already been triggered — the event is immutable, and the
+frozen payload is the source of truth.
+
+To apply a config fix: edit the config, run `mori automate update`, wait
+for (or manually emit via `mori automate ingest git`) a fresh source event,
+and the next `ReactionTriggered` event will carry the new payload.
+
+### Recovering a stuck reaction from a pre-EP-6 daemon
+
+Older daemon builds (before commit `76c9f6f`) did not catch exceptions
+inside the executor subscription. A `RunCommand` that failed at spawn time
+(for example because `just` was not on the daemon's PATH) would halt the
+`mori-reaction-executor` subscription; the reaction row stayed at
+`status: triggered` indefinitely and no subsequent reaction fired. Recent
+builds no longer have this failure mode — the executor wraps
+`executeActions` in an exception boundary and records a `ReactionFailed`
+event on any uncaught error.
+
+If your database still has a reaction stuck in `status: triggered` from a
+pre-fix daemon build, use `mori reaction recover <id>` to unstick it
+without writing SQL by hand:
+
+```
+$ mori reaction recover rxn_01k000000000000000000000TEST
+Advanced executor checkpoint to 12345.
+Reaction rxn_01k000000000000000000000TEST marked failed: manually recovered via mori reaction recover.
+Restart the daemon (or wait for the next poll) to resume processing.
+```
+
+The default `recover` marks the stuck row `failed` with the canonical
+error message `manually recovered via mori reaction recover` and advances
+the `mori-reaction-executor` subscription's checkpoint past the stuck
+event so the next reaction fires normally. Add `--retry` to additionally
+re-emit a fresh `ReactionTriggered` carrying the original actions under a
+new reaction ID — use this when you've already fixed the root cause
+(PATH, missing binary, bad cwd) and want the action to run again. The
+command refuses to operate on rows already in `completed` or `failed`
+state (exit code 2, "nothing to recover").
+
+> **Safety.** `recover` updates the `checkpoints` table directly. Running
+> it while the daemon is actively processing the same subscription can
+> race with the live consumer. It is safe against a genuinely stuck
+> subscription (which, by definition, is not advancing), but stop the
+> daemon first if you are unsure — or simply re-run the command; it is
+> idempotent on non-triggered rows.

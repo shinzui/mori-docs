@@ -742,6 +742,36 @@ migration whose target field is missing. See `addCookbookEntryTags` in
 `mori-core/src/Mori/Config/Migration.hs` for a worked example — subsequent
 cookbook fields follow the same shape.
 
+**Cookbook extension import normalization.** The same migrate command also
+runs `upgrade-cookbook-extension-import`, which keeps the file's
+`let Cookbook = …` binding in sync with the root `Schema` pin. The
+cookbook-only types (`CookbookCatalog`, `CookbookEntry`, `ContentType`,
+`Topic`) live exclusively in `schema/extensions/cookbook/package.dhall` —
+the root `Schema` does not re-export them. Files using one of the legacy
+conventions are rewritten to the canonical form:
+
+- Un-hashed direct imports of `extensions/cookbook/ContentType.dhall` and
+  `Topic.dhall` (which fail at runtime with `TlsNotSupported`) are removed
+  and replaced with a single hashed `let Cookbook = …` binding.
+- A `Cookbook` binding pinned to a stale commit is bumped to the same
+  commit as `Schema`.
+- Files with no extension binding at all (using `Schema.ContentType` /
+  `Schema.Topic` as if root re-exported them) get the canonical Cookbook
+  binding injected.
+
+In every case, `Schema.{CookbookCatalog,CookbookEntry,ContentType,Topic}`
+references are rewritten through the `Cookbook` binding, and bare
+`ContentType.` / `Topic.` references that previously resolved through
+removed un-hashed bindings are rewritten to their `Cookbook.`-qualified
+form. Local-path imports (test fixtures using
+`../schema/extensions/cookbook/package.dhall`) are left alone. The pinned
+URL and hash come from `Mori.Schema.Version.cookbookExtensionUrl` /
+`cookbookExtensionHash` and advance in lockstep with `schemaUrl` /
+`schemaHash`.
+
+To sweep every registered project's `mori/cookbook.dhall` at once, use the
+bulk upgrader: `mori registry upgrade-schema`.
+
 ---
 
 ## Agent Hints

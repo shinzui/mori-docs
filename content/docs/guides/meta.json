@@ -4,6 +4,7 @@
 		"index",
 		"automation",
 		"automation-daemon",
+		"automation-test-repos",
 		"cross-repo-workflows",
 		"reaction-history",
 		"extensions",

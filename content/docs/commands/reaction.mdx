@@ -30,5 +30,33 @@ mori reaction show <REACTION_ID>
 ### Output
 
 - Triggering event, reaction name, actions, status, error (if failed)
+- For failed `RunCommand` actions, the captured stdout and stderr produced before the process exited
+
+## `mori reaction recover`
+
+Unstick a reaction stuck at `status: triggered` because of an older daemon
+build that did not catch executor exceptions (pre-`76c9f6f`). Marks the row
+`failed` with the canonical error `manually recovered via mori reaction
+recover` and advances the `mori-reaction-executor` checkpoint past the stuck
+event so the next reaction fires normally. Recent daemon builds no longer
+produce this state — `recover` is for cleaning up rows left behind by older
+runs.
+
+```bash
+mori reaction recover <REACTION_ID>
+mori reaction recover <REACTION_ID> --retry
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--retry` | Re-emit a fresh `ReactionTriggered` carrying the original actions under a new reaction ID — use this once you've fixed the root cause and want the action to run again |
+
+The command refuses to operate on rows already in `completed` or `failed`
+state (exit code 2, "nothing to recover"). It updates the `checkpoints`
+table directly, so stop the daemon first if you're unsure — `recover` is
+safe against a genuinely stuck (non-advancing) subscription, but racing a
+live consumer can collide. The command is idempotent on non-triggered rows.
 
 See [Reaction History](/docs/guides/reaction-history) for more details.

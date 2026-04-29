@@ -14,6 +14,7 @@ config (`mori.automation.dhall`).
 |---|---|
 | `mori reaction list` | List recent reactions |
 | `mori reaction show` | Show full details for a single reaction |
+| `mori reaction recover` | Unstick a reaction stuck in `status=triggered` |
 
 ## List
 
@@ -55,6 +56,10 @@ mori reaction show <REACTION_ID>
 
 Displays full details for a single reaction, including the triggering
 stream, position, timestamps, duration, and error message (if failed).
+For failed `RunCommand` actions, `show` also prints the command's captured
+stdout and stderr in dedicated `Stdout:` and `Stderr:` blocks (persisted
+on `mori.reaction_history` per action result; non-command actions like
+`Notify`, `EmitEvent`, `Schedule`, and `Signal` leave both blocks empty).
 
 The reaction ID is a TypeID starting with `rxn_` — copy it from the
 ID column of `mori reaction list`.
@@ -66,13 +71,54 @@ mori reaction list                  # Find the reaction ID
 mori reaction show rxn_01hy3x...   # Show full details
 ```
 
+## Recover
+
+```bash
+mori reaction recover <REACTION_ID> [--retry]
+```
+
+Unsticks a reaction that is stuck in `status=triggered`. Older daemon
+builds (before the executor wrapped its action loop in an exception
+boundary) could halt the `mori-reaction-executor` subscription on a
+spawn-time failure; the reaction row stayed `triggered` forever and no
+further reactions on the same target advanced.
+
+**Default behavior:**
+
+1. Marks the stuck row `failed` with the canonical error message
+   `manually recovered via mori reaction recover`.
+2. Advances the `mori-reaction-executor` subscription's checkpoint past
+   the stuck event so the next reaction fires normally.
+
+With `--retry`, additionally re-emits a fresh `ReactionTriggered` event
+carrying the original actions under a new reaction ID. Use this once you
+have fixed the root cause (PATH, missing binary, bad cwd) and want the
+action to run again.
+
+The command refuses to operate on rows already in `completed` or `failed`
+state (exit code 2, "nothing to recover"). It is idempotent on
+non-triggered rows.
+
+> **Safety.** `recover` updates the `checkpoints` table directly. Running
+> it while the daemon is actively processing the same subscription can
+> race with the live consumer. It is safe against a genuinely stuck
+> subscription (which by definition is not advancing), but stop the
+> daemon first if unsure.
+
+### Example
+
+```bash
+mori reaction recover rxn_01hy3x...           # Skip the stuck event
+mori reaction recover rxn_01hy3x... --retry   # Skip and re-fire
+```
+
 ## Status Values
 
 | Status | Description |
 |---|---|
 | `triggered` | The reaction was matched and dispatched but has not finished executing yet. |
 | `completed` | All actions in the reaction executed successfully. |
-| `failed` | One or more actions failed. Use `mori reaction show` to see the error message. |
+| `failed` | One or more actions failed. Use `mori reaction show` to see the error message and any captured stdout/stderr. |
 
 ## See Also
 

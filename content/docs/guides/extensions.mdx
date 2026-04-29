@@ -220,6 +220,31 @@ cross-cutting tags independent of the fixed `Topic` enum (e.g., `"async"`,
 mori schema migrate --apply --file mori/cookbook.dhall
 ```
 
+The same migrate command also runs `upgrade-cookbook-extension-import`,
+which keeps the file's `let Cookbook = …` binding in sync with the root
+`Schema` pin. The cookbook-only types (`CookbookCatalog`, `CookbookEntry`,
+`ContentType`, `Topic`) live exclusively under the `Cookbook` binding —
+the root `Schema` does not re-export them. Files using legacy conventions
+(un-hashed direct imports of `extensions/cookbook/ContentType.dhall` /
+`Topic.dhall`, a stale-pinned `Cookbook` binding, or no extension binding
+at all) are rewritten to the canonical hashed `let Cookbook = …` form,
+with all `Schema.{CookbookCatalog,CookbookEntry,ContentType,Topic}` and
+bare `ContentType.` / `Topic.` references rewritten through the
+`Cookbook` binding. Local-path imports (test fixtures using
+`../schema/extensions/cookbook/package.dhall`) are left alone.
+
+To sweep every registered project's `mori/cookbook.dhall` at once, use
+the bulk upgrader:
+
+```bash
+mori registry upgrade-schema
+```
+
+For cookbook files, the bulk pipeline runs both
+`add-cookbook-entry-tags` and `upgrade-cookbook-extension-import`; the
+dry-run reports `would migrate` for each cookbook file that any of these
+passes needs to touch.
+
 See [Schema Migrations](/docs/guides/schema-migrations) for how the
 per-extension migration pipeline handles additive field changes.
 
