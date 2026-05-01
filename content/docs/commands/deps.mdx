@@ -57,6 +57,7 @@ Show transitive dependency tree.
 mori deps tree
 mori deps tree --max-depth 2
 mori deps tree --project @acme/payments
+mori deps tree --scope regular
 mori deps tree --json
 ```
 
@@ -66,4 +67,21 @@ mori deps tree --json
 |------|-------------|
 | `--max-depth` | Maximum depth to display (default: unlimited) |
 | `--project` | Show tree for a specific project |
+| `--scope` | Filter package-level dependencies by [scope](/docs/schema-guide#dependency-scope) (`regular`, `dev`, `test`, `build`). Project-level dependencies are unscoped and always included |
 | `--json` | JSON output |
+
+### Scope display
+
+Each package-level dependency renders with a trailing scope tag in `mori
+registry show`, `mori show --full`, and `mori deps tree`:
+
+```
+streamly-core
+tasty           [test]
+hspec-discover  [build]
+hlint           [dev]
+```
+
+`regular`-scoped deps display without a tag. See [Dependency
+Scope](/docs/schema-guide#dependency-scope) in the schema guide for the
+declaration form.

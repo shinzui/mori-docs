@@ -1,10 +1,12 @@
 ---
 title: mori path
-description: Print local path for a project, package, or doc
+description: Print local path for a project, package, doc, or canonical ref
 icon: MapPin
 ---
 
-Print local path for a project with optional package or doc subpath.
+Print local path for a project with optional package or doc subpath. Also
+accepts a [canonical `mori://` ref](/docs/concepts/canonical-refs) or its
+compact alias.
 
 ## Usage
 
@@ -13,9 +15,13 @@ mori path <project>
 mori path <project> --package <pkg>
 mori path <project> --doc <doc-key>
 mori path <project> --copy
+
+mori path mori://shinzui/streamly/docs/effects-cookbook
+mori path 'shinzui/streamly#doc:effects-cookbook'
 ```
 
-Supports both bare names and namespace-qualified names (`namespace/name`).
+Supports bare names, namespace-qualified names (`namespace/name`), the
+package-qualified `project:package` shorthand, and full canonical refs.
 
 ## Flags
 
@@ -31,10 +37,45 @@ Supports both bare names and namespace-qualified names (`namespace/name`).
 - Checks that the path exists on disk before printing
 - For packages, resolves the relative path against the project root
 - For docs, resolves local paths against project root; URLs are printed as-is
+- For docs whose `location` is a `DocLocation.Canonical "mori://..."` arm,
+  follows the canonical ref through the registry to the target's filesystem
+  path (via the effectful `resolveDocLocationE`)
 - Ambiguous bare names produce a disambiguation prompt
 
 ## Interactive Selection
 
-When `--package` or `--doc` is used without a name, fzf is launched for interactive selection. Install [fzf](https://github.com/junegunn/fzf) for this feature.
+When `--package` or `--doc` is used without a name, fzf is launched for
+interactive selection. Install [fzf](https://github.com/junegunn/fzf) for this
+feature.
 
-See [Navigation guide](/docs/guides/navigation) for usage patterns with `cd`, `browse`, and shell integration tips.
+## Shell Completion
+
+Shell completion is ref-aware at every level. The completer queries the local
+registry and requires `MORI_PG_CONNECTION_STRING` to be set in the shell where
+you ran `eval "$(mori completions bash)"` (or zsh / fish equivalent).
+
+```bash
+mori path mori://<TAB>              # → registered namespaces
+mori path mori://shinzui/<TAB>      # → project names in shinzui/
+mori path mori://shinzui/mori/<TAB> # → kind segments (docs/, packages/, …)
+                                    #   owned-first ranking
+mori path mori://shinzui/mori/docs/<TAB>
+                                    # → every doc key in shinzui/mori
+```
+
+The compact form has the same behaviour with `#` as the kind delimiter and
+`:` as the key delimiter:
+
+```bash
+mori path shinzui/mori#<TAB>        # → singular kind tokens
+mori path shinzui/mori#doc:<TAB>    # → every doc key
+```
+
+Kind menus list all eight kinds even when a project owns zero artifacts of
+that kind, so you can complete a ref to a kind that has no rows yet. Key
+menus list only existing artifacts. Menus are capped at 200; failures
+(missing connection string, unreachable host) silently fall back to no
+suggestions.
+
+See [Navigation guide](/docs/guides/navigation) for usage patterns with `cd`,
+`browse`, and shell integration tips.

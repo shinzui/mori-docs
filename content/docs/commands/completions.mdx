@@ -33,3 +33,27 @@ mori completions bash > /etc/bash_completion.d/mori
 ```bash
 mori completions fish > ~/.config/fish/completions/mori.fish
 ```
+
+## Ref-aware completion
+
+Tab completion for [canonical `mori://` refs](/docs/concepts/canonical-refs)
+is wired through the same generated scripts — no shell-side changes needed.
+The completer resolves namespaces, project names, kind segments, and
+artifact keys against the local registry on demand.
+
+`MORI_PG_CONNECTION_STRING` must be set in the same shell where the
+completion script is sourced. Without it (or on any registry error), the
+completer silently returns no suggestions and Tab falls back to the shell's
+default behaviour.
+
+```bash
+mori path mori://<TAB>                       # registered namespaces
+mori path mori://shinzui/<TAB>               # projects in shinzui/
+mori path mori://shinzui/mori/<TAB>          # eight kind segments, owned-first
+mori path mori://shinzui/mori/docs/<TAB>     # every doc key
+mori path shinzui/mori#<TAB>                 # singular kind tokens
+mori path shinzui/mori#doc:<TAB>             # doc keys (compact form)
+```
+
+See [`mori path`](/docs/commands/path#shell-completion) for the full
+behaviour.

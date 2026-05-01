@@ -10,6 +10,7 @@ Render evaluated Mori metadata.
 mori show
 mori show --json
 mori show --full
+mori show --full --json
 ```
 
 Displays the fully evaluated Mori configuration for the current project.
@@ -20,3 +21,21 @@ Displays the fully evaluated Mori configuration for the current project.
 |------|-------------|
 | `--json` | Output as JSON |
 | `--full` | Display detailed information for all sections (repos, packages, bundles, dependencies, APIs, agents, skills, subagents, standards, docs) |
+
+## Canonical refs in output
+
+`mori show --full` and `mori show --json` print a [canonical
+`mori://` ref](/docs/concepts/canonical-refs) for every artifact owned by the
+project — docs, packages, repos, skills, subagents, APIs, cookbook entries,
+and seihou templates.
+
+In text mode, the ref appears on a dim line beneath each artifact. In JSON
+mode, every artifact object carries a `canonicalRef` field:
+
+```bash
+mori show --json | jq '.docs[].canonicalRef'
+mori show --json | jq '.packages[].canonicalRef'
+```
+
+The same convention is used by [`mori registry show --full`](/docs/commands/registry#mori-registry-show)
+and `mori registry show --json`.

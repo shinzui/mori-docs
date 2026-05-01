@@ -320,11 +320,15 @@ shared dependency. Register once, reference everywhere.
 ### Augmenting a dependency
 
 Most dependencies need nothing beyond a name. When you need to attach
-project-specific documentation or override a path, use the augmented form:
+project-specific documentation, mark the dependency's scope, or override a
+path, use the augmented form:
 
 ```dhall
 Schema.Dependency.WithAugmentation
   { name = "hasql"
+  , kind = None Schema.DependencyKind
+  , source = None Schema.DependencySource
+  , scope = None Schema.DependencyScope
   , extraDocs =
     [ { key = "hasql-patterns"
       , kind = Schema.DocKind.Cookbook
@@ -344,6 +348,52 @@ Key rules:
 - **`localPathOverride` is a fallback.** Use it only for dependencies not yet in
   the registry. The expectation is that frequently-used dependencies are
   registered as wrapper projects.
+- **No `Aug` bundle.** `Schema.Dependency.WithAugmentation` takes a flat
+  record literal; there is no `Schema.Dependency.Aug::{ … }` completion
+  helper. All six fields are required when authoring this arm.
+
+### Dependency scope
+
+Package-level dependencies carry an optional `scope` field with four values
+that mirror common ecosystem conventions (Cabal test-suites/benchmarks, npm
+`devDependencies`, Cargo `dev-dependencies`/`build-dependencies`, Poetry
+groups, Maven scopes):
+
+| Scope     | Meaning                                  |
+|-----------|------------------------------------------|
+| `Regular` | Runtime dependency (default if omitted)  |
+| `Dev`     | Development tooling (linters, formatters)|
+| `Test`    | Test frameworks and helpers              |
+| `Build`   | Build-time tools (code generators)       |
+
+Declare a scope with the `Dependency.WithAugmentation` arm:
+
+```dhall
+Schema.Dependency.WithAugmentation
+  { name = "tasty"
+  , kind = None Schema.DependencyKind
+  , source = None Schema.DependencySource
+  , scope = Some Schema.DependencyScope.Test
+  , extraDocs = [] : List Schema.DocRef.Type
+  , localPathOverride = None Text
+  }
+```
+
+Omitting the field (or `None`) means `Regular`. Scope applies only to
+package-level dependencies — the project-level `dependencies : List Text`
+field is for cross-project registry pointers and remains unscoped.
+
+**Behavior:**
+
+- `mori registry show` and `mori show --full` print a trailing `[test]`,
+  `[dev]`, or `[build]` tag next to each scoped dep
+- `mori deps tree --scope=<value>` filters the recursive walk
+- `mori agent assist` and `mori agent claude` exclude `Test`-scoped deps
+  from the resolved-dependency context block by default; pass
+  `--include-test-deps` to opt back in
+- The scope is persisted as `mori.package_dependencies.dep_scope` (TEXT,
+  nullable) — pre-scope rows parse as `Nothing` and remain unscoped until
+  the project is re-registered
 
 ### Creating wrapper projects for third-party dependencies
 
@@ -646,6 +696,22 @@ packages. Docs can point to local files, directories, repository paths, or URLs.
 | `LocalDir "path"` | Directory of files relative to project root |
 | `RepoPath "path"` | Path within a git-cloned repo |
 | `Url "https://..."` | External URL |
+| `Canonical "mori://..."` | A [canonical `mori://` ref](/docs/concepts/canonical-refs) to another project's artifact |
+
+The `Canonical` arm lets a doc location point at any registered project's
+artifact by its `mori://` URI rather than a literal local path. It is
+accepted anywhere a `DocLocation` is — `Project.docs`, `Package.docs`,
+augmented `Dependency.extraDocs`, cookbook entries, and checklist source
+docs:
+
+```dhall
+, location = Schema.DocLocation.Canonical
+               "mori://shinzui/streamly/docs/effects-cookbook"
+```
+
+The arm is additive — existing `LocalFile` / `LocalDir` / `RepoPath` /
+`Url` values keep working unchanged. To validate every stored canonical ref
+against the local registry, run `mori validate --check-refs`.
 
 ### Doc audience
 

@@ -33,10 +33,18 @@ Start a Claude session with mori project context.
 
 ```bash
 mori agent assist
+mori agent assist --include-test-deps
 mori agent assist --debug
 ```
 
-Loads the project config, resolves dependencies from the registry, and launches Claude with a system prompt containing project metadata. The `--debug` flag prints the prompt instead of starting a session.
+Loads the project config, resolves dependencies from the registry, and
+launches Claude with a system prompt containing project metadata. The
+`--debug` flag prints the prompt instead of starting a session.
+
+`Test`-scoped dependencies (see [Dependency
+scope](/docs/schema-guide#dependency-scope)) are excluded from the
+resolved-dependency context block and the `Read(path:.../*)` allowed-tools
+list by default — pass `--include-test-deps` to opt back in.
 
 ## `mori agent bootstrap`
 
@@ -84,6 +92,7 @@ Start a Claude session with full project context, skills, and subagents.
 
 ```bash
 mori agent claude
+mori agent claude --include-test-deps
 mori agent claude --debug
 ```
 
@@ -94,10 +103,14 @@ Loads project config, resolves dependencies, and launches Claude with:
 - Skills and subagents from `~/.config/mori/agents/` and `.mori/agents/`
 - Context caching for faster subsequent launches
 
+`Test`-scoped dependencies are excluded by default. See [`mori agent
+assist`](#mori-agent-assist) for details.
+
 ### Flags
 
 | Flag | Description |
 |------|-------------|
+| `--include-test-deps` | Include `Test`-scoped dependencies in the resolved-deps context block and `Read(path:.../*)` allowed-tools |
 | `--debug` | Print the system prompt and cache state instead of starting a session |
 
 ## `mori agent automate`

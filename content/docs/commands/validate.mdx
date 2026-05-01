@@ -9,6 +9,7 @@ Validate the current Mori configuration.
 ```bash
 mori validate
 mori validate --check-deps
+mori validate --check-refs
 ```
 
 ## Checks
@@ -30,11 +31,44 @@ mori validate --check-deps
 This checks that all dependency names (both project-level and package-level)
 resolve to registered projects in the local registry.
 
+### `--check-refs`
+
+Walk every [canonical `mori://` ref](/docs/concepts/canonical-refs) stored in
+the project's config and extension files, parse each one, and resolve it
+through the local registry. Requires a database connection.
+
+```bash
+mori validate --check-refs
+```
+
+The check covers:
+
+- `mori.dhall` — project-level `docs`, per-package `docs`, augmented
+  `Dependency.extraDocs`
+- `mori/cookbook.dhall` — cookbook entries
+- `mori/checklist.dhall` — checklist source docs
+
+Output is grouped by source with a per-ref `✓ / ✗ / ⚠` indicator. Tags name
+the source location (e.g. `Project.docs[3] <key>`,
+`Package.foo.docs[1] <key>`, `Dependency.streamly.extraDocs[0] <key>`,
+`Cookbook.entries[i] <key>`, `Checklist.checks[i].sourceDoc <key>`).
+
+Exit codes:
+
+| Code | Meaning |
+|------|---------|
+| `0`  | Every canonical ref resolved |
+| `1`  | At least one ref failed (missing project, missing artifact key) |
+
+Refs of an unsupported artifact kind produce a ⚠ warning but do not fail
+the check.
+
 ## Flags
 
 | Flag | Description |
 |------|-------------|
 | `--check-deps` | Validate dependencies against the local registry |
+| `--check-refs` | Validate canonical `mori://` refs in the config and extension files |
 
 ## Exit Codes
 

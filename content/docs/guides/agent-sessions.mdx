@@ -83,6 +83,23 @@ The session queries the registry for existing projects and packages to provide
 context about the workspace. Pre-seeded values skip the corresponding prompts
 during the interactive session.
 
+### Registry snapshot and reference discovery
+
+The bootstrap prompt embeds a `## Registry Snapshot` block. Each entry now
+carries the project's local on-disk path, origin
+(`own`/`third_party`/`fork`/`vendored`), and shipped package list, so the
+agent can `Read` a referenced `mori.dhall` directly without scanning the
+filesystem.
+
+Both prompts (regular and `--corpus`) also include a top-level
+`## Reference Discovery` section that names `mori registry list`,
+`mori registry search <query>`, `mori registry show <name> --full`, and
+`mori path <name>` as the canonical ways to discover and inspect reference
+projects, and tells the agent **not** to use `find` to scan the filesystem
+for mori projects. The corpus prompt additionally calls out
+`mori registry list --origin third_party` for finding sibling corpus
+projects.
+
 ### Corpus mode
 
 With `--corpus`, the session uses a specialized template for creating corpus

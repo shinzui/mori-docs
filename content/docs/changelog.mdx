@@ -9,6 +9,49 @@ features, commands, and schema changes.
 
 ---
 
+## 2026-05-01
+
+### Canonical refs (`mori://` URI scheme)
+- New [`mori://<namespace>/<name>/<kind>[/<key>][#<anchor>]` URI scheme](/docs/concepts/canonical-refs) for cross-project artifact pointers
+- Compact alias accepted on input: `<namespace>/<name>#<kind-singular>:<key>`
+- Eight pinned artifact kinds: `docs`, `packages`, `repos`, `skills`, `subagents`, `apis`, `cookbook` (singular), `templates`
+- `mori path`, `mori browse`, `mori registry open-doc` accept full canonical refs and the compact form
+- `mori show --full` / `--json` and `mori registry show --full` / `--json` print a `canonicalRef` for every artifact
+- `Schema.DocLocation` gains a `Canonical : Text` arm — accepted anywhere a `DocLocation` is (project/package docs, augmented `Dependency.extraDocs`, cookbook entries, checklist source docs)
+- New schema types: `Schema.MoriRef`, `Schema.MoriArtifactKind`
+- `mori path --doc <key>` follows `Canonical` arms transparently to the target's filesystem path via the new effectful `resolveDocLocationE`
+- New `mori help mori-refs` topic
+
+### `mori validate --check-refs` (new flag)
+- Walks every canonical ref in `mori.dhall`, `mori/cookbook.dhall`, and `mori/checklist.dhall`
+- Per-source ✓/✗/⚠ report with positional tags (e.g. `Project.docs[3] <key>`, `Cookbook.entries[2] <key>`)
+- Exits 0 if every ref resolves, 1 if any ref fails
+
+### Ref-aware shell completion
+- `mori path mori://<TAB>` completes registered namespaces; `mori://<ns>/<TAB>` completes project names
+- Phase 2: `mori://<ns>/<name>/<TAB>` completes the eight kind segments (owned-first ranking); `mori://<ns>/<name>/<kind>/<TAB>` completes artifact keys via per-kind read-model queries
+- Compact-form parity: `<ns>/<name>#<TAB>` for kind tokens, `<ns>/<name>#<kind>:<TAB>` for keys
+- Capped at 200; silent on connection failure or unset `MORI_PG_CONNECTION_STRING`
+- No shell-script changes — completer threads through the existing `--bash-completion-enriched` protocol
+
+### `Schema.DependencyScope` (new type)
+- Per-package dependency scope: `Regular | Dev | Test | Build` (omission means `Regular`)
+- Persisted as `mori.package_dependencies.dep_scope` (TEXT, nullable)
+- `mori registry show` and `mori show --full` print a trailing `[test]` / `[dev]` / `[build]` tag
+- `mori deps tree --scope=<value>` filters the recursive walk
+- `mori agent assist` and `mori agent claude` exclude `Test`-scoped deps from the resolved-deps context block and `Read(path:.../*)` allowed-tools by default; pass `--include-test-deps` to opt back in
+
+### `mori_apis` and `mori_cookbook_entries` projection tables (new)
+- New read-model tables backing `resolveMoriRef` for the `apis` and `cookbook` artifact kinds
+- Subscription handler writes Api / CookbookEntry rows on project events; `ResolvedApi` / `ResolvedCookbookEntry` arms wired through `mori path`, `mori browse`, and registry display
+
+### `mori agent bootstrap` (registry-first discovery)
+- Embedded `## Registry Snapshot` block now includes each project's local path, origin (`own`/`third_party`/`fork`/`vendored`), and shipped package list
+- New `## Reference Discovery` section in both `bootstrap` and `--corpus` prompts steers the agent to use `mori registry list/search/show` and `mori path` rather than `find` to locate reference projects
+- `--corpus` variant additionally surfaces `mori registry list --origin third_party` for sibling corpus projects
+
+---
+
 ## 2026-04-28
 
 ### `mori registry exec` (new)

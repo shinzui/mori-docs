@@ -1,19 +1,25 @@
 ---
 title: mori browse
-description: Open a project's repository in the browser
+description: Open a project's repository or artifact in the browser
 icon: Globe
 ---
 
-Open a registered project's repository in the browser.
+Open a registered project's repository — or any specific artifact via
+[canonical ref](/docs/concepts/canonical-refs) — in the browser.
 
 ```bash
 mori browse <project>
 mori browse <project> --repo <name>
 mori browse <project:package>
+
+mori browse mori://shinzui/streamly/docs/effects-cookbook
+mori browse 'shinzui/streamly#doc:effects-cookbook'
 ```
 
-Resolves the project from the local registry, looks up its configured repositories,
-and opens the URL in the system browser via `open`.
+Resolves the project from the local registry, picks an enclosing repo, and
+opens a URL in the system browser via `open`. For canonical refs, mori
+computes a sensible URL per artifact kind (e.g., a doc ref points at the
+GitHub blob URL for that file at `HEAD`).
 
 ## Package-Qualified Syntax
 
@@ -23,8 +29,8 @@ Use colon syntax to target a specific package's repository:
 mori browse hasql:hasql-pool
 ```
 
-When a package name is provided, mori selects the matching repository if one exists,
-otherwise falls back to the first repository.
+When a package name is provided, mori selects the matching repository if one
+exists, otherwise falls back to the first repository.
 
 ## Flags
 
@@ -36,8 +42,12 @@ otherwise falls back to the first repository.
 
 1. If `--repo` is specified, uses that exact repository name
 2. If `project:package` syntax is used, matches repository name to package name
-3. Otherwise, uses the first configured repository
+3. For canonical refs, picks the enclosing repo per kind and constructs a
+   blob URL (or falls back to the project URL)
+4. Otherwise, uses the first configured repository
 
-URLs are constructed from the project's repository metadata (GitHub, GitLab, or raw git URL).
+URLs are constructed from the project's repository metadata (GitHub, GitLab,
+or raw git URL).
 
-See [Navigation guide](/docs/guides/navigation) for usage patterns with `cd`, `path`, and shell integration tips.
+See [Navigation guide](/docs/guides/navigation) for usage patterns with `cd`,
+`path`, and shell integration tips.

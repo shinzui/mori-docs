@@ -1,0 +1,147 @@
+---
+title: Canonical Refs
+description: The mori:// URI scheme for cross-project artifact pointers
+icon: Link
+---
+
+Every artifact owned by a registered project — docs, packages, repos, skills,
+subagents, APIs, cookbook entries, and seihou templates — has a stable
+canonical identifier in the `mori://` URI scheme. The CLI accepts canonical
+refs as input wherever it makes sense, prints them in `--full` and `--json`
+output, and the schema can store them in any field typed as `DocLocation`.
+
+## Forms
+
+Canonical (always emitted, always accepted on input):
+
+```
+mori://<namespace>/<name>/<kind-plural>[/<key>][#<anchor>]
+```
+
+Compact alias (input only — canonical form is what gets stored and printed):
+
+```
+<namespace>/<name>[#<kind-singular>:<key>][#<anchor>]
+```
+
+The legacy DepRef shorthand `<namespace>/<name>:<package>` is accepted as a
+synonym for `<namespace>/<name>#package:<package>`.
+
+## Artifact kinds
+
+Eight kinds are pinned in v1. The order matches the Dhall union arms in
+`Schema.MoriArtifactKind` and the Haskell mirror.
+
+| Kind     | URI segment | Compact   |
+|----------|-------------|-----------|
+| Doc      | `docs`      | `doc`     |
+| Package  | `packages`  | `package` |
+| Repo     | `repos`     | `repo`    |
+| Skill    | `skills`    | `skill`   |
+| Subagent | `subagents` | `subagent`|
+| Api      | `apis`      | `api`     |
+| Cookbook | `cookbook`  | `cookbook`|
+| Template | `templates` | `template`|
+
+`cookbook` is the only segment that does not pluralise; it stays singular
+because the artifact is "the cookbook entry" and the existing extension
+already uses the singular form.
+
+## Examples
+
+```
+Project root:                    mori://shinzui/streamly
+A doc:                           mori://shinzui/streamly/docs/effects-cookbook
+A doc with anchor:               mori://shinzui/streamly/docs/effects#pooling
+Compact form for the same doc:   shinzui/streamly#doc:effects-cookbook
+A package:                       mori://shinzui/streamly/packages/streamly-core
+A skill:                         mori://shinzui/streamly/skills/effects-cookbook
+A cookbook entry:                mori://shinzui/streamly/cookbook/postgres-pool
+A seihou template:               mori://shinzui/streamly/templates/scaffold-app
+```
+
+## Resolution model
+
+Refs resolve against the **local** registry only. There is no network fetch
+in v1. To use a ref pointing at project `shinzui/streamly`, that project must
+be registered locally:
+
+```bash
+mori register ~/code/streamly
+```
+
+## Where refs are accepted
+
+On the command line:
+
+```bash
+mori path <ref>                 # print resolved filesystem path
+mori browse <ref>               # open the artifact in a browser
+mori registry open-doc <ref>    # open a doc in $EDITOR (doc refs only)
+```
+
+In config files (`mori.dhall`, `mori/cookbook.dhall`,
+`mori/checklist.dhall`):
+
+```dhall
+location = Schema.DocLocation.Canonical
+             "mori://shinzui/streamly/docs/effects-cookbook"
+```
+
+The `Canonical` arm of `DocLocation` is accepted anywhere a `DocLocation` is —
+`Project.docs`, `Package.docs`, augmented `Dependency.extraDocs`, cookbook
+entries, and checklist source docs. Existing `LocalFile` / `LocalDir` /
+`RepoPath` / `Url` arms keep working unchanged; the addition is purely
+additive.
+
+## Output: canonicalRef in JSON and `--full`
+
+Every artifact JSON object emitted by `mori show --json` and
+`mori registry show --json` carries a `canonicalRef` field with its
+`mori://` URI:
+
+```bash
+mori show --json | jq '.docs[].canonicalRef'
+```
+
+`mori show --full` and `mori registry show --full` print a dim canonical-ref
+line under each artifact in their text rendering, so you can copy a stable
+identifier directly out of the terminal.
+
+## Validation
+
+To parse and resolve every canonical ref in a project's config and extension
+files:
+
+```bash
+mori validate --check-refs
+```
+
+The check walks `mori.dhall`, `mori/cookbook.dhall`, and
+`mori/checklist.dhall`, printing a per-source ✓/✗/⚠ report. It exits zero
+if every ref resolves through the local registry; it exits 1 if any ref
+names a project that is not registered or a missing artifact key. Refs of
+an artifact kind whose registry projection is not yet wired produce a
+warning but do not fail the check.
+
+## Read-model tables
+
+EP-52 added two projection tables that back ref resolution for APIs and
+cookbook entries:
+
+| Table                      | Purpose                                |
+|----------------------------|----------------------------------------|
+| `mori.mori_apis`           | One row per API across all projects    |
+| `mori.mori_cookbook_entries` | One row per cookbook entry            |
+
+The subscription handler writes these rows on project events; a
+`ProjectCookbookEntriesReplaced` bulk event carries the full new catalog
+list when the on-disk cookbook differs from the projection.
+
+## See also
+
+- [`mori path`](/docs/commands/path) — resolves a ref to a filesystem path
+- [`mori browse`](/docs/commands/browse) — opens a ref in a browser
+- [`mori validate --check-refs`](/docs/commands/validate) — validates stored refs
+- [Schema Guide](/docs/schema-guide) — `DocLocation.Canonical` examples
+- [Schema Reference](/docs/guides/schema-reference) — `DocLocation` arms

@@ -169,11 +169,14 @@ Package-level dependencies use a union type with two variants:
 Schema.Dependency.ByName "effectful"
 ```
 
-**Augmented form** — add extra docs or a path override:
+**Augmented form** — attach extra docs, mark scope, or override a path:
 
 ```haskell
 Schema.Dependency.WithAugmentation
   { name = "hasql"
+  , kind = None Schema.DependencyKind
+  , source = None Schema.DependencySource
+  , scope = Some Schema.DependencyScope.Regular
   , extraDocs =
     [ { key = "hasql-patterns"
       , kind = Schema.DocKind.Cookbook
@@ -185,6 +188,18 @@ Schema.Dependency.WithAugmentation
   , localPathOverride = None Text
   }
 ```
+
+The `WithAugmentation` arm requires a flat record literal with all six
+fields — there is no `Aug::{ … }` completion helper for this union arm.
+
+### DependencyScope
+
+```
+Regular | Dev | Test | Build
+```
+
+Optional per-package field. Omitted or `None` means `Regular`. See
+[Dependency scope](/docs/schema-guide#dependency-scope) in the schema guide.
 
 ### ConfigItem
 
@@ -460,6 +475,43 @@ Reference | Guide | Cookbook | Spec | Runbook | Notes | Other <text>
 
 ```
 LocalFile <path> | LocalDir <path> | RepoPath <path> | Url <url>
+| Canonical <mori://uri>
+```
+
+The `Canonical` arm carries a [canonical `mori://`
+ref](/docs/concepts/canonical-refs) to another project's artifact. Validated
+by the resolver and the registry projection at register time; checked in
+bulk by `mori validate --check-refs`.
+
+### MoriArtifactKind
+
+```
+Doc | Package | Repo | Skill | Subagent | Api | Cookbook | Template
+```
+
+Eight pinned kinds used by the canonical-ref system. URI segments are
+plural (`docs`, `packages`, `repos`, `skills`, `subagents`, `apis`,
+`templates`) except `cookbook`, which stays singular.
+
+### MoriRef
+
+A record describing a canonical artifact reference:
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `namespace` | `Text` | Project namespace |
+| `name` | `Text` | Project name |
+| `kind` | `Optional MoriArtifactKind` | `None` for the project root |
+| `key` | `Optional Text` | Artifact key (`None` for `Repo` typically) |
+| `anchor` | `Optional Text` | Anchor fragment (e.g., `#section`) |
+
+```dhall
+Schema.MoriRef::{
+, namespace = "shinzui"
+, name = "streamly"
+, kind = Some Schema.MoriArtifactKind.Doc
+, key = Some "effects-cookbook"
+}
 ```
 
 ### DocAudience
