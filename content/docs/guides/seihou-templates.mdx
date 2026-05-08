@@ -1,0 +1,53 @@
+---
+title: Seihou Templates
+description: Catalog scaffold templates shipped by mori projects
+icon: Boxes
+---
+
+Some Mori projects ship reusable seihou templates that can scaffold new
+projects, packages, or modules. Mori does not reimplement seihou templating; it
+catalogs the templates a project ships so registry commands can discover them.
+
+## Declare Templates
+
+Declare templates in `mori.dhall`:
+
+```dhall
+, templates =
+  [ Schema.SeihouTemplate::{
+    , name = "haskell-base"
+    , description = Some "Minimal Haskell project with Cabal"
+    , version = Some "1.0.0"
+    , modulePath = "."
+    , tags = [ "haskell", "cabal" ]
+    , requiredVars = [ "project.name", "project.version" ]
+    }
+  ]
+```
+
+`SeihouTemplate` records store name, description, version, module path, tags,
+dependencies, and required variables. The authoritative template steps and
+prompts remain in seihou's own `module.dhall`.
+
+## Auto-Discovery
+
+When `templates` is empty, `mori register` looks for seihou manifests:
+
+1. `seihou-registry.dhall` for a multi-module registry.
+2. `module.dhall` for a single-module repository.
+3. No templates if neither exists.
+
+Explicit `templates` entries always win. Discovery failures are warnings and do
+not block registration. Pass `--no-seihou-discovery` to skip the probe.
+
+## Registry Views
+
+```bash
+mori registry list --has-templates
+mori registry templates list
+mori registry templates show shinzui/haskell-kit/nix-flake
+mori registry show shinzui/haskell-kit --full
+```
+
+The read model is populated by the registry subscription. After registration,
+keep `mori automate daemon` running when you need template views to catch up.

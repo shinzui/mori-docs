@@ -1,0 +1,67 @@
+---
+title: Corpus Learning
+description: Use registered corpus projects for debugging and API discovery
+icon: SearchCode
+---
+
+Corpus projects wrap third-party upstream repositories as local source code.
+When your project declares a dependency on a corpus project, mori can resolve
+its filesystem path and grant agents read access to that source.
+
+## Prerequisites
+
+Declare the dependency in `mori.dhall`:
+
+```dhall
+dependencies = [ "hasql", "streamly" ]
+```
+
+Register the corpus project and keep registry projections caught up:
+
+```bash
+mori register --local
+mori automate daemon
+```
+
+## Find Source
+
+```bash
+mori deps locate hasql
+mori deps explain hasql
+mori deps resolve
+mori registry show hasql --full
+```
+
+Use `locate` for the project root, `explain` for the resolution trace, and
+`registry show --full` for packages and docs. Package paths point at the source
+directories agents should inspect.
+
+## Debug A Problem
+
+Start from the symbol, type, or module in the error message:
+
+```bash
+mori deps locate hasql
+rg "functionName" /path/to/hasql-project
+mori registry show hasql --full
+```
+
+Read the implementation, type signature, and tests in the dependency. This is
+often faster than guessing at API behavior from memory.
+
+## Discover APIs
+
+Use the package paths from `registry show --full`, then inspect public module
+exports and re-export facades. Haskell libraries usually mirror module names in
+directory paths, so `Hasql.Session` maps naturally to
+`src/Hasql/Session.hs`.
+
+## Feed Agents
+
+`mori agent claude` and `mori agent ask` resolve dependencies and add read
+permissions for dependency roots. Use `mori agent context <role>` to inspect
+what an agent will receive.
+
+When you discover a useful pattern or gotcha, add it as a DocRef, cookbook
+entry, checklist, or upstream issue so future sessions can find it through
+mori instead of rediscovering it from scratch.

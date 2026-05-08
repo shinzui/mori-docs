@@ -1,0 +1,54 @@
+---
+title: mori checklist
+description: List and inspect structured project procedures
+icon: ListChecks
+---
+
+Commands for reading the checklist extension from `mori/checklist.dhall`.
+Checklist commands read the current project directly; they do not require the
+registry.
+
+## `mori checklist list`
+
+List checklists in the current project.
+
+```bash
+mori checklist list
+mori checklist list --category deployment
+mori checklist list --kind verify
+mori checklist list --tag rollback
+mori checklist list --config path/to/checklist.dhall
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--category` | Filter by checklist category, case-insensitive |
+| `--kind` | Keep checklists containing a step kind (`manual`, `command`, `verify`, `informational`) |
+| `--tag` | Match tags on the checklist or any item |
+| `--config` | Path to checklist config file |
+
+## `mori checklist show`
+
+Show one checklist, optionally zooming in on a single step.
+
+```bash
+mori checklist show install
+mori checklist show install --step enter-devshell
+mori checklist show install --config path/to/checklist.dhall
+```
+
+The detail view prints ordered steps, kind, command text, success criteria, and
+preconditions. Command steps are rendered only; mori does not execute them.
+
+## `mori checklist print-schema`
+
+Print the checklist extension Dhall schema.
+
+```bash
+mori checklist print-schema
+```
+
+See [Checklist](/docs/guides/checklist) for configuration and workflow
+guidance.

@@ -17,6 +17,9 @@ mori tech-radar list
 mori tech-radar list --language Haskell
 mori tech-radar list --category Database
 mori tech-radar list --config path/to/tech-radar.dhall
+mori tech-radar search --level Adopt --category Database
+mori tech-radar search --recommends mori://shinzui/hasql-kit
+mori tech-radar search --json
 ```
 
 ### Flags
@@ -26,6 +29,8 @@ mori tech-radar list --config path/to/tech-radar.dhall
 | `--language` | Filter by language (e.g., `Haskell`, `TypeScript`) |
 | `--category` | Filter by category (e.g., `Database`, `Cryptography`) |
 | `--config` | Path to tech-radar config file |
+
+`list` reads the current project's `mori/tech-radar.dhall` directly.
 
 ## `mori tech-radar show`
 
@@ -40,7 +45,20 @@ mori tech-radar show <package> --config path/to/tech-radar.dhall
 
 - Package name, language, category
 - Adoption level (`Adopt`, `Trial`, `Assess`, `Hold`)
-- Reason and alternatives
+- Reason, alternatives, and optional `mori://` project URI
+
+## `mori tech-radar search`
+
+Search registry-projected tech radar recommendations across all registered
+projects.
+
+```bash
+mori tech-radar search
+mori tech-radar search --level Adopt
+mori tech-radar search --category Database
+mori tech-radar search --recommends mori://shinzui/hasql-kit
+mori tech-radar search --json
+```
 
 ## `mori tech-radar print-schema`
 

@@ -1,0 +1,38 @@
+---
+title: Registry Domains
+description: Tag projects for lightweight registry discovery
+icon: Tags
+---
+
+Domains are free-form tags on `project.domains` that describe the business or
+technical area a project belongs to. They are indexed by the registry and can
+be used for discovery and filtering.
+
+```dhall
+project =
+  { name = "billing-api"
+  , namespace = "acme"
+  , domains = [ "Billing", "Platform" ]
+  , ...
+  }
+```
+
+Run `mori register --local` after changing domains.
+
+## List And Filter
+
+```bash
+mori registry domains
+mori registry domains --json
+mori registry list --domain Platform
+mori registry list --domain Billing --domain Platform
+mori registry search billing --domain Platform
+```
+
+Multiple `--domain` filters use AND semantics, so a project must carry every
+requested domain. Matching is case-insensitive.
+
+Use domains for lightweight intrinsic classification stored in `mori.dhall`.
+Use [Registry Groups](/docs/guides/registry-groups) when the collection needs
+its own identity, description, mutable membership, attachments, or extension
+data.

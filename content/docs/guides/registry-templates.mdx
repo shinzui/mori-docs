@@ -1,0 +1,43 @@
+---
+title: Registry Templates
+description: Browse seihou templates across registered projects
+icon: PackageSearch
+---
+
+`mori registry templates` provides a cross-project view of seihou templates
+known to the registry. `mori registry list --has-templates` filters projects;
+`mori registry templates` lists or shows individual templates.
+
+The data comes from the `mori.seihou_templates` projection populated during
+registration and registry projection.
+
+## List Templates
+
+```bash
+mori registry templates list
+mori registry templates list --tag haskell
+mori registry templates list --namespace shinzui
+mori registry templates list --json
+```
+
+Filters compose with AND semantics.
+
+## Show A Template
+
+```bash
+mori registry templates show shinzui/haskell-kit/nix-flake
+mori registry templates show shinzui/haskell-kit/nix-flake --json
+```
+
+The template reference has three segments:
+
+```text
+<namespace>/<project>/<template>
+```
+
+The detail view includes the template version, description, module path,
+dependencies, required variables, and tags.
+
+Templates can be declared explicitly in `mori.dhall`, or discovered during
+`mori register --local` from `seihou-registry.dhall` or a root `module.dhall`
+unless `--no-seihou-discovery` is passed.

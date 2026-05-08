@@ -1,0 +1,95 @@
+---
+title: Checklist
+description: Model ordered procedures for humans and agents
+icon: ListChecks
+---
+
+The checklist extension catalogs repeatable procedures as ordered steps. Use it
+when a procedure needs structure: order matters, later steps depend on earlier
+steps, verification has an expected signal, or an agent may need to walk the
+procedure.
+
+For prose-only reference material, use a `DocRef` with `kind = Runbook`. For
+teaching examples, use a cookbook entry. A checklist can point at a companion
+runbook with `sourceDoc`.
+
+## Configure A Checklist
+
+Create `mori/checklist.dhall`:
+
+```dhall
+let Schema = ../schema/package.dhall
+
+let Checklist = ../schema/extensions/checklist/package.dhall
+
+in  Checklist.ChecklistCatalog::{
+    , entries =
+      [ Checklist.Checklist::{
+        , key = "install"
+        , title = "Install from source"
+        , category = Checklist.Category.Installation
+        , sourceDoc = Some (Schema.DocLocation.LocalFile "docs/install.md")
+        , items =
+          [ Checklist.ChecklistItem::{
+            , key = "enter-devshell"
+            , title = "Enter the Nix devshell"
+            , kind = Checklist.StepKind.Command
+            , command = Some "nix develop"
+            , successCriteria = Some "Prompt enters the devshell"
+            }
+          , Checklist.ChecklistItem::{
+            , key = "build-all"
+            , title = "Build every target"
+            , kind = Checklist.StepKind.Command
+            , command = Some "cabal build all"
+            , preconditions = [ "enter-devshell" ]
+            , successCriteria = Some "Exit code 0"
+            }
+          ]
+        }
+      ]
+    }
+```
+
+Each extension record exports the same `{ Input, Type, default, mk }` bundle
+shape as the core schema, so record completion fills default-valued fields.
+
+## Step Fields
+
+| Field | Purpose |
+|-------|---------|
+| `key` | Unique identifier within the checklist |
+| `title` | Short human-readable step name |
+| `kind` | `Manual`, `Command`, `Verify`, `Informational`, or `Other` |
+| `command` | Optional shell command text, rendered but not executed |
+| `successCriteria` | What done looks like |
+| `preconditions` | Keys of earlier steps that must be completed first |
+| `tags` | Free-form labels |
+
+## Inspect Checklists
+
+```bash
+mori checklist list
+mori checklist list --category deployment
+mori checklist list --kind verify
+mori checklist list --tag rollback
+mori checklist show install
+mori checklist show install --step enter-devshell
+mori checklist print-schema
+```
+
+The CLI renders command steps but does not execute them. Execution remains the
+user's or agent's job.
+
+## Validation
+
+The checklist loader validates duplicate checklist keys, duplicate item keys,
+empty titles, and preconditions that reference missing or later steps.
+Validation runs during `mori register` and during checklist commands.
+
+After registration, cross-project queries are available:
+
+```bash
+mori extension query checklist
+mori extension query checklist --json
+```

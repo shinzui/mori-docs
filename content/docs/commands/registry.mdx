@@ -64,10 +64,23 @@ Search the local registry.
 
 ```bash
 mori registry search <query>
+mori registry search <query> --domain Platform
 mori registry search <query> --json
 ```
 
 Matches against project name, namespace, and package names.
+
+## `mori registry domains`
+
+List distinct domain tags and project counts.
+
+```bash
+mori registry domains
+mori registry domains --json
+```
+
+Use repeatable `--domain` filters on `registry list` and `registry search` to
+find projects carrying every requested domain. Matching is case-insensitive.
 
 ## `mori registry docs`
 

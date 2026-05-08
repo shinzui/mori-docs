@@ -113,6 +113,23 @@ assist`](#mori-agent-assist) for details.
 | `--include-test-deps` | Include `Test`-scoped dependencies in the resolved-deps context block and `Read(path:.../*)` allowed-tools |
 | `--debug` | Print the system prompt and cache state instead of starting a session |
 
+## `mori agent ask`
+
+Start a Claude session about another project registered in the local registry.
+
+```bash
+mori agent ask shinzui/mori
+mori agent ask
+mori agent ask shinzui/mori --package mori-core
+mori agent ask shinzui/mori --debug
+mori agent ask shinzui/mori --no-cd
+mori agent ask shinzui/mori --include-test-deps
+```
+
+Omit the project argument to pick interactively. A bare project name must be
+unambiguous; otherwise use `namespace/name`. See [Agent Ask](/docs/guides/agent-ask)
+for the workflow details.
+
 ## `mori agent automate`
 
 Start a Claude session specialized for automation config authoring and debugging.

@@ -1,0 +1,48 @@
+---
+title: Status
+description: Check schema pins, registry state, and observation state
+icon: Activity
+---
+
+`mori status` prints a single health report for the mori project in the current
+directory. It is the fastest way to answer whether schema pins are current,
+the project is registered, and automation observation is healthy.
+
+```bash
+mori status
+mori status --json
+```
+
+## Report Sections
+
+| Section | What it checks |
+|---------|----------------|
+| Header | Project identity and overall verdict |
+| Schema | `mori.dhall`, extension configs, and `mori.automation.dhall` pins |
+| Registry | Whether `(namespace, name)` exists in the read model |
+| Observation | Whether the project has a linked `mori/repo-id` and a current config row |
+
+Observation states include `observed`, `linked, no automation configured`,
+`linked, no config row yet`, and `not observed`.
+
+## Remediation
+
+Common fixes:
+
+```bash
+mori register --local
+mori observe
+mori automate
+mori schema upgrade
+mori registry upgrade-schema
+```
+
+Use `--json` for scripts:
+
+```bash
+mori status --json | jq '.verdict'
+mori status --json | jq '.issues'
+```
+
+Exit code `0` means healthy, `1` means attention is needed, and `2` means
+`mori.dhall` is missing or unparseable.

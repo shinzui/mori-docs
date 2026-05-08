@@ -1,0 +1,49 @@
+---
+title: Registry Groups
+description: Manage first-class project collections
+icon: FolderGit2
+---
+
+Registry groups are first-class project collections stored in the local
+registry. Unlike domains, a group has its own identity and can be renamed,
+described, assigned members, and given package, doc, or JSON extension
+attachments without editing any project's `mori.dhall`.
+
+## Lifecycle
+
+```bash
+mori registry group create platform --description "Platform team"
+mori registry group list
+mori registry group show platform
+mori registry group describe platform "Platform engineering services"
+mori registry group rename platform infrastructure
+mori registry group delete infrastructure
+```
+
+## Membership
+
+```bash
+mori registry group add platform shinzui/mori shinzui/rei
+mori registry group remove platform shinzui/rei
+mori registry group members platform
+mori registry list --group platform
+```
+
+Project refs accept either `name` or `namespace/name` when unambiguous. Group
+filters compose with `--namespace`, `--type`, `--origin`, `--domain`,
+`--docs-only`, `--observed`, and `--has-templates`.
+
+## Attachments
+
+```bash
+mori registry group attach-package platform shinzui/mori:mori-core
+mori registry group detach-package platform shinzui/mori:mori-core
+mori registry group attach-doc platform shinzui/mori docs/architecture/CLI.md
+mori registry group detach-doc platform shinzui/mori docs/architecture/CLI.md
+mori registry group set-extension platform owner '"platform-team"'
+mori registry group unset-extension platform owner
+```
+
+Group commands write events synchronously, but list, show, and filter commands
+read projection tables. Keep `mori automate daemon` running when you need read
+models to catch up immediately.

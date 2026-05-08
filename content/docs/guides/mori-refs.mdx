@@ -1,0 +1,57 @@
+---
+title: Mori References
+description: Use mori:// references in commands and configs
+icon: Link
+---
+
+Canonical cross-project references use the `mori://` URI scheme. They identify
+artifacts owned by registered projects: docs, packages, repos, skills,
+subagents, APIs, cookbook entries, and seihou templates.
+
+```text
+mori://<namespace>/<name>/<kind-plural>[/<key>][#<anchor>]
+```
+
+Compact input forms are accepted for command-line convenience:
+
+```text
+<namespace>/<name>[#<kind-singular>:<key>][#<anchor>]
+<namespace>/<name>:<package>
+```
+
+## Examples
+
+```text
+mori://shinzui/streamly
+mori://shinzui/streamly/docs/effects-cookbook
+mori://shinzui/streamly/docs/effects#pooling
+mori://shinzui/streamly/packages/streamly-core
+mori://shinzui/streamly/cookbook/postgres-pool
+mori://shinzui/streamly/templates/scaffold-app
+shinzui/streamly#doc:effects-cookbook
+shinzui/streamly:streamly-core
+```
+
+## Where Refs Work
+
+```bash
+mori path mori://shinzui/streamly/packages/streamly-core
+mori browse mori://shinzui/streamly
+mori registry open-doc mori://shinzui/streamly/docs/effects-cookbook
+mori validate --check-refs
+```
+
+Refs resolve through the local registry. Register the target project locally
+before resolving it.
+
+In Dhall configs, use `DocLocation.Canonical`:
+
+```dhall
+location = Schema.DocLocation.Canonical
+  "mori://shinzui/streamly/docs/effects-cookbook"
+```
+
+Shell completion can complete registered namespaces, projects, artifact kinds,
+and artifact keys when the registry connection is available.
+
+See [Canonical Refs](/docs/concepts/canonical-refs) for the full model.

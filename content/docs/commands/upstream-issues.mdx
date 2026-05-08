@@ -1,0 +1,54 @@
+---
+title: mori upstream-issues
+description: Track known upstream defects and local workarounds
+icon: CircleAlert
+---
+
+Commands for reading the upstream-issues extension from
+`mori/upstream-issues.dhall`. These commands read the current project directly;
+they do not require the registry.
+
+## `mori upstream-issues list`
+
+List known upstream issues.
+
+```bash
+mori upstream-issues list
+mori upstream-issues list --dependency hs-opentelemetry-api
+mori upstream-issues list --status workaround
+mori upstream-issues list --tag tracing
+mori upstream-issues list --config path/to/upstream-issues.dhall
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--dependency` | Filter by dependency name |
+| `--status` | Filter by status (`active`, `workaround`, `resolved`, `stale`) |
+| `--tag` | Filter by tag |
+| `--config` | Path to upstream-issues config file |
+
+Filters are case-insensitive and combine with AND semantics.
+
+## `mori upstream-issues show`
+
+Show one upstream issue.
+
+```bash
+mori upstream-issues show hs-otel-resource-attribute-leak
+```
+
+The detail view includes dependency, summary, status, revisit trigger,
+workaround path, upstream URL, and tags when present.
+
+## `mori upstream-issues print-schema`
+
+Print the upstream-issues extension Dhall schema.
+
+```bash
+mori upstream-issues print-schema
+```
+
+See [Upstream Issues](/docs/guides/upstream-issues) for configuration and
+workflow guidance.

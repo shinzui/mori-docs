@@ -1,0 +1,47 @@
+---
+title: Registry Exec
+description: Run one command across selected registered projects
+icon: Terminal
+---
+
+`mori registry exec` runs the same command in every selected project in the
+local registry. Each command is invoked with its working directory set to that
+project's local path.
+
+```bash
+mori registry exec -- git fetch --all
+mori registry exec --group platform -- just lint
+mori registry exec --namespace shinzui -- cabal build all
+```
+
+The `--` separates mori flags from the command to run. Arguments after `--` are
+passed directly to the spawned process; mori does not run them through a shell
+or wrap them in `nix develop`.
+
+## Filters
+
+```bash
+mori registry exec --group platform -- just check
+mori registry exec --namespace shinzui -- bun outdated
+mori registry exec --type library -- cabal build all
+mori registry exec --origin own -- just lint
+mori registry exec --filter "shinzui/*-kit" -- just lint
+```
+
+Filters compose with AND semantics.
+
+## Execution Controls
+
+```bash
+mori registry exec --dry-run -- anything
+mori registry exec --dry-run --json -- anything | jq .
+mori registry exec --jobs 4 -- just check
+mori registry exec --fail-fast -- just check
+```
+
+The default is `--jobs 1`. With `--fail-fast`, remaining not-yet-started
+projects are reported as `not-run` after the first failure. In parallel mode,
+already-running workers finish.
+
+Projects without a local path, or whose path no longer exists, are skipped and
+do not affect the exit code.

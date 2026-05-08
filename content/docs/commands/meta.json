@@ -21,9 +21,12 @@
 		"extension",
 		"cookbook",
 		"tech-radar",
+		"checklist",
+		"upstream-issues",
 		"alias",
 		"completions",
 		"help",
-		"doctor"
+		"doctor",
+		"status"
 	]
 }

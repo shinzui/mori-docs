@@ -1,0 +1,43 @@
+---
+title: mori status
+description: Show project health at a glance
+icon: Activity
+---
+
+`mori status` prints a single health report for the mori project in the current
+directory.
+
+```bash
+mori status
+mori status --json
+```
+
+## Report Sections
+
+| Section | What it checks |
+|---------|----------------|
+| Header | Project identity and overall verdict |
+| Schema | `mori.dhall`, known extension configs, and automation schema pins |
+| Registry | Whether `(namespace, name)` exists in the read model |
+| Observation | Whether the project is linked with `mori/repo-id` and has current observation state |
+
+Schema files can be `current`, `stale`, `unpinned`, or `missing`. `unpinned`
+means the file uses a local import, which is expected in dogfooding setups and
+is not treated as an error.
+
+## Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | Healthy |
+| `1` | Attention needed: stale pin, not registered, not observed, or automation config not observed |
+| `2` | `mori.dhall` is missing or unparseable |
+
+Use `--json` in scripts or CI:
+
+```bash
+mori status --json | jq '.verdict'
+mori status --json | jq '.issues'
+```
+
+See [Status](/docs/guides/status) for remediation guidance.

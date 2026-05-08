@@ -1,0 +1,51 @@
+---
+title: Agent Ask
+description: Start a Claude session about another registered project
+icon: MessagesSquare
+---
+
+`mori agent ask` opens an interactive Claude session about a project registered
+in the local registry, even when you are not standing in that project's
+directory.
+
+```bash
+mori agent ask [PROJECT] [--package PACKAGE] [--debug] [--no-cd] [--include-test-deps]
+```
+
+Omit `PROJECT` to pick from registered projects interactively. A bare project
+name must be unambiguous; otherwise use `<namespace>/<name>`.
+
+## Common Uses
+
+```bash
+mori agent ask shinzui/mori
+mori agent ask
+mori agent ask shinzui/mori --package mori-core
+mori agent ask shinzui/mori --debug
+```
+
+`--package` narrows the session to a single package and starts Claude in that
+package directory unless `--no-cd` is also set. `--debug` prints the assembled
+prompt instead of launching Claude.
+
+## Difference From `agent claude`
+
+`mori agent claude` is for the project in the current directory. It loads the
+CWD config and can use that project's context cache.
+
+`mori agent ask` looks the target project up in the registry, loads the target
+project's `mori.dhall`, and resolves dependencies on each invocation. It is the
+right command for asking about a sibling or corpus project without changing
+directories.
+
+## What Claude Gets
+
+The session receives:
+
+- `--add-dir <project-root>` for the target project.
+- Read permissions for the target root and resolved dependency roots.
+- A system prompt naming the project, packages, docs, and dependencies with
+  absolute paths.
+- Optional package scope when `--package` is used.
+
+Pass `--include-test-deps` when test-scoped dependencies should be visible.

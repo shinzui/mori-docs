@@ -55,9 +55,10 @@ Show transitive dependency tree.
 
 ```bash
 mori deps tree
-mori deps tree --max-depth 2
-mori deps tree --project @acme/payments
+mori deps tree acme/payments --depth 5
 mori deps tree --scope regular
+mori deps tree --scope regular,test
+mori deps tree --scope all
 mori deps tree --json
 ```
 
@@ -65,9 +66,9 @@ mori deps tree --json
 
 | Flag | Description |
 |------|-------------|
-| `--max-depth` | Maximum depth to display (default: unlimited) |
-| `--project` | Show tree for a specific project |
-| `--scope` | Filter package-level dependencies by [scope](/docs/schema-guide#dependency-scope) (`regular`, `dev`, `test`, `build`). Project-level dependencies are unscoped and always included |
+| `--depth` | Maximum depth to display (default: `3`) |
+| project argument | Optional `namespace/name`; when omitted, mori reads the current directory's `mori.dhall` |
+| `--scope` | Filter package-level dependencies by [scope](/docs/schema-guide#dependency-scope) (`regular`, `dev`, `test`, `build`), comma-separated combinations, or `all` |
 | `--json` | JSON output |
 
 ### Scope display

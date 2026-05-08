@@ -1,0 +1,71 @@
+---
+title: Upstream Issues
+description: Track upstream defects and local workarounds
+icon: CircleAlert
+---
+
+The upstream-issues extension catalogs known defects in upstream dependencies
+that affect a project. Each entry records a stable key, dependency name,
+summary, status, optional workaround path, optional upstream URL, revisit
+trigger, and tags.
+
+Use it for live concerns: local workarounds, fixes you are waiting to adopt, or
+reminders to revisit a dependency when upstream changes. It is not a replacement
+for the upstream issue tracker.
+
+## Configure A Catalog
+
+Create `mori/upstream-issues.dhall`:
+
+```dhall
+let UpstreamIssues = ../schema/extensions/upstream-issues/package.dhall
+
+in  UpstreamIssues.UpstreamIssuesCatalog::{
+    , entries =
+      [ UpstreamIssues.UpstreamIssue::{
+        , key = "hs-otel-resource-attribute-leak"
+        , dependency = "hs-opentelemetry-api"
+        , summary = "Resource attributes leak across spans"
+        , status = UpstreamIssues.IssueStatus.Workaround
+        , workaroundPath = Some "docs/upstream/hs-otel.md"
+        , upstreamUrl = Some "https://github.com/iand675/hs-opentelemetry/pull/123"
+        , revisitTrigger = Some "When opentelemetry-api 0.5.0 ships"
+        , tags = [ "tracing", "blocking" ]
+        }
+      ]
+    }
+```
+
+The minimal entry only needs `key`, `dependency`, and `summary`; the schema
+fills `status = Active`, optional fields as `None`, and `tags = []`.
+
+## Status Values
+
+| Status | Meaning |
+|--------|---------|
+| `Active` | Upstream is broken and the project is affected |
+| `Workaround` | A local workaround is in place and should be revisited |
+| `Resolved` | Upstream has fixed it; remove the entry on the next sweep |
+| `Stale` | The dependency is no longer in use, but context is kept |
+
+## Inspect Issues
+
+```bash
+mori upstream-issues list
+mori upstream-issues list --dependency hs-opentelemetry-api
+mori upstream-issues list --status workaround
+mori upstream-issues list --tag tracing
+mori upstream-issues show hs-otel-resource-attribute-leak
+mori upstream-issues print-schema
+```
+
+After registration, query all projects:
+
+```bash
+mori extension query upstream-issues
+mori extension query upstream-issues --json
+```
+
+Pair this with cross-repo automation when a corpus repository can signal
+dependent projects that an upstream file changed and a workaround should be
+revisited.

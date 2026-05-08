@@ -46,7 +46,7 @@ mori doctor
 Migrations create all required schemas and tables:
 
 ```bash
-cabal run mori-migrations
+just run-migrations
 ```
 
 Four phases run in order:
@@ -56,7 +56,7 @@ Four phases run in order:
 | TypeID functions | UUIDv7 generation, base32 encoding for type-safe IDs |
 | MessageDB schema | `message_store` schema and event store tables |
 | PGMQ schema | Queue infrastructure for scheduled actions |
-| Application tables | `mori` schema with 14 SQL migration scripts |
+| Application tables | `mori` schema with project, package, dependency, automation, app, group, extension, and projection tables |
 
 A final migration sets the PostgreSQL `search_path` to `public, message_store, mori`
 so queries can reference tables without schema prefixes.
@@ -289,13 +289,19 @@ All events are written to streams named `project-{namespace}:{name}` under the
 
 ## Subscriptions and Projections
 
-The registry subscription runs as part of `mori automate run`. Three
-subscriptions start concurrently:
+Registry projections run as part of `mori automate daemon`; `mori automate run`
+also starts the registry subscription for a single-repo automation session.
+Several subscriptions may run concurrently, depending on which features are in
+use:
 
 | Subscription | Category | Purpose |
 |-------------|----------|---------|
 | `mori-registry` | `project` | Projects events into read model tables |
+| `mori-group-registry` | `group` | Projects registry group membership and attachments |
+| `mori-app-registration` | `app` | Projects app registrations and status |
+| `mori-tech-radar` | `project` | Projects tech-radar recommendations |
 | `mori-automation` | `repository` | Matches events against selectors, triggers reactions |
+| `mori-workflow` | `workflow` | Tracks cross-repo workflow state |
 | `mori-reaction-executor` | `reaction` | Executes triggered reaction actions |
 
 The registry handler parses each event and performs the corresponding database
@@ -319,15 +325,15 @@ Registration and projection are separate steps:
 mori register --local
 
 # Step 2: Start subscriptions to populate read model tables
-mori automate run
+mori automate daemon
 ```
 
 Without step 2, the read model tables stay empty. Commands that query the read
 model (`deps resolve`, `deps locate`, `deps explain`, `agent context`) require
 both steps to return results.
 
-Once `mori automate run` is running, it continuously processes new events. You
-can register additional projects in another terminal and the read model updates
+Once `mori automate daemon` is running, it continuously processes new events.
+You can register additional projects in another terminal and the read model updates
 automatically.
 
 ## Verifying the Registry
@@ -383,12 +389,12 @@ in `message_store.messages` to see if the subscription is caught up.
 
 ### Tables don't exist
 
-Migrations haven't been run. Run `cabal run mori-migrations` and verify with
-`mori doctor`.
+Migrations haven't been run. Run `just run-migrations` (or the migration
+executable for your build setup) and verify with `mori doctor`.
 
 ### Read model empty despite events existing
 
-The subscription hasn't been started. Run `mori automate run` to start
+The subscription hasn't been started. Run `mori automate daemon` to start
 processing events into the read model tables.
 
 ### Stale projections
@@ -402,7 +408,7 @@ WHERE name = 'mori-registry';
 ```
 
 If the position is behind the latest event, the subscription may have stopped.
-Restart `mori automate run`.
+Restart `mori automate daemon`.
 
 ### Replaying the subscription from scratch
 
@@ -413,7 +419,7 @@ DELETE FROM checkpoints WHERE name = 'mori-registry';
 ```
 
 ```bash
-mori automate run
+mori automate daemon
 ```
 
 The subscription reprocesses all events from the beginning. Because all
