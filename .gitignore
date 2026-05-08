@@ -1,6 +1,8 @@
 node_modules/
 .pre-commit-config.yaml
 
+.agents/
+
 .direnv/
 .envrc
 
