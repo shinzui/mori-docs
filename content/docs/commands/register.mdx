@@ -33,3 +33,18 @@ mori register --no-seihou-discovery
 Internal callers (`mori observe`, `mori automate register`, `mori registry
 reregister`) always run the discovery probe — `--no-seihou-discovery` only
 applies to direct invocations of `mori register`.
+
+## Recovery hint on extension load failure
+
+When an extension fails to load, mori prints a warning. If the error looks
+like a stale or mismatched pin (HTTP 404, hash mismatch, or `TlsNotSupported`
+on old binaries) the warning is followed by a recovery hint pointing at
+`mori schema migrate`:
+
+```
+Warning: extension 'agent-plans' failed to load: ...
+  Hint: run `mori schema migrate --apply --file mori/agent-plans.dhall` to align the extension import with the mori binary's pinned schema.
+```
+
+Apply the suggested migration to repin the extension import to the same
+mori-schema commit the binary expects, then re-run `mori register`.

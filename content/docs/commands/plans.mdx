@@ -1,0 +1,129 @@
+---
+title: mori plans
+description: Cross-project queries over the agent-plans registry
+icon: ClipboardList
+---
+
+`mori plans` queries the cross-project plan registry populated by the
+[agent-plans extension](/docs/guides/agent-plans). All subcommands read the
+local registry projection; they do not parse the local `mori/agent-plans.dhall`
+directly, so they work from any directory once a project has been registered.
+
+## `mori plans list`
+
+List plans across the registry.
+
+```bash
+mori plans list
+mori plans list --project shinzui/mori
+mori plans list --kind master
+mori plans list --status InProgress
+mori plans list --owner alice
+mori plans list --json
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--project` | Restrict to a project (`namespace/name`) |
+| `--kind` | Filter by plan kind (`master` or `exec`) |
+| `--status` | Filter by status (`NotStarted`, `InProgress`, `Complete`, `Cancelled`, `Blocked`) |
+| `--owner` | Filter by owner |
+| `--json` | Emit JSON instead of a table |
+
+## `mori plans show`
+
+Show one plan's detail along with forward and reverse dependencies.
+
+```bash
+mori plans show mori://shinzui/mori/masterplans/9-agent-plans-extension
+mori plans show shinzui/mori#plan:70-agent-plans-dhall-schema-and-uri-kinds
+mori plans show <PLAN_REF> --json
+```
+
+Plan references accept canonical `mori://` form, the compact
+`namespace/name#kind:key` form, or a local plan markdown path.
+
+## `mori plans search`
+
+Search plans by title substring or filter, including forward and reverse
+dependency lookups.
+
+```bash
+mori plans search billing
+mori plans search --owner alice --kind exec
+mori plans search --status NotStarted --project acme/web-app
+mori plans search --blocks mori://acme/event-store/plans/7-typed-event-encoder
+mori plans search --blocked-by mori://shinzui/mori/plans/70-agent-plans-dhall-schema-and-uri-kinds
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `QUERY` | Optional positional argument — substring match on plan title (case-insensitive) |
+| `--blocks` | Reverse lookup: plans whose dependencies include this `mori://` URI |
+| `--blocked-by` | Forward lookup: the plans this URI's plan depends on |
+| `--owner` | Filter by owner |
+| `--status` | Filter by status |
+| `--kind` | Filter by plan kind (`master` or `exec`) |
+| `--project` | Restrict to a project (`namespace/name`) |
+| `--json` | Emit JSON instead of a table |
+
+`--blocks` and `--blocked-by` are mutually exclusive.
+
+## `mori plans deps`
+
+Show plan dependencies in forward, reverse, or next-implementable mode.
+
+```bash
+mori plans deps mori://shinzui/mori/masterplans/9-agent-plans-extension
+mori plans deps mori://shinzui/mori/masterplans/9-agent-plans-extension --reverse
+mori plans deps --next-implementable
+mori plans deps --next-implementable --master-plan docs/masterplans/9-agent-plans-extension.md
+mori plans deps --next-implementable --project shinzui/mori
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `PLAN_REF` | Plan reference whose dependencies to inspect (required for default and `--reverse` modes) |
+| `--reverse` | Show plans depending on this plan instead of plans this plan depends on |
+| `--next-implementable` | Show child ExecPlans whose Hard deps are all Complete |
+| `--master-plan` | Restrict `--next-implementable` to a specific MasterPlan |
+| `--project` | Restrict `--next-implementable` to a project |
+| `--json` | Emit JSON instead of a table |
+
+`--next-implementable` and `--reverse` are mutually exclusive. The
+next-implementable mode powers the seihou skill loop — when every child plan
+is already Complete or has unmet hard deps, the command reports "No
+implementable plan: every child plan is Complete or has incomplete hard deps."
+
+## `mori plans open`
+
+Open a plan file in your editor. Delegates to `mina <kind>-plan open` when the
+`mina` binary is available on `PATH`, otherwise falls back to `$EDITOR` (or
+`vi`).
+
+```bash
+mori plans open mori://shinzui/mori/plans/70-agent-plans-dhall-schema-and-uri-kinds
+```
+
+The path resolver looks for the plan file under
+`<project>/{plans,masterplans}/<id>-<slug>.md`.
+
+## `mori plans print-schema`
+
+Print the agent-plans extension's Dhall schema for reference.
+
+```bash
+mori plans print-schema
+```
+
+## See Also
+
+- [Agent Plans guide](/docs/guides/agent-plans) — author and register a plan catalog
+- [Canonical Refs](/docs/concepts/canonical-refs) — `mori://` URI scheme including MasterPlan and ExecPlan kinds
+- [`mori agent bootstrap-agent-plan`](/docs/commands/agent#mori-agent-bootstrap-agent-plan) — Claude session pre-loaded to author a new agent plan

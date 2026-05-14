@@ -29,23 +29,27 @@ synonym for `<namespace>/<name>#package:<package>`.
 
 ## Artifact kinds
 
-Eight kinds are pinned in v1. The order matches the Dhall union arms in
+The kinds are pinned in the schema. The order matches the Dhall union arms in
 `Schema.MoriArtifactKind` and the Haskell mirror.
 
-| Kind     | URI segment | Compact   |
-|----------|-------------|-----------|
-| Doc      | `docs`      | `doc`     |
-| Package  | `packages`  | `package` |
-| Repo     | `repos`     | `repo`    |
-| Skill    | `skills`    | `skill`   |
-| Subagent | `subagents` | `subagent`|
-| Api      | `apis`      | `api`     |
-| Cookbook | `cookbook`  | `cookbook`|
-| Template | `templates` | `template`|
+| Kind | URI segment | Compact |
+|------|-------------|---------|
+| Doc | `docs` | `doc` |
+| Package | `packages` | `package` |
+| Repo | `repos` | `repo` |
+| Skill | `skills` | `skill` |
+| Subagent | `subagents` | `subagent` |
+| Api | `apis` | `api` |
+| Cookbook | `cookbook` | `cookbook` |
+| Template | `templates` | `template` |
+| MasterPlan | `masterplans` | `masterplan` |
+| ExecPlan | `plans` | `plan` |
 
 `cookbook` is the only segment that does not pluralise; it stays singular
 because the artifact is "the cookbook entry" and the existing extension
-already uses the singular form.
+already uses the singular form. The `MasterPlan` and `ExecPlan` kinds are
+added by the [agent-plans extension](/docs/guides/agent-plans); their
+trailing key is the plan's `<id>-<slug>` segment.
 
 ## Examples
 
@@ -58,6 +62,8 @@ A package:                       mori://shinzui/streamly/packages/streamly-core
 A skill:                         mori://shinzui/streamly/skills/effects-cookbook
 A cookbook entry:                mori://shinzui/streamly/cookbook/postgres-pool
 A seihou template:               mori://shinzui/streamly/templates/scaffold-app
+A masterplan:                    mori://shinzui/mori/masterplans/9-agent-plans-extension
+An exec plan:                    mori://shinzui/mori/plans/70-agent-plans-dhall-schema-and-uri-kinds
 ```
 
 ## Resolution model

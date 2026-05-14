@@ -40,7 +40,7 @@ mori schema print --category automation
 
 ## `mori schema migrate`
 
-Check or apply schema migrations to `mori.dhall` or a known extension file (`mori/cookbook.dhall`, `mori/tech-radar.dhall`, `mori.automation.dhall`). The target's file kind is detected by path, and the appropriate migration pipeline is applied — the mk-form rewrite runs first so subsequent field-level migrations operate on a file already in `Schema.<Record>::{…}` form.
+Check or apply schema migrations to `mori.dhall` or a known extension file (`mori/cookbook.dhall`, `mori/tech-radar.dhall`, `mori/agent-plans.dhall`, `mori.automation.dhall`). The target's file kind is detected by path, and the appropriate migration pipeline is applied — the mk-form rewrite runs first so subsequent field-level migrations operate on a file already in `Schema.<Record>::{…}` form.
 
 ```bash
 mori schema migrate
@@ -49,7 +49,14 @@ mori schema migrate --dry-run
 mori schema migrate --file path/to/mori.dhall
 mori schema migrate --apply --file mori/cookbook.dhall
 mori schema migrate --apply --file mori/tech-radar.dhall
+mori schema migrate --apply --file mori/agent-plans.dhall
 ```
+
+The `agent-plans` migration inserts the `let AgentPlans = … sha256:…` import
+pinned to the same mori-schema commit as the core schema. The schema-URL
+rewrite step that runs for other targets is skipped for
+`mori/agent-plans.dhall` because agent-plans bodies do not reference the
+`let Schema = …` binding.
 
 ### Flags
 
@@ -60,3 +67,20 @@ mori schema migrate --apply --file mori/tech-radar.dhall
 | `--file` | Target file (default: `mori.dhall`) |
 
 For bulk migration across every project in the local registry (including extension files), use [`mori registry upgrade-schema`](/docs/commands/registry#mori-registry-upgrade-schema). See [Schema Migrations](/docs/guides/schema-migrations) for per-migration details and the `rewrite-to-mk-form` migration.
+
+## `mori schema pin`
+
+Print the mori-schema commit and extension hashes that this binary is pinned
+against. Useful for drift detection and for confirming that an extension import
+in a project file matches the binary's expectations.
+
+```bash
+mori schema pin
+mori schema pin --emit-json
+```
+
+Without flags, prints three lines (commit, main schema hash, agent-plans
+extension hash). With `--emit-json`, emits a single-line JSON document with a
+stable key order (`moriSchemaCommit`, `mainSchemaHash`,
+`agentPlansExtensionHash`) intended for machine consumption — mina's
+`just check-schema-pin` drift detector relies on the byte sequence.

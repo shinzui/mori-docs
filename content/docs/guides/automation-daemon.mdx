@@ -46,18 +46,23 @@ mori automate daemon --refresh-interval 120    # config-refresh cycle
    - Triggers reactions with `workingDir` automatically set to the
      repo's path (so `RunCommand` actions execute in the right directory)
 
-5. The daemon runs six concurrent subscription workers:
+5. The daemon runs several concurrent subscription workers:
 
 | Subscription | Purpose |
 |-------------|---------|
 | `mori-automation` (daemon mode) | Route events to per-repo configs + app fan-out |
 | `mori-reaction-executor` | Execute triggered actions |
+| `mori-pending-schedules-projection` | Maintain `mori.pending_scheduled_reactions` for `ReactionScheduled` / terminal events |
 | `mori-registry` | Populate registry read model |
+| `mori-tech-radar-projection` | Project tech-radar recommendations |
+| `mori-agent-plans-projection` | Project agent-plans catalog and dependencies |
 | `mori-workflow` | Maintain workflow projections |
 | Registration subscription | Update in-memory config registry on register/deregister |
 | App registration subscription | Update app registry on app events |
 
-Plus a shibuya worker for scheduled actions, and a periodic **auto-ingest loop**.
+Plus a shibuya worker for legacy per-action `Schedule` deferrals, the
+scheduled-reactions worker for per-reaction `schedule` deferrals (with
+idempotency-check execution), and a periodic **auto-ingest loop**.
 
 ## Auto-Ingest
 

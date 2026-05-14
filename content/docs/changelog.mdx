@@ -9,6 +9,44 @@ features, commands, and schema changes.
 
 ---
 
+## 2026-05-13
+
+### Agent-plans extension and `mori plans` (new)
+- New cross-project plan registry: publish a project's MasterPlans and ExecPlans through `mori/agent-plans.dhall` so other projects can declare `Hard` / `Soft` / `Integration` dependencies on them by `mori://` URI
+- New top-level command [`mori plans`](/docs/commands/plans) with `list`, `show`, `search`, `deps`, `open`, and `print-schema` subcommands — queries the read-model projection, not the local catalog, so it works from any directory
+- `mori plans deps --next-implementable` returns child ExecPlans whose Hard deps (including cross-project ones) are all `Complete`; the seihou `master-plan` and `exec-plan` skills consult this before picking the next plan
+- `mori plans search --blocks <uri>` (reverse) and `--blocked-by <uri>` (forward) expose the cross-project dependency graph
+- Two new canonical-ref kinds: `mori://<ns>/<name>/masterplans/<id>-<slug>` and `mori://<ns>/<name>/plans/<id>-<slug>` (compact: `#masterplan:` and `#plan:`)
+- `mori registry show <project> --full` gains "Plans depending on this project" and "Plans here depending on others" subsections (text and JSON)
+- New `mori help agent-plans` topic and [Agent Plans guide](/docs/guides/agent-plans)
+
+### `mori agent bootstrap-agent-plan` (new)
+- Claude session pre-loaded with the agent-plans extension schema, a snapshot of the project's existing plans, the canonical Markdown skeleton, and the validate / register / verify workflow
+- Optional `--title`, `--kind`, `--summary`, `--description`, and repeatable `--depends-on` flags; `--debug` prints the system prompt without launching a session
+
+### Scheduled reactions (new)
+- New per-reaction `schedule` field on `Schema.Reaction`. When set, the whole reaction is enqueued on the `scheduled_reactions` pgmq queue and runs at the absolute `runAt` instant computed from `schedule.after` (ISO 8601 duration; years and weeks not supported)
+- Optional `idempotencyCheck`: a shell command run just before the actions fire — if its exit code matches `skipOnExit` (`Zero` or `NonZero`), the reaction is skipped and `ReactionSkipped` is emitted instead of running the actions. The check command sees `MORI_REACTION_ID`, `MORI_REACTION_NAME`, `MORI_REPO_ID`, `MORI_TRIGGER_*`, `MORI_SCHEDULED_AT`, `MORI_RUN_AT`, and `MORI_COALESCE_KEY` env vars
+- Optional `coalesceKey`: debounce by `(repo, automation, reaction-name, key)` — a fresh trigger cancels the prior pending reaction (`ReactionCancelled` with `reason = "superseded by …"`) and enqueues a new one. Without a key, repeated triggers stack
+- Three new reaction status values: `scheduled`, `skipped`, `cancelled`. `mori reaction list --status` accepts them
+- New commands: [`mori reaction cancel`](/docs/commands/reaction#mori-reaction-cancel), [`mori reaction scheduled list`](/docs/commands/reaction#mori-reaction-scheduled-list), and [`mori reaction scheduled show`](/docs/commands/reaction#mori-reaction-scheduled-show)
+- New daemon subscriptions: `mori-pending-schedules-projection` (maintains `mori.pending_scheduled_reactions`) and `mori-agent-plans-projection`
+- The per-action `Schedule` wrapper is preserved for backwards compatibility; per-reaction `schedule` is preferred for new code
+
+### `mori schema pin` (new)
+- Print the pinned mori-schema commit, main schema hash, and agent-plans extension hash. Three-line human transcript by default; `--emit-json` emits a single-line JSON document with a stable key order (`moriSchemaCommit`, `mainSchemaHash`, `agentPlansExtensionHash`) for drift detection (mina's `just check-schema-pin`)
+
+### `mori schema migrate` extends to `mori/agent-plans.dhall`
+- The migration pipeline now recognises `mori/agent-plans.dhall`, inserts the pinned `let AgentPlans = … sha256:…` import, and skips the standalone schema-URL rewrite (agent-plans bodies do not reference `let Schema = …`)
+
+### `mori kit status` enhancements
+- New `INSTALLED`, `LATEST`, and `STATE` columns. State precedence is `unknown > outdated > dirty > up-to-date`
+- Per-install sidecar (`*.mori-kit.json`) records name, kind, version, content hash, and install time. `mori kit uninstall` removes the sidecar too
+- New required `version` field in skill / agent manifest entries (legacy entries without a version are tolerated but report `outdated`)
+
+### `mori register` recovery hint
+- When an extension load fails with an error that looks like a stale or mismatched pin (HTTP 404, hash mismatch, or `TlsNotSupported` on old binaries), `mori register` now follows the warning with a hint: `run mori schema migrate --apply --file mori/<ext>.dhall to align the extension import with the mori binary's pinned schema`
+
 ## 2026-05-08
 
 ### Documentation coverage refresh

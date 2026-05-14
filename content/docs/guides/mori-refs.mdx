@@ -28,9 +28,18 @@ mori://shinzui/streamly/docs/effects#pooling
 mori://shinzui/streamly/packages/streamly-core
 mori://shinzui/streamly/cookbook/postgres-pool
 mori://shinzui/streamly/templates/scaffold-app
+mori://shinzui/mori/masterplans/9-agent-plans-extension
+mori://shinzui/mori/plans/70-agent-plans-dhall-schema-and-uri-kinds
 shinzui/streamly#doc:effects-cookbook
 shinzui/streamly:streamly-core
+shinzui/mori#masterplan:9-agent-plans-extension
+shinzui/mori#plan:70-agent-plans-dhall-schema-and-uri-kinds
 ```
+
+For `masterplans/<id>-<slug>` and `plans/<id>-<slug>` (the agent-plans
+extension's MasterPlan and ExecPlan kinds), the trailing key is the full
+`<id>-<slug>`, not the slug alone. Cross-project dep URIs must use the
+exact segment as it appears on disk. See [Agent Plans](/docs/guides/agent-plans).
 
 ## Where Refs Work
 

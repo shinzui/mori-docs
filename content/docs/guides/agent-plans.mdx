@@ -1,0 +1,309 @@
+---
+title: Agent Plans
+description: Cross-project plan registry with hard / soft / integration dependencies
+icon: ClipboardList
+---
+
+The **agent-plans** extension publishes a project's MasterPlans and ExecPlans
+into the mori registry so cross-project dependencies between plans become
+queryable. A plan in project A can declare a hard dependency on a plan in
+project B, and `mori plans deps --next-implementable` will not unblock A's
+plan until B's plan flips to `Complete` in the registry.
+
+The extension is not a replacement for [mina](https://github.com/shinzui/mina).
+mina remains the rich per-project surface
+(`mina exec-plan parse | graph | attention | findings | agent-assist | migrate`);
+agent-plans adds the cross-project dimension only.
+
+## When to use
+
+Use the agent-plans extension when:
+
+- A plan in your project depends on work landing in a different project
+  (cross-team / cross-repo coordination).
+- You want `/master-plan implement` and `/exec-plan implement` skills to pick
+  the next implementable child ExecPlan automatically — the skills consult
+  the registry, not just the local masterplan's table, so they see
+  cross-project Hard deps.
+- You want a single registry surface (`mori plans list`, `mori plans search`)
+  that spans every project's plans without visiting each project directory.
+
+Single-project use is still valuable. Even with no cross-project deps,
+`mori plans deps --next-implementable --master-plan PATH` is the
+registry-level answer to "what is the next implementable child?", which
+the seihou skills consult before scanning the masterplan table by hand.
+
+The extension expects YAML frontmatter on every published plan file (`id`,
+`slug`, `title`, `kind`, `created_at`, optional `intention` and
+`master_plan`). The agent-seihou init scripts in
+`agents/skills/{master-plan,exec-plan}/` write this frontmatter for new
+plans. To migrate existing plans, run `mina exec-plan migrate` and
+`mina master-plan migrate` once before authoring `mori/agent-plans.dhall`.
+
+## Bootstrapping a new plan
+
+When you want to author a new agent plan, run:
+
+```bash
+mori agent bootstrap-agent-plan \
+  --title "<plan title>" \
+  --kind exec-plan \
+  --summary "<one-line summary>" \
+  --description "<what the plan should achieve>" \
+  --depends-on mori://<ns>/<name>/plans/<dep-slug>
+```
+
+This launches a Claude session whose system prompt already contains the
+agent-plans extension schema, a snapshot of this project's existing plans,
+the canonical Markdown skeleton, and the exact validate / register / verify
+workflow. The agent calls `bun .claude/skills/exec-plan/init-plan.ts` to
+scaffold the file, fills in the body, appends an `ExposedPlan` entry to
+`mori/agent-plans.dhall`, runs `mori validate` and `mori register --local`,
+and verifies with `mori plans show`.
+
+All flags are optional; when omitted, the agent asks once for what is missing
+and proceeds. `--depends-on` is repeatable. Use `--debug` to print the
+system prompt without launching a session.
+
+See [`mori agent bootstrap-agent-plan`](/docs/commands/agent#mori-agent-bootstrap-agent-plan).
+
+## Creating `mori/agent-plans.dhall`
+
+Create `mori/agent-plans.dhall` in your project directory. The file must
+conform to the `AgentPlansCatalog` schema:
+
+```dhall
+let Schema = https://raw.githubusercontent.com/shinzui/mori-schema/<commit>/package.dhall
+      sha256:<hash>
+
+let AgentPlans = https://raw.githubusercontent.com/shinzui/mori-schema/<commit>/extensions/agent-plans/package.dhall
+      sha256:<hash>
+
+in  AgentPlans.AgentPlansCatalog::{
+    , plans =
+      [ AgentPlans.ExposedPlan::{
+        , kind = AgentPlans.PlanKind.MasterPlan
+        , file = "docs/masterplans/1-billing-port.md"
+        , status = AgentPlans.PlanStatus.InProgress
+        , summary = Some "Port billing module to the new event store"
+        }
+      , AgentPlans.ExposedPlan::{
+        , kind = AgentPlans.PlanKind.ExecPlan
+        , file = "docs/plans/12-billing-event-types.md"
+        , status = AgentPlans.PlanStatus.NotStarted
+        , dependencies =
+          [ AgentPlans.PlanDependency::{
+            , kind = AgentPlans.DependencyKind.Hard
+            , target =
+                "mori://acme/event-store/plans/7-typed-event-encoder"
+            }
+          ]
+        }
+      ]
+    }
+```
+
+Every record (`AgentPlansCatalog`, `ExposedPlan`, `PlanDependency`) exports a
+`{ Input, Type, default, mk }` bundle, so the `::` record-completion sugar
+fills in defaults for every field you omit. The optional defaulted fields
+are `owner = None Text`, `summary = None Text`, and
+`dependencies = [] : List PlanDependency.Type`.
+
+After creating the file, run `mori register` to store the catalog. The
+extension data flows through the generic `ProjectExtensionSet` event and is
+projected into `mori.agent_plans` + `mori.agent_plan_dependencies`. The
+loader validates that:
+
+- Every `file` exists under the project root.
+- Every referenced plan has parseable YAML frontmatter whose `kind` matches
+  the `kind` declared in dhall.
+- Every plan file's frontmatter `id` and `slug` agree with the `<id>-<slug>`
+  shape derived from the filename.
+- Every `dependencies[].target` parses as a `mori://` URI.
+
+Validation errors are reported during `mori register` and the catalog is not
+stored until every plan passes.
+
+## Entry fields
+
+| Field | Type | Purpose |
+|-------|------|---------|
+| `kind` | `PlanKind` | `MasterPlan` or `ExecPlan` |
+| `file` | `Text` | Path to the plan markdown, relative to the project root |
+| `status` | `PlanStatus` | Authoritative status the publishing project advertises |
+| `owner` | `Optional Text` | Optional author / DRI handle |
+| `summary` | `Optional Text` | One-line summary (defaults to the plan's `title` if omitted) |
+| `dependencies` | `List PlanDependency` | Cross-project (or local) dep edges |
+
+`PlanDependency`:
+
+| Field | Type | Purpose |
+|-------|------|---------|
+| `kind` | `DependencyKind` | `Hard`, `Soft`, or `Integration` |
+| `target` | `Text` | `mori://` URI of the dep target |
+
+## URI forms
+
+agent-plans introduces two new artifact kinds in the `mori://` URI scheme.
+Each accepts the canonical `mori://` form and the compact
+`host#kind:key` form:
+
+```
+mori://<namespace>/<project>/masterplans/<id>-<slug>
+mori://<namespace>/<project>/plans/<id>-<slug>
+<namespace>/<project>#masterplan:<id>-<slug>
+<namespace>/<project>#plan:<id>-<slug>
+```
+
+Concrete examples:
+
+```
+mori://shinzui/mori/masterplans/9-agent-plans-extension
+mori://shinzui/mori/plans/70-agent-plans-dhall-schema-and-uri-kinds
+shinzui/mori#masterplan:9-agent-plans-extension
+shinzui/mori#plan:70-agent-plans-dhall-schema-and-uri-kinds
+```
+
+The trailing key is `<id>-<slug>`, not the slug alone. URIs are matched
+literally in the projection's reverse-lookup query, so write cross-project
+deps using the exact `<id>-<slug>` segment of the target plan.
+
+See [Canonical Refs](/docs/concepts/canonical-refs) for the full URI scheme.
+
+## Querying
+
+All `mori plans` subcommands query the registry, not the local
+`mori/agent-plans.dhall`. They work from any directory once a project has
+been registered. See the full [`mori plans` command reference](/docs/commands/plans).
+
+### List
+
+```bash
+mori plans list
+mori plans list --project shinzui/mori
+mori plans list --kind master
+mori plans list --status InProgress
+mori plans list --owner alice
+mori plans list --json
+```
+
+### Show
+
+```bash
+mori plans show mori://shinzui/mori/masterplans/9-agent-plans-extension
+mori plans show shinzui/mori#plan:70-agent-plans-dhall-schema-and-uri-kinds
+```
+
+### Search and forward / reverse dep lookups
+
+```bash
+mori plans search billing
+mori plans search --owner alice --kind exec
+mori plans search --blocks mori://acme/event-store/plans/7-typed-event-encoder
+mori plans search --blocked-by mori://shinzui/mori/plans/70-agent-plans-dhall-schema-and-uri-kinds
+```
+
+`--blocks` is the reverse lookup (plans whose dependencies include the URI).
+`--blocked-by` is the forward lookup (the plans the URI's plan depends on).
+
+### Deps
+
+```bash
+mori plans deps mori://shinzui/mori/masterplans/9-agent-plans-extension
+mori plans deps mori://shinzui/mori/masterplans/9-agent-plans-extension --reverse
+mori plans deps --next-implementable
+mori plans deps --next-implementable --master-plan docs/masterplans/9-agent-plans-extension.md
+mori plans deps --next-implementable --project shinzui/mori
+```
+
+The next-implementable mode powers the seihou skill loop: it returns child
+ExecPlans whose status is `NotStarted` or `InProgress` and whose hard deps —
+including cross-project hard deps — are all marked `Complete` in the
+registry.
+
+### Open
+
+```bash
+mori plans open mori://shinzui/mori/plans/70-agent-plans-dhall-schema-and-uri-kinds
+```
+
+When `mina` is on `PATH`, `open` delegates to `mina exec-plan open` or
+`mina master-plan open`; otherwise it falls back to `$EDITOR` (or `vi`).
+
+### Print schema
+
+```bash
+mori plans print-schema
+```
+
+## Registry show enrichment
+
+When agent-plans is registered, `mori registry show <project> --full` gains
+two subsections:
+
+- **Plans depending on this project** — reverse lookup over
+  `agent_plan_dependencies`. Lists every plan in the registry whose dep
+  URIs reference any plan published by `<project>`. Useful for spotting
+  downstream blockers before landing breaking changes.
+- **Plans here depending on others** — forward enumeration of `<project>`'s
+  own plans whose deps point at other projects. Filtered to cross-project
+  edges only — intra-project deps are queryable via
+  `mori plans deps <ref> --reverse` but excluded here by design.
+
+Both subsections render in the text and JSON outputs of
+`registry show --full`.
+
+## Skill integration
+
+The seihou skills under `.claude/skills/` and `agents/skills/` have been
+taught a "next implementable" step that runs
+
+```bash
+mori plans deps --next-implementable [--master-plan PATH]
+```
+
+before picking the next child ExecPlan to implement. The instruction block
+is bracketed with `<!-- mori:agent-plans:next-implementable -->` comments
+inside `master-plan/SKILL.md` and `exec-plan/SKILL.md`.
+
+The skills shell out to mori — they do not import the read model directly —
+so any future Haskell change to the next-implementable query is picked up
+the next time the skill runs. Because the registry sees cross-project Hard
+deps that the masterplan markdown table cannot, the skills now correctly
+defer a child plan whose deps live in a different project.
+
+## Validation
+
+The agent-plans loader validates entries on registration:
+
+- Every `file` resolves to an existing plan markdown under the project root.
+- Every plan file's YAML frontmatter is well-formed and its `kind` agrees
+  with the `kind` declared in dhall.
+- Every plan file's frontmatter `id` and `slug` agree with the
+  `<id>-<slug>` shape derived from the filename.
+- Every `dependencies[].target` parses as a `mori://` URI.
+
+Cross-project URI resolution is **not** required at load time — a dep may
+reference a project that has not yet registered. The reverse-lookup table
+joins on the raw URI string and returns useful results once the target
+project registers.
+
+## Relationship to mina
+
+[mina](https://github.com/shinzui/mina) is the rich per-project plan tooling.
+It owns plan parsing, the in-repo dependency graph, attention/findings
+reports, agent-assist flows, and the frontmatter-migration scripts
+(`mina exec-plan migrate`, `mina master-plan migrate`).
+
+agent-plans is the cross-project complement: it publishes mina's plans into
+the mori registry so other projects can depend on them by URI. The two are
+designed to coexist — write your plans with mina, expose a curated subset
+via `mori/agent-plans.dhall`, and the registry handles the cross-project
+queries.
+
+## See also
+
+- [`mori plans`](/docs/commands/plans) — command reference
+- [`mori agent bootstrap-agent-plan`](/docs/commands/agent#mori-agent-bootstrap-agent-plan) — Claude session to author a new plan
+- [Canonical Refs](/docs/concepts/canonical-refs) — `mori://` URI scheme including `masterplans` and `plans` kinds
+- [Extensions](/docs/guides/extensions) — general extension system

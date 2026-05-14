@@ -1,10 +1,11 @@
 ---
 title: mori reaction
 description: Inspect reaction execution history
-icon: History
+icon: Activity
 ---
 
-Commands for inspecting reaction execution history.
+Commands for inspecting reaction execution history, including pending
+scheduled reactions.
 
 ## `mori reaction list`
 
@@ -12,12 +13,21 @@ List recent reactions.
 
 ```bash
 mori reaction list
-mori reaction list --limit 10
+mori reaction list --limit 50
+mori reaction list --status failed
+mori reaction list --status scheduled
+mori reaction list --name sync-registry
 ```
 
-### Output
+### Flags
 
-- Reaction ID, name, status, timing
+| Flag | Description |
+|------|-------------|
+| `-n`, `--limit` | Maximum rows to show (default: `20`) |
+| `--status` | Filter by status: `triggered`, `completed`, `failed`, `scheduled`, `skipped`, `cancelled` |
+| `--name` | Filter by reaction name |
+
+`--status` and `--name` can be combined.
 
 ## `mori reaction show`
 
@@ -31,6 +41,68 @@ mori reaction show <REACTION_ID>
 
 - Triggering event, reaction name, actions, status, error (if failed)
 - For failed `RunCommand` actions, the captured stdout and stderr produced before the process exited
+- For scheduled reactions, the `scheduled_at`, `run_at`, coalesce key, and queue message id
+- For skipped reactions, the idempotency check's exit code and stderr
+- For cancelled reactions, the cancellation reason
+
+## `mori reaction cancel`
+
+Cancel a pending scheduled reaction.
+
+```bash
+mori reaction cancel <REACTION_ID>
+mori reaction cancel <REACTION_ID> --reason "release window closed"
+```
+
+The command looks up the pgmq `msg_id` from the pending projection, deletes
+the queue message, then emits `ReactionCancelled`. The pending-schedules
+projection sees the event on its next poll and removes the row from
+`mori.pending_scheduled_reactions`.
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--reason` | Free-form text recorded on the `ReactionCancelled` event (default: `cancelled by user`) |
+
+If the worker pops the message just before `cancel` runs, the pgmq delete
+returns "already consumed" and the command prints a warning but still emits
+`ReactionCancelled`. The decider makes subsequent `CompleteReaction` and
+`FailReaction` transitions from the cancelled state into no-ops, so the
+cancellation is harmless if the reaction completed first.
+
+## `mori reaction scheduled list`
+
+List pending scheduled reactions currently waiting on the
+`scheduled_reactions` pgmq queue.
+
+```bash
+mori reaction scheduled list
+mori reaction scheduled list --repo prj_01HZ...
+mori reaction scheduled list --automation mori.automation
+mori reaction scheduled list --json
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--repo` | Filter to a single repository (repo TypeID) |
+| `--automation` | Filter by automation name (basename of the config file, e.g. `mori.automation`) |
+| `--json` | Emit JSON instead of a table |
+
+The view is backed by the `mori.pending_scheduled_reactions` projection.
+Each row shows `run_at`, the coalesce key (if any), and the automation name.
+
+## `mori reaction scheduled show`
+
+Show full details for one pending scheduled reaction, including the snapshot
+of the idempotency check that will run just before the actions fire.
+
+```bash
+mori reaction scheduled show <REACTION_ID>
+mori reaction scheduled show <REACTION_ID> --json
+```
 
 ## `mori reaction recover`
 
@@ -59,4 +131,6 @@ table directly, so stop the daemon first if you're unsure — `recover` is
 safe against a genuinely stuck (non-advancing) subscription, but racing a
 live consumer can collide. The command is idempotent on non-triggered rows.
 
-See [Reaction History](/docs/guides/reaction-history) for more details.
+See [Reaction History](/docs/guides/reaction-history) for the workflow,
+status lifecycle, and the schedule lifecycle states (`scheduled`, `skipped`,
+`cancelled`).

@@ -1,12 +1,14 @@
 ---
 title: Reaction History
-description: View and inspect automation reaction execution history
-icon: History
+description: View, inspect, cancel, and recover automation reactions
+icon: Activity
 ---
 
 View and inspect automation reaction execution history. Reactions are
 triggered when VCS events match selectors defined in your automation
-config (`mori.automation.dhall`).
+config (`mori.automation.dhall`). Scheduled reactions extend the
+lifecycle with `scheduled`, `skipped`, and `cancelled` states — this
+guide covers both immediate and scheduled reactions.
 
 ## Commands
 
@@ -14,6 +16,9 @@ config (`mori.automation.dhall`).
 |---|---|
 | `mori reaction list` | List recent reactions |
 | `mori reaction show` | Show full details for a single reaction |
+| `mori reaction cancel` | Cancel a pending scheduled reaction |
+| `mori reaction scheduled list` | List pending scheduled reactions |
+| `mori reaction scheduled show` | Show details of one pending scheduled reaction |
 | `mori reaction recover` | Unstick a reaction stuck in `status=triggered` |
 
 ## List
@@ -22,31 +27,28 @@ config (`mori.automation.dhall`).
 mori reaction list [--limit N] [--status STATUS] [--name NAME]
 ```
 
-Shows a table of recent reactions with their status, name, triggering
-event type, duration, and start time.
+Shows a table of recent reactions with their status, name, triggering event
+type, duration, and start time.
 
 ### Options
 
 | Option | Description | Default |
 |---|---|---|
 | `-n, --limit N` | Maximum rows to show | `20` |
-| `--status STATUS` | Filter by status: `triggered`, `completed`, `failed` | — |
+| `--status STATUS` | Filter by status: `triggered`, `completed`, `failed`, `scheduled`, `skipped`, `cancelled` | — |
 | `--name NAME` | Filter by reaction name | — |
 
 ### Examples
 
 ```bash
-mori reaction list                      # Show last 20 reactions
-mori reaction list -n 50                # Show last 50 reactions
-mori reaction list --status failed      # Show only failed reactions
-mori reaction list --name sync-registry # Show reactions for sync-registry
+mori reaction list                       # Show last 20 reactions
+mori reaction list -n 50                 # Show last 50 reactions
+mori reaction list --status failed       # Show only failed reactions
+mori reaction list --status scheduled    # Show only pending scheduled reactions
+mori reaction list --name sync-registry  # Show reactions for sync-registry
 ```
 
-Both `--status` and `--name` can be combined:
-
-```bash
-mori reaction list --status completed --name run-tests
-```
+`--status` and `--name` can be combined.
 
 ## Show
 
@@ -54,15 +56,20 @@ mori reaction list --status completed --name run-tests
 mori reaction show <REACTION_ID>
 ```
 
-Displays full details for a single reaction, including the triggering
-stream, position, timestamps, duration, and error message (if failed).
-For failed `RunCommand` actions, `show` also prints the command's captured
-stdout and stderr in dedicated `Stdout:` and `Stderr:` blocks (persisted
-on `mori.reaction_history` per action result; non-command actions like
-`Notify`, `EmitEvent`, `Schedule`, and `Signal` leave both blocks empty).
+Displays full details for a single reaction, including the triggering stream,
+position, timestamps, duration, and error message (if failed). For failed
+`RunCommand` actions, `show` also prints the command's captured stdout and
+stderr in dedicated `Stdout:` and `Stderr:` blocks (persisted on
+`mori.reaction_history` per action result; non-command actions like `Notify`,
+`EmitEvent`, `Schedule`, and `Signal` leave both blocks empty).
 
-The reaction ID is a TypeID starting with `rxn_` — copy it from the
-ID column of `mori reaction list`.
+For scheduled reactions, `show` also prints `scheduled_at`, `run_at`, the
+coalesce key, and the queue message id. For skipped reactions, it prints
+the idempotency check's exit code and stderr. For cancelled reactions, it
+prints the cancellation reason.
+
+The reaction ID is a TypeID starting with `rxn_` — copy it from the ID
+column of `mori reaction list`.
 
 ### Example
 
@@ -70,6 +77,64 @@ ID column of `mori reaction list`.
 mori reaction list                  # Find the reaction ID
 mori reaction show rxn_01hy3x...   # Show full details
 ```
+
+## Scheduled List
+
+```bash
+mori reaction scheduled list
+mori reaction scheduled list --repo prj_01HZ...
+mori reaction scheduled list --automation mori.automation
+mori reaction scheduled list --json
+```
+
+Lists scheduled reactions currently waiting on the `scheduled_reactions`
+pgmq queue. The view is backed by the `mori.pending_scheduled_reactions`
+projection and shows the `run_at` target, coalesce key (if any), and
+automation name for each pending reaction.
+
+### Options
+
+| Option | Description |
+|---|---|
+| `--repo REPO_ID` | Filter to a single repository (repo TypeID) |
+| `--automation NAME` | Filter by automation name (the basename of the config file, e.g. `mori.automation`) |
+| `--json` | Emit JSON instead of a table |
+
+## Scheduled Show
+
+```bash
+mori reaction scheduled show <REACTION_ID>
+mori reaction scheduled show <REACTION_ID> --json
+```
+
+Shows full details for a single pending scheduled reaction. Joins the
+pending row, the `reaction_history` row, and the `ReactionScheduled` event
+so the idempotency check (command, args, timeout, `skipOnExit`) is
+surfaced.
+
+## Cancel
+
+```bash
+mori reaction cancel <REACTION_ID> [--reason TEXT]
+```
+
+Cancels a pending scheduled reaction. Looks up the pgmq `msg_id` from the
+pending projection, deletes the queue message, then emits
+`ReactionCancelled`. The projection sees the event on its next poll and
+removes the row from `mori.pending_scheduled_reactions`.
+
+### Options
+
+| Option | Description |
+|---|---|
+| `--reason TEXT` | Free-form reason recorded on the `ReactionCancelled` event (default: `cancelled by user`) |
+
+> **Race-condition note.** If the worker pops the message just before
+> `cancel` runs, the pgmq delete returns "already consumed" and the
+> command prints a warning but still emits `ReactionCancelled`. The
+> decider makes subsequent `CompleteReaction` and `FailReaction`
+> transitions from the cancelled state into no-ops, so the cancellation
+> is harmless if the reaction completed first.
 
 ## Recover
 
@@ -119,9 +184,31 @@ mori reaction recover rxn_01hy3x... --retry   # Skip and re-fire
 | `triggered` | The reaction was matched and dispatched but has not finished executing yet. |
 | `completed` | All actions in the reaction executed successfully. |
 | `failed` | One or more actions failed. Use `mori reaction show` to see the error message and any captured stdout/stderr. |
+| `scheduled` | The reaction has been enqueued on the `scheduled_reactions` pgmq queue and is waiting for its `run_at` to elapse. |
+| `skipped` | A scheduled reaction was popped, but its idempotency check signalled the work was no longer needed. |
+| `cancelled` | A pending scheduled reaction was cancelled before it ran, either by `mori reaction cancel` or by the coalesce-key debounce projection. |
+
+## Schedule Lifecycle
+
+Scheduled reactions extend the lifecycle of an immediate reaction
+(`Triggered → Completed | Failed`) with three new terminal states:
+
+```
+            ┌─→ Triggered → Completed | Failed
+Initial ────┤
+            └─→ Scheduled → Skipped (idempotency check said skip)
+                          | Cancelled (cancel cli or debounce)
+                          | Triggered → Completed | Failed (ran on time)
+```
+
+See [Automation › Scheduled Reactions](/docs/guides/automation#scheduled-reactions)
+for how to configure `schedule` on a reaction, the ISO 8601 `after`
+duration syntax, the optional idempotency check, and the `coalesceKey`
+debounce.
 
 ## See Also
 
-- [Automation guide](/docs/guides/automation) — automation config structure and event selectors
+- [Automation guide](/docs/guides/automation) — automation config structure, event selectors, and scheduled reactions
+- [`mori reaction`](/docs/commands/reaction) — command reference
 - `mori automate inspect` — config summary and aggregate reaction stats
 - `mori automate explain` — which selectors match a specific event

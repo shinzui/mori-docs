@@ -314,7 +314,7 @@ Schema.ReactionAction.Notify Schema.NotifyAction::{
 }
 ```
 
-### Schedule
+### Schedule (legacy, single-action)
 
 Defer an action for later execution via pgmq + shibuya.
 
@@ -329,8 +329,150 @@ Schema.ReactionAction.Schedule Schema.ScheduleAction::{
 }
 ```
 
-Scheduled actions can be `RunCommand`, `EmitEvent`, or `Notify` — but not
-another `Schedule` (no recursive scheduling).
+Scheduled actions can be `RunCommand`, `EmitEvent`, `Notify`, or `Signal` —
+but not another `Schedule` (no recursive scheduling).
+
+> **Prefer per-reaction `schedule` for new code.** The action-level
+> `Schedule` wrapper above is preserved for backwards compatibility, but
+> the [Scheduled Reactions](#scheduled-reactions) feature below (a
+> `schedule` field on the whole reaction) is more expressive: it covers
+> multi-action reactions, supports a pre-execution idempotency check, and
+> supports debounce via a coalesce key.
+
+## Scheduled Reactions
+
+By default, a reaction runs immediately when its trigger fires. Sometimes
+you want to defer the whole reaction — "run a release-readiness check 1
+hour after the merge commit", "send a follow-up notification 1 day later",
+"build only once after the most recent of a burst of commits". The optional
+`schedule` field on a reaction turns it into a **scheduled reaction**.
+
+### Minimal example
+
+```dhall
+Schema.Reaction::{
+  name = "deferred-build"
+, on = [ "main-commit" ]
+, schedule = Some Schema.Schedule::{
+    after = Some "PT1H"
+  }
+, actions =
+    [ Schema.ReactionAction.RunCommand Schema.RunCommandAction::{
+        command = "make"
+      , args = [ "release" ]
+      }
+    ]
+}
+```
+
+When `main-commit` fires, mori enqueues a `ScheduledReactionPayload` on the
+`scheduled_reactions` pgmq queue with a 1-hour delay and emits
+`ReactionScheduled`. After one hour, the worker pops the message and runs
+the reaction's actions.
+
+### Duration syntax (`after`)
+
+`after` is an ISO 8601 duration string. The parser supports:
+
+| Example | Meaning |
+|---------|---------|
+| `PT30S` | 30 seconds |
+| `PT5M` | 5 minutes |
+| `PT1H30M` | 1 hour 30 minutes |
+| `P1D` | 1 day |
+| `P1DT2H3M4S` | 1 day, 2 hours, 3 minutes, 4 seconds |
+
+Years (`Y`) and weeks (`W`) are not supported. Internally `after` is stored
+as seconds.
+
+### Idempotency check
+
+A common pattern is "schedule this work for an hour from now, but only run
+it if it's still needed when the hour is up." Add an `idempotencyCheck`:
+
+```dhall
+schedule = Some Schema.Schedule::{
+  after = Some "PT1H"
+, idempotencyCheck = Some Schema.IdempotencyCheck::{
+    command = "./scripts/should-still-run.sh"
+  , args = [] : List Text
+  , timeout = Some +30
+  , skipOnExit = Schema.SkipOnExit.NonZero
+  }
+}
+```
+
+Just before the worker runs the reaction's actions, it runs the check
+command. If the command's exit code matches `skipOnExit`, the reaction is
+skipped (`ReactionSkipped` is emitted) and the actions do **not** run.
+Otherwise the actions run as normal.
+
+`skipOnExit` is one of:
+
+- `Schema.SkipOnExit.Zero` — skip when the check exits 0.
+- `Schema.SkipOnExit.NonZero` — skip when the check exits non-zero.
+
+The check command runs in the repository working directory with the
+following environment variables set:
+
+| Variable | Contents |
+|----------|----------|
+| `MORI_REACTION_ID` | The unique id of this scheduled reaction |
+| `MORI_AUTOMATION_NAME` | Basename of the automation config file |
+| `MORI_REACTION_NAME` | The reaction's `name` field |
+| `MORI_REPO_ID` | The mori repository id |
+| `MORI_TRIGGER_STREAM` | Stream that triggered this reaction |
+| `MORI_TRIGGER_POSITION` | Position of the triggering event |
+| `MORI_TRIGGER_EVENT_TYPE` | E.g. `ChangesetObserved` |
+| `MORI_TRIGGER_EVENT_ID` | UUID of the triggering event |
+| `MORI_SCHEDULED_AT` | When the reaction was enqueued (UTC) |
+| `MORI_RUN_AT` | When the worker plans to run (UTC) |
+| `MORI_COALESCE_KEY` | Coalesce key, or empty if none set |
+
+Any `env` map you put on `IdempotencyCheck` is merged on top of these, so
+you can pass custom values to the check.
+
+If the check command times out (default 60 seconds, override with
+`timeout`) the worker treats it as exit code 124 and consults `skipOnExit`.
+If the check command fails to launch (file not found or not executable),
+the reaction is marked **failed** with `ReactionFailed`.
+
+### Debounce: `coalesceKey`
+
+Without a coalesce key, repeated triggers **stack**: each trigger schedules
+its own deferred run. Use `coalesceKey` to opt into debounce — only the
+most recent schedule survives per
+`(repository, automation, reaction-name, coalesceKey)` tuple:
+
+```dhall
+schedule = Some Schema.Schedule::{
+  after = Some "PT1H"
+, coalesceKey = Some "deferred-build"
+}
+```
+
+When a second trigger arrives while the first is still pending, the daemon:
+
+1. Emits `ReactionCancelled` against the first reaction with
+   `reason = "superseded by <new-reaction-id>"`.
+2. Calls `pgmq.delete` on the first reaction's queue message.
+3. Enqueues the new schedule.
+
+The pending-schedules projection sees the cancellation and removes the
+first row from `mori.pending_scheduled_reactions`.
+
+### Inspecting and cancelling
+
+List, inspect, and cancel pending scheduled reactions with `mori reaction`:
+
+```bash
+mori reaction scheduled list
+mori reaction scheduled show rxn_01HZ...
+mori reaction cancel rxn_01HZ... --reason "release window closed"
+```
+
+See [Reaction History › Scheduled List](/docs/guides/reaction-history#scheduled-list)
+for the full command reference and lifecycle.
 
 ## Execution Policy
 

@@ -62,7 +62,8 @@ mori automate daemon
 - Bootstraps config registry from `automation_registrations` projection
 - Subscribes to `automationRegistration` category for live config updates
 - Routes repository events to registered repos' automation configs
-- Concurrent subscription workers (automation, executor, registry, workflow, registration)
+- Concurrent subscription workers (automation, executor, pending-schedules projection, registry, tech-radar projection, agent-plans projection, workflow, registration)
+- Runs the shibuya worker for legacy per-action `Schedule` plus the scheduled-reactions worker for per-reaction `schedule` deferrals
 - Fully event-driven — no filesystem polling
 
 See [Automation Daemon](/docs/guides/automation-daemon) for details.

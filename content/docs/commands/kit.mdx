@@ -64,11 +64,33 @@ mori kit uninstall <NAME> --project
 
 ## `mori kit status`
 
-Show installed skills and subagents.
+Show installed skills and subagents with installed-vs-latest versions and a
+state column.
 
 ```bash
 mori kit status
 ```
+
+### Output columns
+
+| Column | Description |
+|--------|-------------|
+| `NAME` | Skill or subagent name |
+| `KIND` | `skill` or `agent` |
+| `SCOPE` | `user` or `project` |
+| `INSTALLED` | Version recorded in the per-install sidecar (`*.mori-kit.json`) at install time |
+| `LATEST` | Version field from the upstream `kit.json` manifest |
+| `STATE` | `up-to-date`, `outdated`, `dirty`, or `unknown` |
+
+State precedence:
+
+- `unknown` — no sidecar (item installed before sidecar support, or upstream removed)
+- `outdated` — upstream version differs from the sidecar's installed version
+- `dirty` — versions match but upstream content hash differs from the sidecar hash
+- `up-to-date` — versions and hashes match
+
+When the kit cache is unavailable (no network, no `kit.json`), `LATEST` is
+blank and every row falls back to `unknown`.
 
 ## Installation Scopes
 

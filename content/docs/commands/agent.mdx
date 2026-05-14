@@ -69,6 +69,44 @@ mori agent bootstrap --debug
 | `--seihou` | Bootstrap a project that ships seihou templates; adds the `seihou` CLI to the allow-list and injects template authoring guidance into the system prompt |
 | `--debug` | Print the system prompt instead of starting a session |
 
+## `mori agent bootstrap-agent-plan`
+
+Start a Claude session pre-loaded with everything needed to author, register,
+and verify a new agent plan end-to-end.
+
+```bash
+mori agent bootstrap-agent-plan
+mori agent bootstrap-agent-plan \
+  --title "Schedule reactions with idempotency checks" \
+  --kind exec-plan \
+  --summary "EP for scheduled reactions" \
+  --description "Add a per-reaction schedule field with optional idempotency check" \
+  --depends-on mori://acme/event-store/plans/7-typed-event-encoder
+mori agent bootstrap-agent-plan --debug
+```
+
+The session's system prompt embeds the rendered agent-plans extension schema,
+a snapshot of the project's existing plans, the canonical Markdown skeleton,
+and the validate / register / verify workflow. The agent calls
+`bun .claude/skills/exec-plan/init-plan.ts` to scaffold the file, fills in
+the body, appends an `ExposedPlan` entry to `mori/agent-plans.dhall`, runs
+`mori validate` and `mori register --local`, and verifies with
+`mori plans show`.
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--title` | Pre-seed the plan's title |
+| `--kind` | Pre-seed the plan kind: `exec-plan` or `master-plan` |
+| `--summary` | Pre-seed the one-line summary used in `mori/agent-plans.dhall` |
+| `--description` | Free-form goal description seeded into the agent's first instruction |
+| `--depends-on` | `mori://` URI of a plan this one depends on; repeatable |
+| `--debug` | Print the system prompt instead of starting a session |
+
+All flags are optional; when omitted, the agent asks once for what is missing
+and proceeds.
+
 ## `mori agent schema-migrate`
 
 Start a Claude session to migrate and fix `mori.dhall` schema.
