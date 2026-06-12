@@ -37,5 +37,8 @@ mori show --json | jq '.docs[].canonicalRef'
 mori show --json | jq '.packages[].canonicalRef'
 ```
 
+Doc references in JSON use flattened string fields for easier downstream
+processing: `kind`, `audience`, `location`, and `locationType`.
+
 The same convention is used by [`mori registry show --full`](/docs/commands/registry#mori-registry-show)
 and `mori registry show --json`.

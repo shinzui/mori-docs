@@ -1,0 +1,40 @@
+---
+title: mori diagram
+description: Render aggregate lifecycles as Mermaid state diagrams
+icon: GitGraph
+---
+
+Render mori aggregate lifecycles as Mermaid `stateDiagram-v2` blocks.
+
+```bash
+mori diagram project
+mori diagram workflow --guard-mode pretty
+mori diagram --atlas
+```
+
+## Aggregates
+
+Accepted aggregate names:
+
+```text
+app
+automation-registration
+group
+project
+reaction
+repository
+workflow
+```
+
+## Flags
+
+| Flag | Description |
+|------|-------------|
+| `--atlas` | Render a Markdown atlas with one Mermaid block per aggregate |
+| `--guard-mode plain` | Hide guard details on edges; this is the default |
+| `--guard-mode structural` | Render structural constructor summaries for guards |
+| `--guard-mode pretty` | Render domain-readable guard labels |
+
+Use `--atlas` when you want a one-page architecture reference. Use a single
+aggregate name when you want a diagram suitable for pasting into focused design
+docs or PRs.

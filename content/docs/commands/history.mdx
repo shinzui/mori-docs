@@ -1,0 +1,75 @@
+---
+title: mori history
+description: Transform and verify event history during store migrations
+icon: History
+---
+
+Transform mori event history from the legacy message-db layout into the kiroku
+store and verify the migrated history. This is an operator command for migration
+work, not a day-to-day project command.
+
+## `mori history transform-context`
+
+Re-home one bounded context's history.
+
+```bash
+mori history transform-context project
+mori history transform-context project --dry-run
+mori history transform-context project --reset
+mori history transform-context project --source-conn "$OLD_DB" --target-conn "$NEW_DB"
+```
+
+## `mori history transform-all`
+
+Re-home every supported bounded context in deterministic order.
+
+```bash
+mori history transform-all
+mori history transform-all --dry-run
+mori history transform-all --reset
+```
+
+## `mori history verify-context`
+
+Verify one context's migrated history.
+
+```bash
+mori history verify-context project
+mori history verify-context project --axis folder
+mori history verify-context project --axis hydrate
+mori history verify-context project --axis both
+```
+
+## `mori history verify-all`
+
+Verify every supported context plus the global density invariant.
+
+```bash
+mori history verify-all
+mori history verify-all --axis both
+```
+
+## Contexts
+
+Supported context names:
+
+```text
+app
+automation_registration
+group
+project
+reaction
+repository
+workflow
+```
+
+## Flags
+
+| Flag | Applies to | Description |
+|------|------------|-------------|
+| `--source-conn CONNSTR` | `transform-*` | Legacy message-db connection; defaults to `MORI_PG_CONNECTION_STRING` |
+| `--target-conn CONNSTR` | `transform-*` | Kiroku target connection; defaults to `MORI_PG_CONNECTION_STRING` |
+| `--conn CONNSTR` | `verify-*` | Verification connection; defaults to `MORI_PG_CONNECTION_STRING` |
+| `--dry-run` | `transform-*` | Read and decode-validate, but write nothing |
+| `--reset` | `transform-*` | Delete target streams for the selected scope before rebuilding |
+| `--axis folder\|hydrate\|both` | `verify-*` | Select the verification axis; defaults to `both` |

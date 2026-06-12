@@ -530,12 +530,15 @@ This starts a long-running process with four concurrent subscriptions:
 | `mori-registry` | `project` events | Populate registry read model |
 | `mori-workflow` | `workflow` events | Maintain workflow projections |
 
-Plus a shibuya worker that processes scheduled actions from the pgmq queue.
+Plus queue processors for scheduled work. `scheduled_actions` and
+`scheduled_reactions` run as keiro-pgmq jobs, which bundle the queue name,
+payload codec, retry policy, and dead-letter queue. Webhook deliveries remain on
+the existing pgmq adapter.
 
 On startup, `automate run` also:
 - Emits a `MoriAutomationObserved` event (idempotent by config hash)
 - Emits a `MoriConfigObserved` event if `mori.dhall` exists
-- Creates pgmq queues for scheduled actions
+- Creates pgmq queues for scheduled actions, scheduled reactions, webhook deliveries, and the keiro-pgmq dead-letter queues
 
 Use `-c` to specify a custom config path:
 

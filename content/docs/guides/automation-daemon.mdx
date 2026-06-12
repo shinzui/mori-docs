@@ -60,9 +60,14 @@ mori automate daemon --refresh-interval 120    # config-refresh cycle
 | Registration subscription | Update in-memory config registry on register/deregister |
 | App registration subscription | Update app registry on app events |
 
-Plus a shibuya worker for legacy per-action `Schedule` deferrals, the
-scheduled-reactions worker for per-reaction `schedule` deferrals (with
-idempotency-check execution), and a periodic **auto-ingest loop**.
+Plus queue processors for deferred work and a periodic **auto-ingest loop**.
+The `scheduled_actions` and `scheduled_reactions` pgmq queues run through
+keiro-pgmq `Job` definitions, so the queue name, JSON codec, retry policy, and
+dead-letter queue are defined in one place and reused by both producers and
+workers. The `webhook_deliveries` queue still uses its bespoke pgmq adapter.
+
+On startup, the daemon ensures the pgmq queues exist. For the keiro-pgmq jobs,
+that includes the main queues and their dead-letter queues.
 
 ## Auto-Ingest
 

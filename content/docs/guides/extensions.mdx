@@ -7,16 +7,23 @@ icon: Puzzle
 Mori's extension system lets you attach structured metadata to projects beyond
 what the core schema provides. Extensions are project-scoped Dhall configs
 stored in the `mori/` directory and registered alongside the project in the
-local registry. Four built-in extension catalogs ship with the CLI:
-**tech radar**, **cookbook**, **checklist**, and **upstream issues**.
+local registry. Six built-in extension catalogs ship with the CLI:
+**tech radar**, **cookbook**, **checklist**, **upstream issues**,
+**agent plans**, and **DDD** (Domain-Driven Design).
+
+Most extensions expose a `list` / `show` / `print-schema` command surface and a
+cross-project `mori extension query <name>`. Two go further: **agent plans**
+(`mori plans ...`) and **DDD** (`mori ddd ...`) also fan their data out into
+dedicated relational tables and expose richer cross-project search.
 
 ## How Extensions Work
 
 An extension is a named metadata type registered in the event store. Projects
 opt in by placing a Dhall config file in `mori/`, such as
 `mori/tech-radar.dhall`, `mori/cookbook.dhall`, `mori/checklist.dhall`, or
-`mori/upstream-issues.dhall`. When you run `mori register --local`, extension
-data is automatically detected and registered alongside the project.
+`mori/upstream-issues.dhall`, `mori/agent-plans.dhall`, or `mori/ddd.dhall`.
+When you run `mori register --local`, extension data is automatically detected
+and registered alongside the project.
 
 ## Managing Extension Types
 
@@ -376,6 +383,36 @@ mori extension query upstream-issues --json
 
 See [Upstream Issues](/docs/guides/upstream-issues) for configuration examples.
 
+---
+
+## DDD
+
+The DDD extension records a project's Domain-Driven Design model: subdomains,
+bounded contexts, aggregates, context mappings, message flows, glossary terms,
+collaborators, and verification metadata.
+
+```bash
+mori agent bootstrap-ddd
+mori ddd subdomains
+mori ddd aggregates --context checkout
+mori ddd mappings --pattern published-language
+mori ddd search --emits OrderPlaced
+mori ddd search --term invoice --json
+```
+
+Local `mori ddd` browse commands read `mori/ddd.dhall` directly. `mori ddd
+search` uses the registry's relational `mori.ddd_*` projection for
+cross-project queries by relationship pattern, emitted event, owning context, or
+glossary term.
+
+Use [`mori extension query ddd`](/docs/commands/extension#mori-extension-query)
+when you want the generic JSONB extension payload for one project. Use
+[`mori ddd search`](/docs/commands/ddd#mori-ddd-search) when you want
+relational search across projects.
+
+See [DDD Extension](/docs/guides/ddd) for schema details and a full worked
+configuration.
+
 ## Registration
 
 Extensions are auto-detected during `mori register --local`. The output shows
@@ -387,7 +424,7 @@ mori register --local
 
 ```
 Registered: my-namespace/my-project
-  Extensions: cookbook, tech-radar, checklist, upstream-issues
+  Extensions: cookbook, tech-radar, checklist, upstream-issues, agent-plans, ddd
 ```
 
 ## Cross-Project Queries
@@ -402,6 +439,9 @@ mori extension query cookbook --topic database
 
 # Find tech radar recommendations in a specific project
 mori extension query tech-radar --project my-service
+
+# Inspect one project's DDD model from the generic extension table
+mori extension query ddd --project my-service
 ```
 
 ## Related

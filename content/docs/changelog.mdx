@@ -9,6 +9,24 @@ features, commands, and schema changes.
 
 ---
 
+## 2026-06-12
+
+### DDD extension docs and command coverage
+- Added the [DDD Extension guide](/docs/guides/ddd) for `mori/ddd.dhall` models, including subdomains, contexts, aggregates, mappings, flows, glossary terms, collaborators, verification metadata, registry projection, and schema migration workflow
+- Added [`mori ddd`](/docs/commands/ddd) command reference coverage for local browse commands and relational cross-project search
+- Refreshed [Extensions](/docs/guides/extensions) to include the six built-in catalogs: tech radar, cookbook, checklist, upstream issues, agent plans, and DDD
+
+### New command references
+- Added [`mori diagram`](/docs/commands/diagram), which renders aggregate lifecycles as Mermaid `stateDiagram-v2` blocks or a Markdown atlas
+- Added [`mori history`](/docs/commands/history), an operator command for transforming and verifying event history during the message-db to kiroku migration
+
+### CLI behavior notes
+- `mori show --json` now flattens doc reference fields into string-friendly `kind`, `audience`, `location`, and `locationType` fields
+- Several registry, app, automation, reaction, and project write paths now route through the cutover configuration so operators can migrate contexts to kiroku while preserving the message-db default
+- Automation scheduled-action and scheduled-reaction queues now run through keiro-pgmq `Job` definitions, sharing queue setup, JSON codec, retry policy, and dead-letter queue configuration
+
+---
+
 ## 2026-05-13
 
 ### Agent-plans extension and `mori plans` (new)

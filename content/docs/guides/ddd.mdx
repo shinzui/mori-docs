@@ -1,0 +1,220 @@
+---
+title: DDD Extension
+description: Model subdomains, contexts, aggregates, flows, and glossary terms
+icon: Network
+---
+
+The `ddd` extension lets a project record its Domain-Driven Design model in
+`mori/ddd.dhall`: subdomains, bounded contexts, aggregates, context mappings,
+message flows, ubiquitous-language glossary terms, and optional review metadata.
+
+Every modeling concern is optional and empty by default. A glossary-only model,
+a strategic-design-only model, a tactical-design-only model, and an empty
+`Ddd.DddModel::{=}` are all valid.
+
+## When to use it
+
+Use the DDD extension when a project needs a shared model of its domain:
+
+- Ubiquitous language: agreed terms and aliases.
+- Strategic design: subdomains, bounded contexts, and context mappings.
+- Tactical design: aggregates, commands, emitted events, and invariants.
+- Cross-context interactions: ordered message flows.
+- Model health: review date, coverage percentage, notes, and collaborators.
+
+## Getting started
+
+The schema-aware bootstrap command launches an agent session with the pinned
+schema, your current `mori/ddd.dhall`, and the validate/register workflow:
+
+```bash
+mori agent bootstrap-ddd
+```
+
+If the file is pinned to a different schema commit than the binary, migrate it
+first:
+
+```bash
+mori schema migrate --apply --file mori/ddd.dhall
+```
+
+You can inspect the pinned DDD schema at any time:
+
+```bash
+mori ddd print-schema
+```
+
+## Configuration
+
+Create `mori/ddd.dhall` in the project directory. The extension follows the
+same `{ Input, Type, default, mk }` bundle convention as the core schema, so the
+`::` record-completion form supplies omitted defaults.
+
+```dhall
+let Ddd = ../schema/extensions/ddd/package.dhall
+
+in  Ddd.DddModel::{
+    , domain = Some "Logistics"
+    , subdomains =
+      [ Ddd.Subdomain::{
+        , key = "ordering"
+        , name = "Ordering"
+        , kind = Ddd.SubdomainKind.Core
+        , evolution = Some Ddd.WardleyStage.Product
+        }
+      ]
+    , contexts =
+      [ Ddd.BoundedContext::{
+        , key = "checkout"
+        , name = "Checkout"
+        , purpose = Some "Turn a cart into a confirmed order."
+        , subdomain = Some "ordering"
+        }
+      ]
+    , aggregates =
+      [ Ddd.Aggregate::{
+        , key = "order"
+        , name = "Order"
+        , context = Some "checkout"
+        , commands = [ "PlaceOrder", "CancelOrder" ]
+        , events = [ "OrderPlaced", "OrderCancelled" ]
+        , invariants = [ "an order has at least one line item" ]
+        , size = Some Ddd.AggregateSize.Medium
+        , throughputPerDay = Some 1200
+        }
+      ]
+    , mappings =
+      [ Ddd.ContextMapping::{
+        , upstream = "checkout"
+        , downstream = "fulfillment"
+        , pattern = Ddd.RelationshipPattern.PublishedLanguage
+        , teamRelationship = Some Ddd.TeamRelationship.UpstreamDownstream
+        }
+      ]
+    , flows =
+      [ Ddd.MessageFlow::{
+        , key = "place-order"
+        , name = "Place an order"
+        , steps =
+          [ Ddd.FlowStep::{
+            , order = 1
+            , message = "PlaceOrder"
+            , kind = Ddd.MessageKind.Command
+            , from = "customer"
+            , to = "checkout"
+            }
+          ]
+        }
+      ]
+    , glossary =
+      [ Ddd.GlossaryTerm::{
+        , term = "Order"
+        , definition = "A customer's request to purchase one or more items."
+        , aliases = [ "purchase" ]
+        }
+      ]
+    }
+```
+
+Projects outside the mori repository should use the pinned URL import printed by
+`mori ddd print-schema` or prepared by `mori agent bootstrap-ddd`.
+
+## Schema reference
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `domain` | `Optional Text` | Overall domain name |
+| `subdomains` | `List Subdomain` | Business areas |
+| `contexts` | `List BoundedContext` | Model-consistency boundaries |
+| `aggregates` | `List Aggregate` | Tactical consistency clusters |
+| `mappings` | `List ContextMapping` | Relationships between contexts |
+| `flows` | `List MessageFlow` | Ordered cross-context scenarios |
+| `glossary` | `List GlossaryTerm` | Ubiquitous-language terms |
+| `verification` | `Optional Verification` | Review and coverage metrics |
+| `collaborators` | `List Collaborator` | Teams or people and their contexts |
+
+Important nested records:
+
+- `Subdomain`: `key`, `name`, `kind`, optional `description`, optional `evolution`.
+- `BoundedContext`: `key`, `name`, optional `purpose`, optional `subdomain`.
+- `Aggregate`: `key`, `name`, optional `context`, optional `description`, `commands`, `events`, `invariants`, optional `size`, optional `throughputPerDay`.
+- `ContextMapping`: `upstream`, `downstream`, `pattern`, optional `teamRelationship`, optional `notes`.
+- `MessageFlow`: `key`, `name`, optional `description`, ordered `steps`.
+- `GlossaryTerm`: `term`, `definition`, optional `context`, `aliases`.
+- `Collaborator`: `key`, `name`, optional `role`, `contexts`.
+- `Verification`: optional `lastReviewed`, optional `coveragePercent`, optional `notes`.
+
+The main unions are `SubdomainKind`, `RelationshipPattern`,
+`TeamRelationship`, `MessageKind`, `WardleyStage`, and `AggregateSize`.
+`RelationshipPattern` includes an `Other : Text` arm for project-specific
+patterns.
+
+## Browse locally
+
+Local browse commands read `mori/ddd.dhall` directly and do not require a
+registry database.
+
+```bash
+mori ddd subdomains
+mori ddd subdomains --kind core
+mori ddd contexts
+mori ddd contexts --subdomain ordering
+mori ddd aggregates
+mori ddd aggregates --context checkout
+mori ddd mappings
+mori ddd mappings --pattern published-language
+mori ddd flows
+mori ddd flows place-order
+mori ddd glossary
+mori ddd glossary order
+mori ddd glossary --context checkout
+mori ddd collaborators
+mori ddd collaborators --context checkout
+mori ddd verification
+```
+
+Filters are case-insensitive. Pattern and kind filters also ignore hyphens and
+underscores, so `anticorruption-layer` matches `AnticorruptionLayer`.
+
+## Cross-project search
+
+Registration stores the model in the generic extension JSONB store. The
+automation daemon also projects it into normalized `mori.ddd_*` tables so
+`mori ddd search` can answer relational questions across every registered
+project.
+
+```bash
+mori ddd search --pattern published-language
+mori ddd search --emits OrderPlaced
+mori ddd search --context checkout
+mori ddd search --term invoice
+mori ddd search --project acme/billing
+mori ddd search --json
+```
+
+Use `mori extension query ddd` when you want one project's stored model from
+the generic extension table. Use `mori ddd search` when you want relational
+queries by pattern, emitted event, context, or term across the registry.
+
+## Maintenance
+
+Existing mk-form DDD files keep loading when new optional fields are added
+because the bundle default supplies the missing fields. To normalize an older
+file, run:
+
+```bash
+mori schema migrate --apply --file mori/ddd.dhall
+```
+
+To sweep registered projects, use:
+
+```bash
+mori registry upgrade-schema
+```
+
+## Related
+
+- [mori ddd](/docs/commands/ddd) - exact command syntax
+- [Extensions](/docs/guides/extensions) - the general extension system
+- [Local Registry](/docs/concepts/local-registry) - database setup and projections
+- [Schema Guide](/docs/schema-guide) - record completion and schema pins

@@ -1,0 +1,83 @@
+---
+title: mori ddd
+description: Browse and search Domain-Driven Design extension models
+icon: Network
+---
+
+Browse the current project's `mori/ddd.dhall` model and search the registry's
+relational DDD projection.
+
+See the [DDD Extension guide](/docs/guides/ddd) for configuration examples and
+schema details.
+
+## Local browse
+
+Local subcommands read `mori/ddd.dhall` directly. They do not require a registry
+database.
+
+```bash
+mori ddd subdomains
+mori ddd contexts
+mori ddd aggregates
+mori ddd mappings
+mori ddd flows
+mori ddd glossary
+mori ddd collaborators
+mori ddd verification
+mori ddd print-schema
+```
+
+### Filters
+
+```bash
+mori ddd subdomains --kind core
+mori ddd contexts --subdomain ordering
+mori ddd aggregates --context checkout
+mori ddd mappings --pattern published-language
+mori ddd flows place-order
+mori ddd glossary order
+mori ddd glossary --context checkout
+mori ddd collaborators --context checkout
+```
+
+Most filters are case-insensitive. Kind and pattern filters also ignore hyphens
+and underscores.
+
+## `mori ddd search`
+
+Search DDD models across registered projects through the relational projection.
+This requires `MORI_PG_CONNECTION_STRING` and an up-to-date projection from the
+automation daemon.
+
+```bash
+mori ddd search
+mori ddd search --pattern published-language
+mori ddd search --emits OrderPlaced
+mori ddd search --context checkout
+mori ddd search --term invoice
+mori ddd search --project namespace/name
+mori ddd search --json
+```
+
+| Flag | Description |
+|------|-------------|
+| `--pattern` | Show context mappings using a relationship pattern |
+| `--emits` | Show aggregates that emit an event |
+| `--context` | Show aggregates owned by a bounded context |
+| `--term` | Show glossary terms or aliases containing a substring |
+| `--project` | Scope to one project, by name or `namespace/name` |
+| `--json` | Emit JSON output |
+
+Without a section-selecting filter, `search` shows all supported result
+sections.
+
+## JSONB query alternative
+
+`mori extension query ddd` reads the generic extension JSONB store and is useful
+when you want one project's whole model:
+
+```bash
+mori extension query ddd
+mori extension query ddd --project namespace/name
+mori extension query ddd --json
+```
