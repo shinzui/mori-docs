@@ -509,6 +509,39 @@ package within a bundle.
 
 ---
 
+## OKF Knowledge Bundles
+
+Use `okfBundles` when a project owns an Open Knowledge Format bundle: a
+project-relative directory of Markdown knowledge concepts with an optional
+profile. This is separate from `bundles`, which groups packages for dependency
+resolution.
+
+```dhall
+, okfBundles =
+  [ Schema.OkfBundle::{
+    , name = "team-knowledge"
+    , path = "knowledge/team"
+    , profile = Some "https://raw.githubusercontent.com/shinzui/okf-profiles/main/profiles/team.dhall"
+    , okfVersion = "0.1"
+    , description = Some "Shared team knowledge bundle"
+    }
+  ]
+```
+
+After registration, inspect the read model with:
+
+```bash
+mori registry bundles <project>
+mori registry concepts <project>
+mori registry concepts <project> --bundle team-knowledge
+```
+
+`mori registry bundles` prints each bundle's canonical
+`mori://<namespace>/<project>/okf/<bundle>` ref. `mori registry concepts` walks
+the bundle directory on disk and lists parsed concept ids and types.
+
+---
+
 ## APIs
 
 If your project exposes APIs, the `apis` list describes them. This enables Mori
@@ -1000,7 +1033,7 @@ Dhall uses `Some` for present values and `None <Type>` for absent ones:
 
 For the defaulted list fields on `Schema.Project::{ … }` — `packages`,
 `docs`, `skills`, `bundles`, `apis`, `agents`, `subagents`,
-`standards`, `templates` — **omit the line entirely**. The bundle's
+`standards`, `templates`, `okfBundles` — **omit the line entirely**. The bundle's
 `default` supplies the empty list already, so spelling it out adds
 nothing and actively obscures the mk idiom.
 

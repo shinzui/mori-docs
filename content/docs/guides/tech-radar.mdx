@@ -1,0 +1,70 @@
+---
+title: Tech Radar
+description: Publish package recommendations across the registry
+icon: Radar
+---
+
+The tech-radar extension records durable package recommendations by language,
+category, and adoption level. Recommendations can also point at a registered
+project with a `mori://<namespace>/<name>` URI.
+
+Start with:
+
+```bash
+mori agent bootstrap-tech-radar
+```
+
+The bootstrap session authors `mori/tech-radar.dhall`, validates it, registers
+the project, and verifies the projection.
+
+## Recommendation Shape
+
+```dhall
+let Schema = https://raw.githubusercontent.com/shinzui/mori-schema/<commit>/package.dhall
+      sha256:<hash>
+
+let TechRadar = https://raw.githubusercontent.com/shinzui/mori-schema/<commit>/extensions/tech-radar/package.dhall
+      sha256:<hash>
+
+in  TechRadar.TechRadar::{
+    , recommendations =
+      [ TechRadar.Recommendation::{
+        , language = Schema.Language.Haskell
+        , category = TechRadar.Category.Database
+        , package = "hasql"
+        , level = TechRadar.AdoptionLevel.Adopt
+        , reason = Some "Type-safe PostgreSQL access"
+        , alternatives = [ "postgresql-simple", "persistent" ]
+        , project = Some "mori://shinzui/hasql-kit"
+        }
+      ]
+    }
+```
+
+Adoption levels are `Adopt`, `Trial`, `Assess`, and `Hold`. Category has closed
+arms such as `Database`, `Testing`, `CLI`, and `Streaming`, plus
+`TechRadar.Category.Other "X"` for custom labels.
+
+## Browse A Project
+
+```bash
+mori tech-radar list
+mori tech-radar list --language Haskell
+mori tech-radar list --category Database
+mori tech-radar show hasql
+```
+
+## Search The Registry
+
+```bash
+mori tech-radar search
+mori tech-radar search aeson
+mori tech-radar search --level Adopt --category Cryptography
+mori tech-radar search --recommends mori://shinzui/hasql-kit
+mori tech-radar search --json
+```
+
+`--recommends` performs a reverse lookup for recommendations whose optional
+project URI exactly matches the provided `mori://` ref. The same reverse-link
+data appears in `mori registry show <project> --full`.
+

@@ -1,0 +1,60 @@
+---
+title: Trailer Matching
+description: Match automation events by git trailers and interpolate event data
+icon: Tags
+---
+
+Automation selectors can match git trailers, and reaction actions can inject
+event data into command arguments or environment variables.
+
+## Trailer Patterns
+
+Git trailers are key-value pairs at the end of commit messages:
+
+```text
+feat: add deploy step
+
+Wire the deploy pipeline into CI.
+
+Intention: intention_01kgkg9f7dejvbc2ft8npxer5x
+Deploy: staging
+```
+
+Use `trailerPatterns` on a `ChangesetSelector`:
+
+```dhall
+Schema.EventSelector.ChangesetSelector Schema.ChangesetSelector::{
+  name = "intention-commits"
+, branches = [ "main" ]
+, trailerPatterns = [ { mapKey = "Intention", mapValue = "intention_*" } ]
+}
+```
+
+All trailer patterns must match. Glob values support `*`, and
+`{ mapKey = "Intention", mapValue = "*" }` means the trailer must be present
+with any value.
+
+## Interpolation
+
+Reaction action fields support `{{variable}}` templates. Values are expanded
+when the event triggers the reaction, and the resolved values are visible in
+reaction history.
+
+Common variables:
+
+| Variable | Meaning |
+|----------|---------|
+| `{{changeset.id}}` | Commit hash |
+| `{{changeset.subject}}` | Commit subject |
+| `{{changeset.body}}` | Commit body, or empty when absent |
+| `{{changeset.timestamp}}` | Committer timestamp |
+| `{{changeset.author.name}}` | Author name |
+| `{{changeset.author.email}}` | Author email |
+| `{{trailer.<Key>}}` | Trailer value, such as `{{trailer.Intention}}` |
+| `{{meta.<Key>}}` | Event metadata value |
+| `{{ref.name}}` | Ref name from `RefObserved` |
+| `{{signal.type}}` | Signal type from `WorkflowSignalReceived` |
+
+Unknown variables pass through unchanged. Missing optional values expand to an
+empty string.
+

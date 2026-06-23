@@ -1,0 +1,75 @@
+---
+title: Cookbook
+description: Catalog classified examples, patterns, and guides
+icon: BookText
+---
+
+The cookbook extension catalogs examples, configuration templates, patterns,
+and instructions with typed metadata so people and agents can find useful
+resources without scanning every docs file.
+
+Start with the bootstrap command when authoring a new entry:
+
+```bash
+mori agent bootstrap-cookbook
+```
+
+The session creates or updates `mori/cookbook.dhall`, validates it, registers
+the project, and verifies the entry with `mori cookbook list`.
+
+## Catalog Shape
+
+```dhall
+let Schema = https://raw.githubusercontent.com/shinzui/mori-schema/<commit>/package.dhall
+      sha256:<hash>
+
+let Cookbook = https://raw.githubusercontent.com/shinzui/mori-schema/<commit>/extensions/cookbook/package.dhall
+      sha256:<hash>
+
+in  Cookbook.CookbookCatalog::{
+    , entries =
+      [ Cookbook.CookbookEntry::{
+        , key = "my-pattern"
+        , title = "How to Do X with Library Y"
+        , contentType = Cookbook.ContentType.SampleCode
+        , topics = [ Cookbook.Topic.Database, Cookbook.Topic.Testing ]
+        , packages = [ "hasql", "tasty" ]
+        , language = Schema.Language.Haskell
+        , audience = Schema.DocAudience.Module
+        , location = Schema.DocLocation.LocalFile "docs/my-pattern.md"
+        , description = Some "Brief summary of what this teaches"
+        }
+      ]
+    }
+```
+
+Entries require a unique `key`, a non-empty title, at least one topic, a content
+type, related packages, language, audience, and location.
+
+## Browse Locally
+
+```bash
+mori cookbook list
+mori cookbook list --content-type sample-code
+mori cookbook list --topic database
+mori cookbook list --package hasql
+mori cookbook list --language haskell
+mori cookbook show my-pattern
+```
+
+Filters combine with AND logic and are case-insensitive.
+
+## Query Across Projects
+
+After registration, query projected cookbook entries from anywhere:
+
+```bash
+mori extension query cookbook
+mori extension query cookbook --project namespace/name
+mori extension query cookbook --topic database
+mori extension query cookbook --content-type pattern
+```
+
+Cookbook entries complement `docs` entries in `mori.dhall`: docs are reference
+material, while cookbook entries are teaching material.
+

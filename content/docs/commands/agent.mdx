@@ -107,6 +107,29 @@ the body, appends an `ExposedPlan` entry to `mori/agent-plans.dhall`, runs
 All flags are optional; when omitted, the agent asks once for what is missing
 and proceeds.
 
+## Extension bootstrap commands
+
+Start schema-aware Claude sessions for authoring extension entries.
+
+```bash
+mori agent bootstrap-cookbook
+mori agent bootstrap-tech-radar
+mori agent bootstrap-upstream-issues
+mori agent bootstrap-checklist
+mori agent bootstrap-ddd
+mori agent bootstrap-cookbook --debug
+```
+
+Each command embeds the extension schema, the pinned mori-schema URL and hash,
+the current project snapshot, and the author / validate / register / verify
+workflow. The commands refuse to launch when `mori.dhall` or the extension file
+is pinned to a different schema commit than the running binary; migrate first
+with `mori schema migrate --apply` or `mori schema migrate --apply --file
+mori/<extension>.dhall`.
+
+See [Extension Bootstrap](/docs/guides/bootstrap-extensions) for the shared
+workflow and staleness guard.
+
 ## `mori agent schema-migrate`
 
 Start a Claude session to migrate and fix `mori.dhall` schema.

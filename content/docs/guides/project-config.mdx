@@ -1,0 +1,70 @@
+---
+title: Project Configuration
+description: Structure mori.dhall with schema defaults and project metadata
+icon: FileCode
+---
+
+`mori.dhall` is a `Schema.Project::{ ... }` record describing project identity,
+repositories, packages, dependencies, docs, templates, and knowledge bundles.
+Use the `::` form so schema defaults fill in optional fields:
+
+```dhall
+let Schema = ./schema/package.dhall
+
+in  Schema.Project::{
+    , project = Schema.ProjectIdentity::{
+      , name = "my-project"
+      , namespace = "myorg"
+      , type = Schema.PackageType.Application
+      , language = Schema.Language.Haskell
+      , lifecycle = Schema.Lifecycle.Active
+      }
+    }
+```
+
+## Top-Level Fields
+
+| Field | Type | Purpose |
+|-------|------|---------|
+| `project` | `ProjectIdentity` | Required project identity |
+| `repos` | `List Repo` | Repository references |
+| `packages` | `List Package` | Buildable units in the project |
+| `bundles` | `List PackageBundle` | Package groups used together |
+| `dependencies` | `List Text` | External project dependencies by name |
+| `apis` | `List Api` | API definitions |
+| `agents` | `List AgentHint` | Agent role hints |
+| `skills` | `List Skill` | Agent skill definitions |
+| `subagents` | `List Subagent` | Specialized assistant definitions |
+| `standards` | `List Text` | Standards this project follows |
+| `docs` | `List DocRef` | Documentation references |
+| `templates` | `List SeihouTemplate` | Seihou scaffold templates |
+| `okfBundles` | `List OkfBundle` | OKF knowledge bundles owned by the project |
+
+Defaulted list fields can be omitted when empty. The schema bundle supplies the
+empty lists.
+
+## OKF Bundles
+
+Declare OKF knowledge bundles with `okfBundles`, not `bundles`:
+
+```dhall
+, okfBundles =
+  [ Schema.OkfBundle::{
+    , name = "team-knowledge"
+    , path = "knowledge/team"
+    , profile = Some "https://raw.githubusercontent.com/shinzui/okf-profiles/main/profiles/team.dhall"
+    , okfVersion = "0.1"
+    , description = Some "Shared team knowledge bundle"
+    }
+  ]
+```
+
+After registration:
+
+```bash
+mori registry bundles my-project
+mori registry concepts my-project
+```
+
+See [Schema Reference](/docs/guides/schema-reference) for field-by-field details.
+

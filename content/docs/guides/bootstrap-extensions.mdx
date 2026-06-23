@@ -1,0 +1,56 @@
+---
+title: Extension Bootstrap
+description: Launch schema-aware agent sessions for authoring extension entries
+icon: Sparkles
+---
+
+Extension bootstrap commands launch Claude sessions with the exact schema,
+current project state, and validation workflow needed to author extension data.
+
+```bash
+mori agent bootstrap-agent-plan
+mori agent bootstrap-cookbook
+mori agent bootstrap-tech-radar
+mori agent bootstrap-upstream-issues
+mori agent bootstrap-checklist
+mori agent bootstrap-ddd
+```
+
+Each command has a matching extension purpose:
+
+| Command | Use it to author |
+|---------|------------------|
+| `bootstrap-agent-plan` | MasterPlans or ExecPlans plus `mori/agent-plans.dhall` entries |
+| `bootstrap-cookbook` | Classified examples, patterns, instructions, and references |
+| `bootstrap-tech-radar` | Package recommendations with adoption level, language, and category |
+| `bootstrap-upstream-issues` | Tracked upstream dependency issues and workarounds |
+| `bootstrap-checklist` | Operational, release, onboarding, or incident checklists |
+| `bootstrap-ddd` | Domain-driven design models for the project |
+
+## Schema Pin Guard
+
+Before launching Claude, each command checks `mori.dhall` and the relevant
+`mori/<extension>.dhall` file, when present. If either file imports a
+`mori-schema` commit that differs from the commit baked into the running binary,
+the command exits and tells you to migrate first:
+
+```bash
+mori schema migrate --apply
+mori schema migrate --apply --file mori/cookbook.dhall
+```
+
+Use `mori registry upgrade-schema --dry-run` to preview the same kind of
+migration across registered projects.
+
+## Session Workflow
+
+The generated session follows one workflow:
+
+1. Author the Markdown body and Dhall record.
+2. Run `mori validate`.
+3. Run `mori register --local`.
+4. Verify the projected data with the matching read-model command, such as
+   `mori cookbook list`, `mori tech-radar search`, or `mori ddd search`.
+
+Pass `--debug` to print the assembled prompt without starting Claude.
+

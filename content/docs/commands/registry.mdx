@@ -65,10 +65,40 @@ Search the local registry.
 ```bash
 mori registry search <query>
 mori registry search <query> --domain Platform
+mori registry search <query> --domain Platform --domain Internal
 mori registry search <query> --json
 ```
 
 Matches against project name, namespace, and package names.
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--json` | JSON output |
+| `--domain DOMAIN` | Filter by domain tag. Repeatable; filters compose with AND semantics and match case-insensitively |
+
+## `mori registry dependents`
+
+List registered projects or packages that depend on a project or dependency
+name. The reference can be a bare project name, `namespace/name`, or a library
+name such as `effectful`.
+
+```bash
+mori registry dependents <ref>
+mori registry dependents shinzui/rei
+mori registry dependents effectful --packages
+mori registry dependents effectful --scope test
+mori registry dependents effectful --json
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--json` | JSON output |
+| `--packages` | Show per-package dependency edges instead of a project rollup |
+| `--scope SCOPE` | Only show edges with this dependency scope, such as `regular`, `dev`, `test`, or `build` |
 
 ## `mori registry domains`
 
@@ -102,6 +132,43 @@ mori registry docs <project> --json
 | `--kind` | Filter by doc kind (`reference`, `guide`, `cookbook`, `spec`, `runbook`, `notes`) |
 | `--audience` | Filter by audience (`module`, `user`, `api`, `internal`) |
 | `--package` | Filter by package name |
+
+## `mori registry bundles`
+
+List a project's registered OKF knowledge bundles. These are distinct from
+`PackageBundle` entries in `mori.dhall`: OKF bundles describe directories of
+Markdown knowledge concepts and carry canonical `mori://<ns>/<name>/okf/<bundle>`
+refs.
+
+```bash
+mori registry bundles <project>
+mori registry bundles <namespace/name>
+mori registry bundles <project> --json
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--json` | JSON output |
+
+## `mori registry concepts`
+
+Walk a project's registered OKF bundle directories and list the concepts parsed
+from disk.
+
+```bash
+mori registry concepts <project>
+mori registry concepts <project> --bundle team-knowledge
+mori registry concepts <project> --json
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--json` | JSON output |
+| `--bundle BUNDLE` | Only list concepts from the named OKF bundle |
 
 ## `mori registry exec`
 

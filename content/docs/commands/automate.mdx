@@ -55,6 +55,8 @@ Run multi-repo automation daemon.
 
 ```bash
 mori automate daemon
+mori automate daemon --ingest-interval 60
+mori automate daemon --queued-concurrency 6
 ```
 
 ### Behavior
@@ -64,9 +66,18 @@ mori automate daemon
 - Routes repository events to registered repos' automation configs
 - Concurrent subscription workers (automation, executor, pending-schedules projection, registry, tech-radar projection, agent-plans projection, workflow, registration)
 - Runs the shibuya worker for legacy per-action `Schedule` plus the scheduled-reactions worker for per-reaction `schedule` deferrals
+- Runs FIFO workers for `queued = True` automations. Each automation remains internally ordered, while distinct automations can drain concurrently
 - Fully event-driven — no filesystem polling
 
 See [Automation Daemon](/docs/guides/automation-daemon) for details.
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--refresh-interval SECONDS` | Interval between config refresh cycles. Default: `60` |
+| `--ingest-interval SECONDS` | Interval between auto-ingest cycles for observed projects. Default: `300`; use `0` to disable |
+| `--queued-concurrency N` | Number of FIFO worker instances for `queued = True` automations. Default: `3` |
 
 ## `mori automate register`
 

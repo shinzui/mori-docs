@@ -38,6 +38,8 @@ The root type is defined in `schema/Project.dhall`:
 | `subagents` | `List Subagent` | Specialized AI assistant definitions |
 | `standards` | `List Text` | Names of standard projects this project follows |
 | `docs` | `List DocRef` | Project-level documentation |
+| `templates` | `List SeihouTemplate` | Seihou scaffold templates shipped by this project |
+| `okfBundles` | `List OkfBundle` | OKF knowledge bundles owned by this project |
 
 ## project
 
@@ -241,6 +243,32 @@ matches a bundle name, only the bundle's packages are included.
   , description = Some "Streaming data processing"
   , packages = [ "streamly", "streamly-core" ]
   , primary = "streamly"
+  }
+]
+```
+
+## okfBundles
+
+OKF bundles describe directories of Markdown knowledge concepts owned by this
+project. They are distinct from `PackageBundle`: package bundles group code
+packages for dependency resolution, while OKF bundles expose structured
+knowledge through registry commands and canonical refs.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `name` | `Text` | Bundle name, unique within the project |
+| `path` | `Text` | Project-relative directory containing the bundle |
+| `profile` | `Optional Text` | URL or path to the OKF profile the bundle should follow |
+| `okfVersion` | `Text` | OKF format version, such as `"0.1"` |
+| `description` | `Optional Text` | Human-readable description |
+
+```haskell
+[ Schema.OkfBundle::{
+  , name = "team-knowledge"
+  , path = "knowledge/team"
+  , profile = Some "https://raw.githubusercontent.com/shinzui/okf-profiles/main/profiles/team.dhall"
+  , okfVersion = "0.1"
+  , description = Some "Shared team knowledge bundle"
   }
 ]
 ```
