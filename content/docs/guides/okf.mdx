@@ -1,0 +1,130 @@
+---
+title: OKF Bundles
+description: Declare, register, address, and discover Open Knowledge Format bundles
+icon: Library
+---
+
+OKF (Open Knowledge Format) is a plain-Markdown-plus-YAML knowledge bundle
+format. An **OKF bundle** is a directory of Markdown "concept" files — each
+concept has an id (its bundle-relative path without the `.md`, e.g.
+`tables/users`), a type, a title, and links to other concepts.
+
+A separate library, **okf-core**, does all the parsing, validation, and graph
+extraction. Mori is the *catalog* layer: it indexes the bundles a project owns
+and makes them addressable. The dependency is strictly one-way (mori →
+okf-core); mori never re-implements any OKF semantics.
+
+> **Not the same as `PackageBundle`.** Mori also has a `PackageBundle` entity (a
+> grouping of Haskell packages with a "primary" package), rendered as the
+> **Bundles** section in `mori show`. That is unrelated. An OKF bundle is a
+> directory of knowledge concepts and is rendered as the **OKF Bundles** section.
+> Declare OKF bundles in `okfBundles` (not `bundles`); they never alias or share
+> fields with `PackageBundle`.
+
+## Declaring bundles in `mori.dhall`
+
+A project lists the OKF bundles it owns in the `okfBundles` field of its
+`Schema.Project`. Each entry is a `Schema.OkfBundle::{ … }`:
+
+```dhall
+okfBundles =
+  [ Schema.OkfBundle::{
+    , name = "team-knowledge"
+    , path = "knowledge/team"
+    , profile = Some "https://raw.githubusercontent.com/shinzui/okf-profiles/main/profiles/team.dhall"
+    , okfVersion = "0.1"
+    , description = Some "Shared team knowledge bundle"
+    }
+  ]
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | `Text` | Bundle name, unique within the project |
+| `path` | `Text` | Project-relative directory of the bundle |
+| `profile` | `Optional Text` | Reference (URL or path) to an okf-profiles Dhall profile the bundle should follow |
+| `okfVersion` | `Text` | OKF format version (e.g. `"0.1"`) |
+| `description` | `Optional Text` | Human-readable summary |
+
+`path` is resolved relative to the project root, so a bundle's absolute
+directory is `<project path>/<bundle path>`. `profile` is optional; a bundle
+with no profile is never validated (see [Advisory profile
+validation](#advisory-profile-validation)).
+
+See [Project Configuration](/docs/guides/project-config) for the `okfBundles`
+manifest field and [Schema Reference](/docs/guides/schema-reference) for the
+`OkfBundle` record.
+
+## Registering and viewing bundles
+
+`mori observe` (or `mori register`) reads `okfBundles` from the manifest and
+projects each bundle into the `mori.okf_bundles` read model. After that:
+
+```bash
+mori show <project> --full              # an "OKF Bundles" section, separate
+                                        # from the PackageBundle "Bundles" one
+mori registry bundles <project>         # the bundle table, text form
+mori registry bundles <project> --json  # same, as JSON
+```
+
+Each row in `mori registry bundles` carries its canonical
+`mori://<ns>/<project>/okf/<bundle>` reference (see [Addressing a
+bundle](#addressing-a-bundle)); the JSON form includes that string under a
+`ref` key.
+
+## Listing concepts
+
+`mori registry concepts` walks each bundle live from disk with okf-core and
+lists the concepts inside (id and type):
+
+```bash
+mori registry concepts <project>                 # every bundle
+mori registry concepts <project> --bundle <name> # one named bundle
+mori registry concepts <project> --json
+```
+
+A bundle that cannot be read prints a non-fatal "could not read bundle" line
+and the command continues with the others. Cross-bundle concept search and a
+stored concept index are deferred.
+
+## Advisory profile validation
+
+When a bundle declares a `profile`, `mori observe` / `mori register` loads that
+profile with okf-core, walks the bundle, runs okf-core's profile check, and
+prints any deviation as a one-line advisory to standard error:
+
+```text
+okf: <bundleName>: <deviation>
+```
+
+This validation is **advisory only** — it matches OKF's permissive model and
+mori's existing warning channel. It **never fails registration**: a profile
+deviation, an unparsable bundle, or a missing/unreachable profile (e.g. a
+remote okf-profiles URL that does not resolve) all degrade to advisory lines
+and leave the exit code unchanged. A bundle with no declared `profile` is
+skipped silently.
+
+## Addressing a bundle
+
+A registered bundle is addressable with the `okf` artifact kind:
+
+```text
+Canonical:  mori://<namespace>/<project>/okf/<bundle>
+Compact:    <namespace>/<project>#okf:<bundle>
+```
+
+For example `mori://shinzui/mori/okf/architecture`. The `okf` segment does not
+pluralise (it names the format, not a plural noun). These refs resolve against
+the local registry to the stored bundle row; an unknown bundle name resolves to
+a not-found error. See [Canonical Refs](/docs/concepts/canonical-refs) for the
+full ref grammar.
+
+Nested concept URIs (`mori://…/okf/<bundle>/concepts/<concept-id>`) are deferred
+along with the concept index; today addressing is flat at the bundle grain.
+
+## Related
+
+- [`mori registry`](/docs/commands/registry) — `registry bundles` and `registry concepts`
+- [Canonical Refs](/docs/concepts/canonical-refs) — the `okf` ref kind and grammar
+- [Project Configuration](/docs/guides/project-config) — the `okfBundles` manifest field
+- [Schema Reference](/docs/guides/schema-reference) — the `OkfBundle` record

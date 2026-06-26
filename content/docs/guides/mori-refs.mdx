@@ -6,7 +6,7 @@ icon: Link
 
 Canonical cross-project references use the `mori://` URI scheme. They identify
 artifacts owned by registered projects: docs, packages, repos, skills,
-subagents, APIs, cookbook entries, and seihou templates.
+subagents, APIs, cookbook entries, seihou templates, and OKF bundles.
 
 ```text
 mori://<namespace>/<name>/<kind-plural>[/<key>][#<anchor>]
@@ -28,9 +28,11 @@ mori://shinzui/streamly/docs/effects#pooling
 mori://shinzui/streamly/packages/streamly-core
 mori://shinzui/streamly/cookbook/postgres-pool
 mori://shinzui/streamly/templates/scaffold-app
+mori://shinzui/streamly/okf/architecture
 mori://shinzui/mori/masterplans/9-agent-plans-extension
 mori://shinzui/mori/plans/70-agent-plans-dhall-schema-and-uri-kinds
 shinzui/streamly#doc:effects-cookbook
+shinzui/streamly#okf:architecture
 shinzui/streamly:streamly-core
 shinzui/mori#masterplan:9-agent-plans-extension
 shinzui/mori#plan:70-agent-plans-dhall-schema-and-uri-kinds

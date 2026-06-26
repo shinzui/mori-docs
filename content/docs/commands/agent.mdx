@@ -209,3 +209,68 @@ troubleshooting `mori.automation.dhall` configurations.
 | Flag | Description |
 |------|-------------|
 | `--debug` | Print the system prompt instead of starting a session |
+
+## `mori agent exec`
+
+Run a prompt or skill against every repo in a [group](/docs/guides/registry-groups),
+one Claude session per repo. Each run is recorded as a session and recalls
+accumulated memory, so later repos can build on what earlier repos learned. See
+[Agent Exec](/docs/guides/agent-exec) for the workflow.
+
+```bash
+mori agent exec --group backends --prompt "Upgrade the pinned GHC to 9.10"
+mori agent exec --group backends --skill upgrade-deps
+mori agent exec --group backends --filter "shinzui/*" --dry-run
+mori agent exec --group backends --prompt "..." --follow-up
+mori agent exec --group backends --prompt "..." --debug
+```
+
+Supply exactly one of `--prompt`/`-p` or `--skill`. Runs are sequential by
+default so later repos can see memory written by earlier ones.
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--group GROUP` | Run across the repos in GROUP (required) |
+| `--prompt`, `-p TEXT` | Instruction to run in each repo |
+| `--skill NAME` | Claude Code skill to run in each repo |
+| `--filter GLOB` | Restrict to `<namespace>/<name>` matching GLOB |
+| `--jobs`, `-j N` | Parallel repos (default 1; values > 1 are reserved and disable accumulate-as-you-go) |
+| `--fail-fast` | Stop after the first repo that fails |
+| `--dry-run` | List the repos without running |
+| `--follow-up` | Recall the prior run's session and memories |
+| `--debug` | Print the assembled prompt instead of launching Claude |
+
+## `mori agent memory`
+
+Record or list reusable agent memory for a [group](/docs/guides/registry-groups)
+or a single repo. `mori agent exec` recalls active memory into each session's
+prompt and writes new memory back; you can also manage it directly.
+
+### `mori agent memory record`
+
+```bash
+mori agent memory record --group backends "Use just build, not cabal directly"
+mori agent memory record --repo <project-id> "Migrations live in db/migrate" --type pattern --tag db
+```
+
+Pass exactly one scope: `--group GROUP` (a mori group name) or `--repo
+PROJECT_ID` (a mori project id). The memory text is a positional argument.
+
+| Flag | Description |
+|------|-------------|
+| `--group GROUP` | Scope the memory to a mori group |
+| `--repo PROJECT_ID` | Scope the memory to a single project |
+| `--type TYPE` | Memory type: `fact` (default), `pattern`, `preference`, `constraint`, or `instruction` |
+| `--tag TAG` | Tag to attach to the memory; repeatable |
+
+### `mori agent memory list`
+
+```bash
+mori agent memory list --group backends
+mori agent memory list --repo <project-id> --type pattern
+```
+
+Lists active memory for the given scope. Pass `--group` or `--repo` (as above);
+`--type TYPE` filters to a single memory type.

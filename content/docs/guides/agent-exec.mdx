@@ -1,0 +1,111 @@
+---
+title: Agent Exec
+description: Run a prompt or skill across every repo in a group with accumulated memory
+icon: Boxes
+---
+
+`mori agent exec` runs a prompt or [skill](/docs/guides/kit) against every repo
+in a [group](/docs/guides/registry-groups), launching one Claude Code session
+per repo. Unlike [`mori registry exec`](/docs/guides/registry-exec) — which runs
+a shell command in each repo — `agent exec` starts an interactive agent in each
+repo and, crucially, **accumulates memory across the run**: each repo recalls
+what earlier repos learned, and what every session learns is written back for
+next time.
+
+## Prerequisites
+
+- Claude Code CLI (`claude`) installed and authenticated
+- A [registry group](/docs/guides/registry-groups) whose members have local
+  on-disk paths
+- A database connection (sessions and memory are persisted)
+
+## Running across a group
+
+```bash
+mori agent exec --group backends --prompt "Bump the pinned GHC to 9.10 and fix fallout"
+mori agent exec --group backends --skill upgrade-deps
+```
+
+Supply **exactly one** of `--prompt`/`-p` (a free-form instruction) or
+`--skill` (a Claude Code skill name, run as `/<skill>` in each repo). Restrict
+the member set with `--filter`, which matches `<namespace>/<name>` against a
+glob:
+
+```bash
+mori agent exec --group backends --filter "shinzui/*" --prompt "..."
+```
+
+Preview the repos that would be visited without launching anything:
+
+```bash
+mori agent exec --group backends --dry-run
+```
+
+## How a run works
+
+Repos are visited **sequentially by default** so that memory written in one repo
+is available to the next. For each repo, `agent exec`:
+
+1. Starts a session (recorded for follow-ups and history).
+2. Recalls active memory at both **group** scope and **repo** scope and injects
+   it into the prompt under an "Accumulated learnings" section.
+3. Launches Claude in the repo with your prompt or skill, plus instructions to
+   record reusable learnings with [`mori agent memory
+   record`](/docs/commands/agent#mori-agent-memory).
+4. Marks the session complete (or failed if Claude exits non-zero).
+
+A repo with no on-disk path, or a path that no longer exists, is skipped with a
+note. At the end, `agent exec` prints a summary (`N repo(s) visited, M
+failed.`) and exits non-zero if any repo failed.
+
+| Flag | Effect |
+|------|--------|
+| `--jobs`, `-j N` | Parallel repos. Default `1`; values > 1 are reserved and disable accumulate-as-you-go (later repos cannot see earlier memory writes) |
+| `--fail-fast` | Stop after the first repo that fails |
+| `--follow-up` | Recall the prior run's session for this group and build on it |
+| `--debug` | Print the assembled prompt for each repo instead of launching Claude |
+
+## Accumulated memory
+
+Each session can record reusable knowledge that future runs recall
+automatically. Memory is scoped to either the **group** (applies to every repo)
+or a single **repo**:
+
+```bash
+# group-wide learning — recalled in every repo of the group
+mori agent memory record --group backends "Use just build, not cabal directly"
+
+# repo-specific learning
+mori agent memory record --repo <project-id> "Migrations live in db/migrate" --type pattern --tag db
+```
+
+Memory has a **type** (`fact`, `pattern`, `preference`, `constraint`, or
+`instruction`) and optional repeatable `--tag`s. Inspect what is stored for a
+scope with `mori agent memory list`:
+
+```bash
+mori agent memory list --group backends
+mori agent memory list --repo <project-id> --type pattern
+```
+
+See [`mori agent memory`](/docs/commands/agent#mori-agent-memory) for the full
+flag reference.
+
+## Following up
+
+Pass `--follow-up` to continue from the most recent `agent exec` run for the
+same group. The new run threads the prior session and surfaces the accumulated
+learnings, so a second pass builds on the first instead of starting cold:
+
+```bash
+mori agent exec --group backends --prompt "Finish the migrations you started" --follow-up
+```
+
+If no prior run exists for the group, `agent exec` notes that and starts fresh.
+
+## Related
+
+- [`mori agent`](/docs/commands/agent) — command reference for `exec` and `memory`
+- [Registry Groups](/docs/guides/registry-groups) — defining the member set
+- [Registry Exec](/docs/guides/registry-exec) — run a shell command across repos
+- [Agent Sessions](/docs/guides/agent-sessions) — single-repo Claude sessions

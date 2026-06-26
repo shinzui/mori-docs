@@ -24,9 +24,13 @@ session with appropriate tools and permissions.
 | `mori agent bootstrap` | Scaffold a new mori project | No | Yes |
 | `mori agent schema-migrate` | Fix or migrate `mori.dhall` | No | No |
 | `mori agent automate` | Author/debug automation configs | Yes | No |
+| `mori agent exec` | Run a prompt/skill across every repo in a group | No | Yes |
 
 All sessions accept `--debug` to print the system prompt instead of launching
 Claude (useful for inspecting what context is provided).
+
+To run an agent across *multiple* repos at once — one session per repo, with
+memory accumulating across the run — see [Agent Exec](/docs/guides/agent-exec).
 
 ## assist — Development Session
 
@@ -170,6 +174,7 @@ interruption.
 ## Related
 
 - [Agent Context](/docs/concepts/agent-context) — static JSON context for programmatic use
+- [Agent Exec](/docs/guides/agent-exec) — run a prompt or skill across every repo in a group
 - [Kit](/docs/guides/kit) — installing skills and subagents
 - [Automation](/docs/guides/automation) — VCS event reactions and config authoring
 - [Getting Started](/docs/getting-started) — CLI usage and project configuration

@@ -9,6 +9,19 @@ features, commands, and schema changes.
 
 ---
 
+## 2026-06-25
+
+### Agent exec and agent memory (new)
+- Added [`mori agent exec`](/docs/commands/agent#mori-agent-exec) — run a prompt or skill against every repo in a [group](/docs/guides/registry-groups), one Claude session per repo, with `--filter`, `--dry-run`, `--fail-fast`, `--follow-up`, and `--jobs`
+- Added [`mori agent memory record`](/docs/commands/agent#mori-agent-memory) and `mori agent memory list` for group- and repo-scoped agent memory (types `fact`, `pattern`, `preference`, `constraint`, `instruction`, with tags)
+- Agent exec runs sequentially by default so each repo recalls memory written by earlier repos; new [Agent Exec guide](/docs/guides/agent-exec) covers the accumulated-memory workflow
+
+### OKF bundle guide and `okf` ref kind
+- Added the [OKF Bundles guide](/docs/guides/okf) for declaring `okfBundles`, registering and viewing bundles, listing concepts, advisory profile validation, and `mori://` addressing
+- Documented the new `OkfBundle` artifact kind (`okf` segment, non-pluralising) in [Canonical Refs](/docs/concepts/canonical-refs) and [Mori References](/docs/guides/mori-refs); `okf` refs resolve against the `mori.okf_bundles` read model
+
+---
+
 ## 2026-06-23
 
 ### Registry and OKF docs

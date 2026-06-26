@@ -5,7 +5,7 @@ icon: Link
 ---
 
 Every artifact owned by a registered project — docs, packages, repos, skills,
-subagents, APIs, cookbook entries, and seihou templates — has a stable
+subagents, APIs, cookbook entries, seihou templates, and OKF bundles — has a stable
 canonical identifier in the `mori://` URI scheme. The CLI accepts canonical
 refs as input wherever it makes sense, prints them in `--full` and `--json`
 output, and the schema can store them in any field typed as `DocLocation`.
@@ -42,14 +42,18 @@ The kinds are pinned in the schema. The order matches the Dhall union arms in
 | Api | `apis` | `api` |
 | Cookbook | `cookbook` | `cookbook` |
 | Template | `templates` | `template` |
+| OkfBundle | `okf` | `okf` |
 | MasterPlan | `masterplans` | `masterplan` |
 | ExecPlan | `plans` | `plan` |
 
-`cookbook` is the only segment that does not pluralise; it stays singular
-because the artifact is "the cookbook entry" and the existing extension
-already uses the singular form. The `MasterPlan` and `ExecPlan` kinds are
-added by the [agent-plans extension](/docs/guides/agent-plans); their
-trailing key is the plan's `<id>-<slug>` segment.
+`cookbook` and `okf` are the segments that do not pluralise: the cookbook
+artifact is "the cookbook entry" (and its extension already uses the singular
+form), and `okf` names the OKF format rather than a plural noun. The
+`OkfBundle` kind addresses an [OKF knowledge bundle](/docs/guides/okf) and
+resolves against the `mori.okf_bundles` read model. The `MasterPlan` and
+`ExecPlan` kinds are added by the [agent-plans
+extension](/docs/guides/agent-plans); their trailing key is the plan's
+`<id>-<slug>` segment.
 
 ## Examples
 
@@ -62,6 +66,8 @@ A package:                       mori://shinzui/streamly/packages/streamly-core
 A skill:                         mori://shinzui/streamly/skills/effects-cookbook
 A cookbook entry:                mori://shinzui/streamly/cookbook/postgres-pool
 A seihou template:               mori://shinzui/streamly/templates/scaffold-app
+An OKF bundle:                   mori://shinzui/streamly/okf/architecture
+Compact form for the same OKF:   shinzui/streamly#okf:architecture
 A masterplan:                    mori://shinzui/mori/masterplans/9-agent-plans-extension
 An exec plan:                    mori://shinzui/mori/plans/70-agent-plans-dhall-schema-and-uri-kinds
 ```
