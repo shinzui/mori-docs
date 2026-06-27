@@ -9,6 +9,16 @@ features, commands, and schema changes.
 
 ---
 
+## 2026-06-27
+
+### Runtime documentation refresh
+- Rewrote [Event Sourcing](/docs/concepts/event-sourcing), [Local Registry](/docs/concepts/local-registry), and [Architecture Overview](/docs/architecture) around the current keiro/kiroku runtime, shibuya worker host, pgmq queues, and PostgreSQL read models
+- Clarified that MessageDB references now describe migration compatibility, legacy history, or specific CLI checks such as `mori doctor`, not the steady-state runtime model
+- Updated automation daemon docs to cover current daemon workers, DDD/extension projections, and FIFO `queued = True` automation jobs
+- Expanded the [Agent Exec guide](/docs/guides/agent-exec) with concrete use cases enabled by group-scoped execution, accumulated memory, and follow-up runs
+
+---
+
 ## 2026-06-25
 
 ### Agent exec and agent memory (new)

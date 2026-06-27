@@ -6,7 +6,7 @@ icon: Activity
 
 The automation daemon manages automation for all registered repos from a
 single long-running process. Instead of running `mori automate run` in each
-repo, the daemon discovers repos from the event store, loads their
+repo, the daemon discovers repos from the local runtime, loads their
 automation configs, and routes events to the correct repo automatically.
 
 ## Usage
@@ -16,6 +16,7 @@ mori automate daemon
 mori automate daemon --ingest-interval 30      # faster cycle for development
 mori automate daemon --ingest-interval 0       # disable auto-ingest
 mori automate daemon --refresh-interval 120    # config-refresh cycle
+mori automate daemon --queued-concurrency 6    # FIFO queued automation workers
 ```
 
 ### Flags
@@ -24,6 +25,7 @@ mori automate daemon --refresh-interval 120    # config-refresh cycle
 |------|---------|---------|
 | `--refresh-interval SECONDS` | 60 | Interval between config-refresh cycles |
 | `--ingest-interval SECONDS` | 300 | Interval between auto-ingest cycles (`0` to disable) |
+| `--queued-concurrency N` | 3 | Number of FIFO worker instances for `queued = True` automations |
 
 ## How It Works
 
@@ -38,15 +40,17 @@ mori automate daemon --refresh-interval 120    # config-refresh cycle
    automation configs, the daemon picks up changes automatically —
    fully event-driven with no filesystem polling.
 
-4. A message-db subscription on the repository event category receives
-   all repository events. For each event the daemon:
+4. Repository-event processors receive observed VCS and config events from the
+   current event runtime. During migration, compatible legacy pollers may still
+   serve contexts that have not been moved, but the steady-state daemon path is
+   the keiro/kiroku worker host. For each event the daemon:
    - Extracts the RepoId from the event payload
    - Looks up the matching RepoConfig in the registry
    - Runs the automation matcher against that repo's config
    - Triggers reactions with `workingDir` automatically set to the
      repo's path (so `RunCommand` actions execute in the right directory)
 
-5. The daemon runs several concurrent subscription workers:
+5. The daemon runs several concurrent workers and projections:
 
 | Subscription | Purpose |
 |-------------|---------|
@@ -64,7 +68,9 @@ Plus queue processors for deferred work and a periodic **auto-ingest loop**.
 The `scheduled_actions` and `scheduled_reactions` pgmq queues run through
 keiro-pgmq `Job` definitions, so the queue name, JSON codec, retry policy, and
 dead-letter queue are defined in one place and reused by both producers and
-workers. The `webhook_deliveries` queue still uses its bespoke pgmq adapter.
+workers. Automations with `queued = True` also run through FIFO pgmq jobs:
+events for one automation stay ordered while different automations can drain
+concurrently. The `webhook_deliveries` queue still uses its bespoke pgmq adapter.
 
 On startup, the daemon ensures the pgmq queues exist. For the keiro-pgmq jobs,
 that includes the main queues and their dead-letter queues.

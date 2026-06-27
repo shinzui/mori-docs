@@ -12,6 +12,33 @@ repo and, crucially, **accumulates memory across the run**: each repo recalls
 what earlier repos learned, and what every session learns is written back for
 next time.
 
+## What this enables
+
+`agent exec` is for work that is too context-sensitive for
+[`mori registry exec`](/docs/guides/registry-exec), but too repetitive to run as
+one manually managed Claude session per repo.
+
+Good fits:
+
+- **Fleet migrations** — upgrade a pinned compiler, framework, schema import, or
+  dependency across every repo in a group, letting each repo's fixes inform the
+  next one.
+- **Cross-repo audits** — ask the agent to inspect each service for a pattern,
+  record exceptions as memory, and leave repo-specific follow-up notes.
+- **Rolling bug fixes** — apply the same behavioral fix across similar repos
+  while adapting to local build systems, module names, generated code, and test
+  commands.
+- **Convention rollout** — run a skill that installs or updates shared repo
+  conventions, then record group-wide discoveries such as "services in this
+  group use `just check` before commit".
+- **Second-pass cleanup** — run with `--follow-up` after the first pass, so the
+  agent can continue from the prior sessions and accumulated learnings instead
+  of rediscovering the same constraints.
+
+The important difference from a shell loop is that each stop is a full agent
+session in the target repo. The important difference from doing it manually is
+that the run has a group-level memory channel.
+
 ## Prerequisites
 
 - Claude Code CLI (`claude`) installed and authenticated

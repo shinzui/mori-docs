@@ -64,10 +64,10 @@ mori automate daemon --queued-concurrency 6
 - Bootstraps config registry from `automation_registrations` projection
 - Subscribes to `automationRegistration` category for live config updates
 - Routes repository events to registered repos' automation configs
-- Concurrent subscription workers (automation, executor, pending-schedules projection, registry, tech-radar projection, agent-plans projection, workflow, registration)
+- Concurrent workers and projections for automation, execution, pending schedules, registry, tech radar, DDD, agent plans, workflow, registration, and app fan-out
 - Runs the shibuya worker for legacy per-action `Schedule` plus the scheduled-reactions worker for per-reaction `schedule` deferrals
 - Runs FIFO workers for `queued = True` automations. Each automation remains internally ordered, while distinct automations can drain concurrently
-- Fully event-driven — no filesystem polling
+- Event-driven after ingest; the daemon also has a periodic auto-ingest loop for observed repos
 
 See [Automation Daemon](/docs/guides/automation-daemon) for details.
 

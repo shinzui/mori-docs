@@ -291,7 +291,9 @@ Schema.ReactionAction.RunCommand Schema.RunCommandAction::{
 
 ### EmitEvent
 
-Write an event to a MessageDB stream.
+Record an event-emission intent in the reaction result. The action carries the
+target stream and event type; the executor currently records the intent rather
+than directly appending a custom event itself.
 
 ```dhall
 Schema.ReactionAction.EmitEvent Schema.EmitEventAction::{
@@ -494,15 +496,15 @@ Schema.ExecutionPolicy::{
 
 ### 1. Ingest VCS events
 
-Ingest git history into the event store:
+Ingest git history into the local event runtime:
 
 ```bash
 mori automate ingest git
 ```
 
 This reads new commits since the last ingestion and writes `ChangesetObserved`
-and `RefObserved` events to the `repository-{repo_id}` stream. Ingestion is
-cursor-tracked — only new commits are processed on subsequent runs.
+and `RefObserved` repository events. Ingestion is cursor-tracked, so only new
+commits are processed on subsequent runs.
 
 To ingest from a different repository path:
 
@@ -521,9 +523,9 @@ mori automate ingest git --path /path/to/repo
 mori automate run
 ```
 
-This starts a long-running process with four concurrent subscriptions:
+This starts a long-running process with concurrent processors:
 
-| Subscription | Listens to | Purpose |
+| Processor | Listens to | Purpose |
 |-------------|------------|---------|
 | `mori-automation` | `repository` events | Match selectors, trigger reactions |
 | `mori-reaction-executor` | `reaction` events | Execute triggered actions |
@@ -620,7 +622,7 @@ daemon auto-ingest loop           (periodic, every --ingest-interval seconds)
     ▼
 mori automate run / daemon
     │
-    ├─ mori-automation subscription
+    ├─ mori-automation processor
     │  reads repository events
     │  matches against selectors
     │  triggers reactions
@@ -629,7 +631,7 @@ mori automate run / daemon
     │      │  written to reaction-{id}:{name} stream
     │      │
     │      ▼
-    ├─ mori-reaction-executor subscription
+    ├─ mori-reaction-executor processor
     │  reads reaction events
     │  executes RunCommand / Notify / EmitEvent
     │  writes ReactionCompleted / ReactionFailed

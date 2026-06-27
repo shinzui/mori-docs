@@ -265,7 +265,7 @@ The following design questions remain to be resolved:
 ### Resolved
 
 * **RepoId generation**: TypeID (`repo_xxxx`) generated on `mori init`. See [Event Sourcing](/docs/concepts/event-sourcing).
-* **Cursor persistence**: Subscription checkpoints in MessageDB. See [Event Sourcing](/docs/concepts/event-sourcing).
-* **Event storage**: MessageDB on PostgreSQL. Streams organized as `repository-{repo_typeid}`.
+* **Cursor persistence**: subscription checkpoints in the current runtime; legacy MessageDB checkpoints remain relevant during migration. See [Event Sourcing](/docs/concepts/event-sourcing).
+* **Event storage**: current repository events are stored in kiroku streams, with legacy MessageDB history transformable through `mori history`.
 * **touchedPaths**: Added to `ChangesetObservedV1`. Required for path-based automation matching.
 * **observedAt in ChangesetRewrittenV1**: Removed -- `observedAt` lives in the `EventEnvelope`, not the payload. The `ChangesetRewrittenV1` payload carries only domain-specific fields.

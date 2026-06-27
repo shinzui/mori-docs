@@ -1,426 +1,172 @@
 ---
 title: Local Registry
-description: Event-sourced project registration and dependency resolution
+description: Event-derived project registration and dependency resolution
 icon: Archive
 ---
 
-The local registry is mori's event-sourced store for project metadata. It
-records every change to your projects as immutable events in MessageDB, then
-projects those events into PostgreSQL tables that power dependency resolution,
-agent context, and automation.
+The local registry is mori's machine-local index of projects, packages,
+dependencies, docs, groups, templates, OKF bundles, and extension catalogs. It is
+not a manually edited JSON file. It is a PostgreSQL read model derived from
+events in the current runtime.
 
-Two layers make this work:
+## What It Stores
 
-1. **Event store** — events written to MessageDB streams (`project-{namespace}:{name}`)
-2. **Read model** — projection tables in the `mori` schema, populated by a subscription
+The registry powers:
 
-Commands like `deps resolve`, `deps locate`, `deps explain`, and `agent context`
-query the read model. Without running the subscription that populates it, these
-tables stay empty even after registration.
+- project lookup by `namespace/name`
+- dependency resolution for `mori deps`
+- filesystem navigation through `mori cd`, `mori path`, and `mori browse`
+- agent context assembly
+- registry groups and batch execution
+- canonical `mori://` reference resolution
+- extension catalogs such as plans, tech radar, cookbook, checklist, DDD, and
+  OKF bundles
+
+## Runtime Model
+
+```text
+mori.dhall on disk
+    |
+    v
+mori register / mori observe / mori automate register
+    |
+    v
+project and repository events
+    |
+    v
+keiro/kiroku event runtime
+    |
+    v
+mori-registry and extension projections
+    |
+    v
+mori.* read-model tables
+    |
+    v
+registry, deps, path, agent, and extension commands
+```
+
+Legacy MessageDB history can still be transformed and verified with
+[`mori history`](/docs/commands/history), but new registry behavior should be
+understood in terms of the keiro/kiroku event runtime and PostgreSQL read
+models.
 
 ## Database Setup
 
-Mori requires PostgreSQL with [MessageDB](https://github.com/message-db/message-db)
-installed.
-
-Set the connection string:
+Set the database connection:
 
 ```bash
 export MORI_PG_CONNECTION_STRING="host=localhost port=5432 dbname=mori_dev"
 ```
 
-Verify connectivity and MessageDB installation:
+Run the project's migrations through your normal development command. The
+migrations create the runtime schemas, pgmq queues/tables, and the `mori` read
+models.
+
+Verify the baseline:
 
 ```bash
 mori doctor
 ```
 
-```
-✓ Database connection successful
-✓ MessageDB installed
-✓ Required tables exist
-```
+The current doctor baseline checks PostgreSQL connectivity and legacy
+MessageDB compatibility. That compatibility check remains because migration
+tooling and mixed-runtime deployments can still read old `message_store`
+history.
 
-## Running Migrations
+## Populating The Registry
 
-Migrations create all required schemas and tables:
-
-```bash
-just run-migrations
-```
-
-Four phases run in order:
-
-| Phase | What it creates |
-|-------|----------------|
-| TypeID functions | UUIDv7 generation, base32 encoding for type-safe IDs |
-| MessageDB schema | `message_store` schema and event store tables |
-| PGMQ schema | Queue infrastructure for scheduled actions |
-| Application tables | `mori` schema with project, package, dependency, automation, app, group, extension, and projection tables |
-
-A final migration sets the PostgreSQL `search_path` to `public, message_store, mori`
-so queries can reference tables without schema prefixes.
-
-Migrations are idempotent — safe to re-run at any time.
-
-## Registry Tables
-
-All application tables live in the `mori` schema.
-
-### projects
-
-Project identity and metadata. One row per registered project.
-
-```sql
-CREATE TABLE mori.projects (
-  id TEXT PRIMARY KEY,
-  namespace TEXT NOT NULL,
-  name TEXT NOT NULL,
-  project_type TEXT NOT NULL,
-  path TEXT NOT NULL,
-  config_hash TEXT,
-  registered_at TIMESTAMPTZ NOT NULL,
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  message_position BIGINT NOT NULL DEFAULT 0,
-  UNIQUE (namespace, name)
-);
-```
-
-### packages
-
-Per-package metadata. The `id` format is `{project_id}:{package_name}`.
-
-```sql
-CREATE TABLE mori.packages (
-  id TEXT PRIMARY KEY,
-  project_id TEXT NOT NULL REFERENCES mori.projects(id),
-  name TEXT NOT NULL,
-  package_type TEXT NOT NULL,
-  language TEXT NOT NULL,
-  path TEXT,
-  message_position BIGINT NOT NULL DEFAULT 0
-);
-```
-
-### dependencies
-
-Maps dependency names to the projects that provide them.
-
-```sql
-CREATE TABLE mori.dependencies (
-  id SERIAL PRIMARY KEY,
-  name TEXT NOT NULL,
-  project_id TEXT NOT NULL REFERENCES mori.projects(id),
-  package_path TEXT,
-  message_position BIGINT NOT NULL DEFAULT 0
-);
-```
-
-### bundles
-
-Package groupings with a designated primary package.
-
-```sql
-CREATE TABLE mori.bundles (
-  name TEXT PRIMARY KEY,
-  project_id TEXT NOT NULL REFERENCES mori.projects(id),
-  packages TEXT[] NOT NULL,
-  primary_package TEXT NOT NULL,
-  message_position BIGINT NOT NULL DEFAULT 0
-);
-```
-
-### repository_configs
-
-Tracks observed automation configuration (used by config hot-reload).
-
-```sql
-CREATE TABLE mori.repository_configs (
-  repo_id TEXT PRIMARY KEY,
-  config_hash TEXT,
-  automation_hash TEXT,
-  selector_count INTEGER,
-  reaction_count INTEGER,
-  observed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  message_position BIGINT NOT NULL DEFAULT 0
-);
-```
-
-### reaction_history
-
-Execution log for automation reactions.
-
-```sql
-CREATE TABLE mori.reaction_history (
-  id TEXT PRIMARY KEY,
-  triggering_stream TEXT NOT NULL,
-  triggering_position BIGINT NOT NULL,
-  triggering_message_type TEXT NOT NULL,
-  reaction_name TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'triggered',
-  started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  completed_at TIMESTAMPTZ,
-  duration_ms BIGINT,
-  error_message TEXT,
-  message_position BIGINT NOT NULL DEFAULT 0
-);
-```
-
-### skills
-
-Per-project skill definitions (from the agentskills.io spec).
-
-```sql
-CREATE TABLE mori.skills (
-  id TEXT PRIMARY KEY,
-  project_id TEXT NOT NULL REFERENCES mori.projects(id),
-  name TEXT NOT NULL,
-  description TEXT,
-  message_position BIGINT NOT NULL DEFAULT 0
-);
-```
-
-### subagents
-
-Per-project subagent definitions with provider, model, and tool configuration.
-
-```sql
-CREATE TABLE mori.subagents (
-  id TEXT PRIMARY KEY,
-  project_id TEXT NOT NULL REFERENCES mori.projects(id),
-  name TEXT NOT NULL,
-  description TEXT,
-  provider TEXT,
-  model TEXT,
-  message_position BIGINT NOT NULL DEFAULT 0
-);
-```
-
-### project_extensions
-
-Per-project extension data stored as opaque JSONB. GIN index on the data column
-for containment queries.
-
-```sql
-CREATE TABLE mori.project_extensions (
-  project_id TEXT NOT NULL REFERENCES mori.projects(id),
-  extension_name TEXT NOT NULL,
-  data JSONB NOT NULL,
-  message_position BIGINT NOT NULL DEFAULT 0,
-  PRIMARY KEY (project_id, extension_name)
-);
-```
-
-### extension_catalog
-
-Tracks known extension types (not event-sourced, direct SQL).
-
-```sql
-CREATE TABLE mori.extension_catalog (
-  name TEXT PRIMARY KEY,
-  description TEXT,
-  schema_ref TEXT,
-  active BOOLEAN NOT NULL DEFAULT TRUE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-```
-
-### checkpoints
-
-Tracks subscription progress. Each named subscription stores the last global
-position it processed.
-
-```sql
-CREATE TABLE checkpoints (
-  id SERIAL PRIMARY KEY,
-  name TEXT NOT NULL,
-  stream TEXT NOT NULL,
-  last_processed_global_position BIGINT,
-  last_processed_at TIMESTAMPTZ
-);
-```
-
-Every table with a `message_position` column uses it for idempotent upserts —
-a write only takes effect if its position is newer than the stored one.
-
-## How Registration Works
-
-When you run `mori register --local`, the following happens:
-
-1. **Load config** — reads `mori.dhall` from the current directory
-2. **Check existence** — queries the read model for `(namespace, name)`
-3. **New project** — generates a `proj_*` TypeID and emits a `ProjectRegistered`
-   event containing all project metadata
-4. **Existing project** — computes a granular diff against the current state and
-   emits only the specific change events needed (type changed, package added, etc.)
-5. **Write events** — appends events to the stream `project-{namespace}:{name}`
-
-If nothing changed, mori prints "Project up to date" and emits no events.
-
-## Event Types
-
-All events are written to streams named `project-{namespace}:{name}` under the
-`project` category.
-
-| Event | When emitted |
-|-------|-------------|
-| `ProjectRegistered` | First registration of a project |
-| `ProjectTypeChanged` | Project type differs from stored value |
-| `ProjectPathChanged` | Project path differs from stored value |
-| `ProjectPackageAdded` | New package not in current state |
-| `ProjectPackageRemoved` | Package in current state not in new config |
-| `ProjectPackageUpdated` | Package exists but fields changed |
-| `ProjectDependencyAdded` | New dependency not in current state |
-| `ProjectDependencyRemoved` | Dependency in current state not in new config |
-| `ProjectBundleAdded` | New bundle not in current state |
-| `ProjectBundleRemoved` | Bundle in current state not in new config |
-| `ProjectBundleUpdated` | Bundle exists but fields changed |
-| `ProjectDocAdded` | New doc not in current state |
-| `ProjectDocRemoved` | Doc in current state not in new config |
-| `ProjectDocUpdated` | Doc exists but fields changed |
-| `ProjectSkillAdded` | New skill not in current state |
-| `ProjectSkillRemoved` | Skill in current state not in new config |
-| `ProjectSkillUpdated` | Skill exists but fields changed |
-| `ProjectSubagentAdded` | New subagent not in current state |
-| `ProjectSubagentRemoved` | Subagent in current state not in new config |
-| `ProjectSubagentUpdated` | Subagent exists but fields changed |
-| `ProjectExtensionSet` | Extension data added or changed |
-| `ProjectExtensionRemoved` | Extension data removed |
-
-## Subscriptions and Projections
-
-Registry projections run as part of `mori automate daemon`; `mori automate run`
-also starts the registry subscription for a single-repo automation session.
-Several subscriptions may run concurrently, depending on which features are in
-use:
-
-| Subscription | Category | Purpose |
-|-------------|----------|---------|
-| `mori-registry` | `project` | Projects events into read model tables |
-| `mori-group-registry` | `group` | Projects registry group membership and attachments |
-| `mori-app-registration` | `app` | Projects app registrations and status |
-| `mori-tech-radar` | `project` | Projects tech-radar recommendations |
-| `mori-automation` | `repository` | Matches events against selectors, triggers reactions |
-| `mori-workflow` | `workflow` | Tracks cross-repo workflow state |
-| `mori-reaction-executor` | `reaction` | Executes triggered reaction actions |
-
-The registry handler parses each event and performs the corresponding database
-operation:
-
-- **Registered** → upsert project + all packages, dependencies, bundles, docs, skills, subagents, extensions
-- **Changed/Updated** → targeted `UPDATE` of the specific column
-- **Added/Set** → `INSERT` (or upsert for extensions) into the relevant table
-- **Removed** → `DELETE` from the relevant table
-
-All operations are idempotent — the handler checks `message_position` ordering
-before applying changes. The subscription checkpoint tracks the last processed
-`global_position` so it resumes where it left off after restarts.
-
-## Populating the Read Model
-
-Registration and projection are separate steps:
+Register or observe projects:
 
 ```bash
-# Step 1: Write events to MessageDB
-mori register --local
+mori register
+mori observe
+mori automate register
+```
 
-# Step 2: Start subscriptions to populate read model tables
+`mori register` records the project identity. `mori observe` links repository
+identity and VCS observation state. `mori automate register` registers the
+automation config and also emits the project/repo link needed by the daemon, so
+there is no separate observe prerequisite for automation.
+
+Start the daemon to keep projections current:
+
+```bash
 mori automate daemon
 ```
 
-Without step 2, the read model tables stay empty. Commands that query the read
-model (`deps resolve`, `deps locate`, `deps explain`, `agent context`) require
-both steps to return results.
+The daemon runs the registry projection alongside automation, workflow,
+reaction, app, DDD, tech-radar, and agent-plan processors.
 
-Once `mori automate daemon` is running, it continuously processes new events.
-You can register additional projects in another terminal and the read model updates
-automatically.
+## Querying The Registry
 
-## Verifying the Registry
-
-### Check registered projects
-
-```sql
-SELECT id, namespace, name, project_type, path
-FROM mori.projects;
+```bash
+mori registry list
+mori registry show shinzui/mori --full
+mori registry search effectful
+mori registry dependents effectful --packages
+mori deps resolve
+mori deps tree --depth 2
+mori path shinzui/mori --doc getting-started
 ```
 
-### Check packages
+Most commands query read models rather than reading every `mori.dhall` from disk
+on every invocation. That is what makes dependency lookup, canonical refs, and
+agent context fast enough for repeated use.
 
-```sql
-SELECT id, project_id, name, package_type, language, path
-FROM mori.packages;
-```
+## Important Read Models
 
-### Check dependencies
+The exact schema is migration-owned, but these tables are the main public mental
+model:
 
-```sql
-SELECT name, project_id, package_path
-FROM mori.dependencies;
-```
+| Read model | Purpose |
+|---|---|
+| `mori.projects` | Registered project identity, namespace/name, path, repo id |
+| `mori.packages` | Per-project package metadata |
+| `mori.package_dependencies` | Package-level dependency graph and scope |
+| `mori.docs` | Documentation references and canonical refs |
+| `mori.groups` / memberships | Named registry groups for batch workflows |
+| `mori.automation_registrations` | Daemon config registrations |
+| `mori.reaction_history` | Reaction execution history |
+| `mori.pending_scheduled_reactions` | Scheduled reactions waiting in pgmq |
+| Extension tables | Plans, DDD, tech radar, OKF, cookbook, checklist, and related catalogs |
 
-### Check bundles
-
-```sql
-SELECT name, project_id, packages, primary_package
-FROM mori.bundles;
-```
-
-### Check events in the store
-
-```sql
-SELECT stream_name, type, position, global_position, time
-FROM message_store.messages
-WHERE stream_name LIKE 'project-%'
-ORDER BY global_position;
-```
-
-### Check subscription progress
-
-```sql
-SELECT name, stream, last_processed_global_position, last_processed_at
-FROM checkpoints;
-```
-
-Compare `last_processed_global_position` against the highest `global_position`
-in `message_store.messages` to see if the subscription is caught up.
+Prefer CLI commands for inspection unless you are debugging a projection.
 
 ## Troubleshooting
 
-### Tables don't exist
+### The registry is empty
 
-Migrations haven't been run. Run `just run-migrations` (or the migration
-executable for your build setup) and verify with `mori doctor`.
-
-### Read model empty despite events existing
-
-The subscription hasn't been started. Run `mori automate daemon` to start
-processing events into the read model tables.
-
-### Stale projections
-
-Check the subscription checkpoint:
-
-```sql
-SELECT name, last_processed_global_position, last_processed_at
-FROM checkpoints
-WHERE name = 'mori-registry';
-```
-
-If the position is behind the latest event, the subscription may have stopped.
-Restart `mori automate daemon`.
-
-### Replaying the subscription from scratch
-
-Delete the checkpoint row and restart:
-
-```sql
-DELETE FROM checkpoints WHERE name = 'mori-registry';
-```
+Register at least one project, then run the daemon:
 
 ```bash
+mori register
 mori automate daemon
 ```
 
-The subscription reprocesses all events from the beginning. Because all
-operations are idempotent, the final read model state is the same.
+### A project was registered but is not queryable
+
+The read model may be behind. Restart `mori automate daemon` and check its logs.
+If the issue is ingest-specific, run:
+
+```bash
+mori doctor --ingest
+```
+
+### Dependency lookup is missing a package
+
+Use the registry command surface first:
+
+```bash
+mori registry show <namespace>/<project> --full
+mori registry dependents <dependency> --packages
+mori deps explain <dependency>
+```
+
+If the source `mori.dhall` changed, rerun `mori register` or `mori observe` so
+the new events can update the projections.
+
+### You need to inspect legacy history
+
+Use [`mori history`](/docs/commands/history). Direct SQL against
+`message_store.messages` is only appropriate for legacy migration debugging.

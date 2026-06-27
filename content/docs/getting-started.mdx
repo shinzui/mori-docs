@@ -8,13 +8,19 @@ icon: Rocket
 
 **Required:**
 
-- PostgreSQL with [MessageDB](https://github.com/message-db/message-db) installed
+- PostgreSQL with mori's database migrations applied. The current event runtime
+  uses the keiro/kiroku stack, plus pgmq-backed queues for deferred work.
 - The `mori` CLI built and on your PATH (`cabal install mori-cli`)
 - A `MORI_PG_CONNECTION_STRING` environment variable pointing to your database:
 
 ```bash
-export MORI_PG_CONNECTION_STRING="host=localhost port=5432 dbname=message_store"
+export MORI_PG_CONNECTION_STRING="host=localhost port=5432 dbname=mori_dev"
 ```
+
+Some migration and compatibility paths still read legacy MessageDB history. The
+current `mori doctor` baseline check therefore verifies both PostgreSQL
+connectivity and the legacy `message_store` schema. See [`mori history`](/docs/commands/history)
+for the MessageDB-to-kiroku migration command surface.
 
 **Verify your setup:**
 
@@ -453,7 +459,7 @@ ReactionAction.RunCommand
   }
 ```
 
-**EmitEvent** — write a custom event to the event store:
+**EmitEvent** — record an event-emission intent in the reaction result:
 
 ```haskell
 ReactionAction.EmitEvent
@@ -553,20 +559,21 @@ Starting automation engine...
   Config: mori.automation.dhall
   Config hash: a1b2c3d4...
   Queues initialized.
-  Subscriptions initialized. Listening for events...
-  Schedule worker started.
+  Processors initialized. Listening for events...
+  Queue workers started.
 ```
 
 The engine:
 
 1. Loads and observes the automation config (emitting a `MoriAutomationObserved` event with a content hash)
-2. Creates pgmq queues for scheduled actions
-3. Starts four concurrent subscriptions:
-   - **Automation subscription** — matches repository events against selectors and triggers reactions
-   - **Executor subscription** — executes the triggered reaction actions
-   - **Registry subscription** — projects project events into the read model
-   - **Workflow subscription** — maintains workflow projections
-4. Starts a shibuya worker for processing scheduled actions
+2. Creates pgmq queues for scheduled and queued work
+3. Starts concurrent processors and projections:
+   - **Automation processor** — matches repository events against selectors and triggers reactions
+   - **Executor processor** — executes the triggered reaction actions
+   - **Registry projection** — projects project events into the read model
+   - **Workflow projection** — maintains workflow state
+   - **Extension projections** — maintain plans, DDD, tech-radar, and related catalogs when enabled
+4. Starts queue workers for scheduled actions, scheduled reactions, and FIFO queued automations
 
 To use a custom config path:
 
@@ -875,7 +882,7 @@ mori automate explain 15
 
 | Command | Description | Requires DB |
 |---|---|---|
-| `mori doctor` | Check PostgreSQL and MessageDB | Yes |
+| `mori doctor` | Check database connectivity and legacy MessageDB compatibility | Yes |
 | `mori init [--name NAME]` | Create `mori.dhall` scaffold | No |
 | `mori validate` | Type-check `mori.dhall` | No |
 | `mori show [--json] [--full]` | Display project summary | No |

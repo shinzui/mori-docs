@@ -8,11 +8,20 @@ Check system health.
 
 ```bash
 mori doctor
+mori doctor --ingest
 ```
 
-Runs the following checks:
+By default, `mori doctor` runs baseline database checks:
 
 - **PostgreSQL connection** — verifies database connectivity via `MORI_PG_CONNECTION_STRING`
-- **MessageDB installation** — verifies the MessageDB event store schema is present
+- **Legacy MessageDB compatibility** — verifies the `message_store` schema is present
 
-Displays version information and reports pass/fail status for each check.
+The compatibility check is still part of the current CLI because migration and
+mixed-runtime deployments can read legacy MessageDB history. The current event
+runtime is the keiro/kiroku stack; see [Event Sourcing](/docs/concepts/event-sourcing)
+and [`mori history`](/docs/commands/history).
+
+`mori doctor --ingest` skips the baseline checks and audits repository ingest
+health from `mori.repository_ingest_status`. It exits `2` when any repo is stuck
+after repeated failures or no successful ingest in the health window, which makes
+it suitable for cron and CI monitoring.

@@ -4,316 +4,211 @@ description: High-level architecture of mori's data plane and control plane
 icon: Blocks
 ---
 
-This document describes the **end-to-end architecture of Mori**, including the **local execution runtime** and the **Global Mori Registry**.
-
-It is intended as a **high-level technical overview** suitable for:
-
-* Architecture reviews
-* Onboarding
-* Aligning local development with CI and org-wide workflows
+This document describes mori's high-level architecture: a local execution
+runtime for project identity and automation, plus an optional global registry
+plane for discovery and governance.
 
 ## Architectural Goal
 
 Mori is designed to:
 
-* React to **VCS events** (Git and Jujutsu)
-* Remain **local-first** and replayable
-* Scale safely to **CI and organization-wide automation**
-* Separate **execution** from **governance**
+- make repositories self-describing through `mori.dhall`
+- resolve dependencies and docs through a local registry
+- observe VCS events and run local automation
+- provide structured context to coding agents
+- scale from one developer machine to CI and organization-wide workflows
 
 Core idea:
 
-> **Local Mori executes automation. Global Mori governs trust and policy.**
+> Local Mori executes automation. Global Mori governs trust and policy.
 
-## Design Context: Multi-Repo Microservices
+## Major Planes
 
-Mori is designed for organizations with **many services across many repositories**.
+### Data Plane: Local Mori Runtime
 
-Typical environment:
+The local runtime lives on developer machines and CI workers. It is fully useful
+without a central service.
 
-* 50+ services, each in its own repository
-* Shared dependencies (internal libraries, third-party ecosystems)
-* Multiple teams with different ownership boundaries
-* Need for consistent tooling and agent assistance across all repos
+It contains:
 
-Problems Mori solves:
+- the `mori` CLI
+- the local PostgreSQL database
+- the keiro/kiroku event runtime
+- pgmq queues for delayed and queued work
+- read models in the `mori` schema
+- the automation daemon and worker host
+- local filesystem paths for repositories, docs, skills, templates, and source
 
-| Problem | Without Mori | With Mori |
-|---------|--------------|-----------|
-| Dependency paths | Hardcoded in each repo | Resolved via local registry |
-| Documentation | Scattered, duplicated | Centralized in wrapper projects |
-| Agent context | Manual prompt engineering | Structured, queryable metadata |
-| Cross-repo automation | Ad-hoc scripts | Event-driven, policy-governed |
+### Control Plane: Global Registry
 
-**Key design principle:**
+The global registry is the future shared governance/indexing plane. It can
+provide organization-wide discovery, trust, and policy, but it does not execute
+automation directly.
 
-> **Registry-first resolution.** Services reference dependencies by name.
-> The local registry resolves names to filesystem paths.
-> This eliminates path duplication across dozens of repositories.
+## Runtime Stack
 
-## Major Architectural Layers
+Mori's current event runtime is built from the keiro-runtime family:
 
-Mori consists of two primary planes:
+| Layer | Role in mori |
+|---|---|
+| `kiroku` | PostgreSQL event store and subscriptions |
+| `keiro` | command execution, routers, process managers, durable timers, async projections |
+| `keiki` | pure transducer semantics for aggregate behavior |
+| `shibuya` | supervised queue processors and graceful worker lifecycle |
+| `pgmq` | delayed jobs, FIFO queued automations, webhook delivery, dead-letter queues |
 
-### Data Plane (Local Mori Runtime)
-
-* Lives on developer machines and CI workers
-* Observes repositories and executes reactions
-* Fully functional without any central service
-
-### Control Plane (Global Mori Registry)
-
-* Central, shared service
-* Indexes projects and policies
-* Never executes automation directly
+Legacy MessageDB remains visible in migration tooling and compatibility checks.
+For example, `mori history` transforms legacy MessageDB streams into kiroku and
+`mori doctor` still verifies the `message_store` schema. New architecture work
+should use the keiro/kiroku model.
 
 ## Component Diagram
 
-```
+```text
 ┌──────────────────────────────┐
 │      Global Mori Registry    │
 │                              │
-│  - Project index             │
-│  - mori.dhall metadata       │
-│  - Org-level policies        │
-│  - Automation allow/deny     │
-│  - Trust levels              │
+│  - project index             │
+│  - org policies              │
+│  - trust levels              │
+│  - shared discovery          │
 └───────────────┬──────────────┘
-                │
-          (sync / pull)
-                │
+                │ optional sync / policy input
 ┌───────────────▼──────────────┐
 │      Local Mori Runtime      │
 │                              │
-│  ┌────────────────────────┐  │
-│  │ Local Registry          │  │
-│  │ (PostgreSQL projection) │  │
-│  │                          │  │
-│  │ - registered projects   │  │
-│  │ - dependency resolution │  │
-│  │ - agent context cache   │  │
-│  └──────────┬─────────────┘  │
-│             │                │
-│  ┌──────────▼─────────────┐  │
-│  │ VCS Adapter             │  │
-│  │ (git | jj)              │  │
-│  └──────────┬─────────────┘  │
-│             │                │
-│  ┌──────────▼─────────────┐  │
-│  │ Normalizer              │  │
-│  │                          │  │
-│  │ - ChangesetObserved     │  │
-│  │ - ChangesetRewritten    │  │
-│  │ - RefObserved           │  │
-│  └──────────┬─────────────┘  │
-│             │                │
-│  ┌──────────▼─────────────┐  │
-│  │ Event Store             │  │
-│  │ (MessageDB/PostgreSQL)  │  │
-│  └──────────┬─────────────┘  │
-│             │                │
-│  ┌──────────▼─────────────┐  │
-│  │ Repository Interrogator │  │
-│  │                          │  │
-│  │ - load mori.dhall       │  │
-│  │ - load mori.automation  │  │
-│  └──────────┬─────────────┘  │
-│             │                │
-│  ┌──────────▼─────────────┐  │
-│  │ Policy Resolver         │  │
-│  │                          │  │
-│  │ - local automation      │  │
-│  │ - global registry rules │  │
-│  └──────────┬─────────────┘  │
-│             │                │
-│  ┌──────────▼─────────────┐  │
-│  │ Reaction Engine         │  │
-│  │                          │  │
-│  │ - event selectors       │  │
-│  │ - idempotency           │  │
-│  │ - scheduling            │  │
-│  └──────────┬─────────────┘  │
-│             │                │
-│  ┌──────────▼─────────────┐  │
-│  │ Agent Context Assembler │  │
-│  │                          │  │
-│  │ - dependency resolution │  │
-│  │ - doc/code paths        │  │
-│  │ - standards lookup      │  │
-│  └──────────┬─────────────┘  │
-│             │                │
-│        ┌────▼────┐           │
-│        │ Effects │           │
-│        │         │           │
-│        │ - run   │           │
-│        │ - notify│           │
-│        │ - emit  │           │
-│        └─────────┘           │
+│  CLI commands                │
+│  ├─ init / validate / show   │
+│  ├─ register / observe       │
+│  ├─ registry / deps / path   │
+│  ├─ agent / kit              │
+│  ├─ automate / reaction      │
+│  └─ plans / ddd / okf / ...  │
+│                              │
+│  PostgreSQL                  │
+│  ├─ kiroku event streams     │
+│  ├─ keiro runtime tables     │
+│  ├─ pgmq queues              │
+│  └─ mori read models         │
+│                              │
+│  Daemon worker host          │
+│  ├─ shibuya processors       │
+│  ├─ keiro routers            │
+│  ├─ process managers         │
+│  ├─ async projections        │
+│  └─ durable timers           │
 └──────────────────────────────┘
 ```
 
 ## Configuration Layers
 
-### Project Manifest (`mori.dhall`)
+### Project Manifest: `mori.dhall`
 
-* Declares project identity
-* Declares ownership and dependencies
-* Indexed by the global registry
-* Does **not** enable automation
+Declares project identity, ownership, packages, dependencies, docs, APIs,
+skills, subagents, templates, OKF bundles, and extension configuration. It does
+not enable automation by itself.
 
-### Automation Policy (`mori.automation.dhall`)
+### Automation Policy: `mori.automation.dhall`
 
-* References `mori.dhall`
-* Declares event selectors and reactions
-* Enforces execution constraints
-* Optional and opt-in
-
-Automation is only active when **both**:
-
-* The automation file exists
-* Policy resolution allows execution
+Declares selectors and reactions. It is optional and opt-in. Automation becomes
+active only after the repo is registered or run with the automation command
+surface.
 
 ## Local Registry
 
-The Local Registry is a **projection** (read model) derived from events in the event store.
+The local registry is a set of PostgreSQL read models derived from events.
 
-### Responsibilities
+Responsibilities:
 
-* **Project registration**: Track all Mori projects on the local filesystem
-* **Dependency resolution**: Resolve dependency names to filesystem paths
-* **Agent context assembly**: Provide structured context for coding agents
-* **Cache for global registry**: Sync and cache data from org-wide registry
+- track registered projects and repo paths
+- resolve dependency names to projects and packages
+- resolve canonical `mori://` refs
+- assemble agent context
+- index extension catalogs
+- support navigation commands such as `mori cd`, `mori path`, and `mori browse`
+- support batch workflows over registry groups
 
-### Registry Hierarchy
+Typical commands:
 
-```
-Local Registry (machine-specific, authoritative for dev)
-       ↓ fallback
-Global Registry (org-wide defaults)
-       ↓ fallback
-Not Found
-```
-
-### Implementation
-
-* **Event-sourced**: Registry state derived from `ProjectRegistered`, `ProjectUpdated` events
-* **PostgreSQL tables**: Projections stored in `mori.*` schema for fast queries
-* **Subscription-updated**: `mori-registry` subscription processes events and updates tables
-* **Rebuildable**: Can replay events from position 0 to reconstruct registry
-
-### Key Tables
-
-```
-mori.projects      -- Registered projects
-mori.packages      -- Packages within projects
-mori.dependencies  -- Dependency name → project path lookup
-mori.bundles       -- Package bundles
+```bash
+mori registry list
+mori registry show shinzui/mori --full
+mori registry dependents effectful --packages
+mori deps tree --depth 2
+mori path shinzui/mori --doc getting-started
 ```
 
-## Event Flow Overview
+## Event Flow
 
-```
-VCS Event (git commit, jj operation)
-   ↓
-Normalize to canonical events
-   ↓
-Write to MessageDB (repository-{id} stream)
-   ↓
-Subscriptions process events:
-   ├── mori-automation: match events → trigger reactions
-   ├── mori-registry: update project/dependency projections
-   └── mori-reaction-executor: execute triggered reactions
-   ↓
-Update projections (PostgreSQL tables)
-   ↓
-Emit effects (run commands, notify, emit new events)
-```
-
-At no point is mutable filesystem state consulted during reaction execution.
-
-## Role of the Global Mori Registry
-
-The Global Mori Registry provides:
-
-* Project discovery and indexing
-* Ownership and team metadata
-* Organization-wide automation policies
-* Trust levels (local-only, CI-approved, org-wide)
-
-It does **not**:
-
-* Execute reactions
-* Push automation into repos
-* Override local configuration
-
-## Policy Resolution Model
-
-Effective behavior is determined by:
-
-```
-Local Automation Rules
-        +
-Global Registry Policy
-        ↓
-Effective Execution Policy
+```text
+CLI command or VCS ingest
+    |
+    v
+domain command handler
+    |
+    v
+keiro/kiroku append
+    |
+    v
+shibuya-supervised processors
+    |
+    +-- registry projections
+    +-- automation matching
+    +-- reaction execution
+    +-- workflow projections
+    +-- extension projections
+    +-- app fan-out
+    |
+    v
+mori read models and pgmq jobs
 ```
 
-Rules:
+Examples:
 
-* Global policy may restrict
-* Local config may not escalate
-* Absence of registry implies permissive local mode
+- `mori register` records project metadata and updates registry projections.
+- `mori automate ingest git` records repository observations.
+- `mori automate daemon` consumes repository events, matches automation
+  selectors, executes reactions, and maintains read models.
+- Scheduled reactions enqueue pgmq jobs and later emit lifecycle events.
+- Extension projections make plans, DDD, tech-radar, OKF, cookbook, and checklist
+  data searchable from any registered project.
 
 ## Local vs CI Execution
 
 | Aspect | Local Mori | CI Mori |
-|--------|-----------|---------|
-| Execution | Always allowed | Registry-gated |
-| Config loading | Local FS | Ephemeral checkout |
-| Policy source | Local + optional registry | Registry required |
-| Replay | Yes | Yes |
+|---|---|---|
+| Execution | local-first | policy-gated |
+| Config loading | checked-out filesystem | ephemeral checkout |
+| Registry source | local read model plus optional global input | local read model plus required policy input |
+| Event model | same runtime | same runtime |
+| Replay | yes | yes |
 
-CI uses the **same runtime**, only stricter policy resolution.
+CI uses the same event/runtime model with stricter policy decisions.
 
 ## Design Invariants
 
-1. Events are the source of truth
-2. Configuration is domain data
-3. Execution is local and deterministic
-4. Governance is centralized and declarative
-5. Replay always yields identical behavior
+1. Events are the source of truth.
+2. Read models are derived and rebuildable.
+3. Configuration is domain data, not hidden process state.
+4. Automation execution is local and explicit.
+5. Deferred work is visible in pgmq-backed queues.
+6. Global governance constrains local behavior; it does not run local effects.
 
-## Mental Model
+## Migration Status
 
-> **Mori is an event-sourced automation system with a local execution engine and a global registry that governs trust, policy, and coordination.**
+Mori has moved its event backend onto the keiro/keiki/kiroku/shibuya stack.
+MessageDB references now mean one of three things:
 
-## What This Architecture Enables
+- legacy history that can be transformed with `mori history`
+- compatibility checks still present in the current CLI
+- older architecture documents retained for historical context
 
-* Safe local experimentation
-* Deterministic CI automation
-* Org-wide governance without tight coupling
-* Cross-repo workflows
-* Explainable, auditable automation
-
-## Open Questions
-
-The following design questions remain to be resolved:
-
-* **VCS Adapter**: How does it observe events? Git hooks? Polling? `fswatch`? jj's operation log?
-* **Registry sync**: Push or pull? How often? What if offline? (Phase 2)
-* **Trust enforcement**: How are trust levels verified locally? Signed policies?
-* **Event versioning**: Schema evolution strategy? (Elegant solution in progress)
-* **Failure recovery**: What happens if Mori crashes mid-reaction?
-
-### Resolved
-
-* **Event Store**: MessageDB on PostgreSQL.
-* **Local Registry**: PostgreSQL projections derived from events (not SQLite).
-* **Concurrency**: Consumer groups in MessageDB subscriptions enable horizontal scaling.
-* **Repository identity**: TypeID (`repo_xxxx`) generated on `mori init`.
+When those conflict with current command references or source behavior, prefer
+the current command docs and [Event Sourcing](/docs/concepts/event-sourcing).
 
 ## Architecture Deep Dives
 
-- [CLI Architecture](/docs/architecture/cli) — command specification and internal design
-- [Schema Architecture](/docs/architecture/schema) — the `mori.dhall` type system
-- [Registry Design](/docs/architecture/registry) — registry and navigation commands
+- [CLI Architecture](/docs/architecture/cli) - command specification and internal design
+- [Schema Architecture](/docs/architecture/schema) - the `mori.dhall` type system
+- [Registry Design](/docs/architecture/registry) - historical registry and navigation design
+- [Event Sourcing](/docs/concepts/event-sourcing) - current runtime and migration boundary

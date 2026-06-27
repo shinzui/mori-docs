@@ -160,6 +160,10 @@ Constraints:
 
 ### EmitEvent
 
+Records an event-emission intent in the reaction result. The configured stream
+and event type are preserved for downstream handling; the executor does not
+directly append a custom event itself.
+
 ```haskell
 EmitEventAction =
 { eventType : Text

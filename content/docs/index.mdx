@@ -28,7 +28,7 @@ At its core, Mori provides two configuration files:
 
 - **Schema-first** — Dhall files are authoritative; JSON is derived
 - **Registry-first resolution** — dependencies are resolved by name, not hardcoded paths
-- **Event-sourced** — all state changes are immutable events in MessageDB
+- **Event-sourced** — state changes are immutable events in the local PostgreSQL runtime, now centered on the keiro/kiroku stack
 - **Local-first** — works entirely offline on a single developer machine
 - **Agent-aware** — metadata is designed to generate reliable AI agent context
 
