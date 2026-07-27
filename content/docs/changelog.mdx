@@ -9,6 +9,47 @@ features, commands, and schema changes.
 
 ---
 
+## 2026-07-26
+
+### OKF concept index and nested concept refs
+- Registration now indexes every declared bundle's concepts and links into `mori.okf_concepts` and `mori.okf_concept_edges` alongside `mori.okf_bundles`; all three are replaced atomically per project, and the snapshot travels in the event so replays never re-read the filesystem
+- [`mori registry concepts`](/docs/commands/registry#mori-registry-concepts) gained cross-project indexed modes: `--search <term>` (matches concept IDs, document IDs, labels, descriptions) and `--id <document-id>` (exact document-ID lookup, returning every match). The existing project argument still walks the working tree live
+- New nested ref grammar `mori://<ns>/<name>/okf/<bundle>/concepts/<segment>`, addressing a concept by its rename-stable **document ID** (e.g. `IR-1`) when its profile declares one, or by its bundle-relative concept ID otherwise. Both forms resolve; nested refs always print canonically
+- `mori path` resolves bundle and concept refs to a directory or Markdown file; `mori validate --check-refs` checks both grains; duplicate document IDs within a bundle produce an ambiguity error naming the candidates
+- Indexing problems report as `Warning: could not index OKF bundle …` on stderr, before the profile advisories; both channels remain advisory
+- Updated the [OKF Bundles guide](/docs/guides/okf), [Canonical Refs](/docs/concepts/canonical-refs), and [Mori References](/docs/guides/mori-refs)
+
+### `mori improvement-requests` (new)
+- New top-level command for cross-repository improvement requests, modelled as profile-governed OKF concepts of type `Improvement Request` with a rename-stable `IR-N` handle
+- [`list`](/docs/commands/improvement-requests#mori-improvement-requests-list) with `--project`, `--origin`, `--status`, `--planning-state`, and `--json`; [`show`](/docs/commands/improvement-requests#mori-improvement-requests-show) with `--project`, `--bundle`, `--id`, and `--json`
+- [`validate --path`](/docs/commands/improvement-requests#mori-improvement-requests-validate) checks the closed status set, UTC timestamp, canonical references, artifact kinds, project ownership, and exact plan registration
+- [`link-plan`](/docs/commands/improvement-requests#mori-improvement-requests-link-plan) safely attaches a registered target plan — atomic, OKF-serialized, `--dry-run` and `--replace` aware, never touching status
+- Planning state (`planned` / `unplanned` / `invalid`) is derived, not authored; invalid requests are never reported as unplanned
+- New [Improvement Requests guide](/docs/guides/improvement-requests) and `mori help improvement-requests` topic
+
+### `mori serve` and the HTTP API (new)
+- New [`mori serve`](/docs/commands/serve) command runs the Servant + Warp HTTP API: application resources under `/v1` (projects, reactions, workflows, repositories, groups, apps, signed ingest), a generated OpenAPI 3.1 document at `/v1/openapi.json`, and standard operational probes under `/health`
+- `--port` / `-p`, falling back to `$MORI_API_PORT`, then `8080`. `MORI_PG_CONNECTION_STRING` is required
+- [`mori automate daemon`](/docs/commands/automate#mori-automate-daemon) can serve the same API on a shared pool and store with `--serve` / `--api-port` (or `MORI_API_PORT`); serving is opt-in and the daemon otherwise opens no socket
+- Fallible routes return typed RFC 9457 problem documents; requests carry OpenTelemetry instrumentation
+
+### Deprecation guidance
+- New `Deprecation` record with optional `alternative` and `details`, attachable to a project or a package. A present record must contain at least one non-blank value and is valid only for an effective `Deprecated` lifecycle
+- Package `lifecycle` is an `Optional Lifecycle` override that inherits the project lifecycle when absent; deprecation guidance is *never* inherited and must be declared per package
+- `mori show --full` and `mori registry show` print lifecycle plus `Alternative` / `Details`, marking inherited package lifecycles `(inherited)`; `mori registry list` gained a **Lifecycle** column and JSON output gained `lifecycle` and `deprecation`
+- Documented in [Getting Started](/docs/getting-started), the [Schema Guide](/docs/schema-guide), [Schema Reference](/docs/guides/schema-reference#deprecation), and [Project Configuration](/docs/guides/project-config)
+
+### Checklist item documentation references
+- Checklist items gained a `docs` list of step-specific `DocLocation` references, distinct from the checklist-level `sourceDoc`
+- `mori checklist show` renders item docs (and the full `Docs` list under `--step`); `mori validate --check-refs` resolves canonical item docs against the registry, tagged `Checklist.checks[i].items[j].docs[k] <checklist-key>/<item-key>`
+
+### Ref resolution
+- Every artifact kind now resolves through a registry read model, including `apis` and `cookbook`; the "unsupported kind" warning survives only for a malformed nested sub-key on a kind with no nested grammar
+- Plan refs (`masterplans/…`, `plans/…`) resolve to the plan Markdown under the project's `docs/` directory
+- `MasterPlan`, `ExecPlan`, and `OkfBundle` are documented as **URI-only** kinds: parsed, rendered, and resolved by the CLI, but with no arm in the Dhall `Schema.MoriArtifactKind` union
+
+---
+
 ## 2026-06-27
 
 ### Runtime documentation refresh

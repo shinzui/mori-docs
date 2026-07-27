@@ -43,6 +43,31 @@ in  Schema.Project::{
 Defaulted list fields can be omitted when empty. The schema bundle supplies the
 empty lists.
 
+## Deprecation Guidance
+
+`Deprecation` groups an optional replacement with optional migration details:
+
+```dhall
+, project = Schema.ProjectIdentity::{
+  , name = "my-project"
+  , namespace = "myorg"
+  , type = Schema.PackageType.Application
+  , language = Schema.Language.Haskell
+  , lifecycle = Schema.Lifecycle.Deprecated
+  , deprecation = Some Schema.Deprecation::{
+    , alternative = Some "mori://myorg/my-project-next"
+    , details = Some "Move new integrations to my-project-next."
+    }
+  }
+```
+
+Attach it to a project or package only when that item's effective lifecycle is
+`Deprecated`. At least one field must contain non-whitespace text. A package
+with `lifecycle = None Schema.Lifecycle` inherits the project lifecycle, but its
+deprecation record is always package-specific and is never inherited.
+Alternatives are free-form text, so external package coordinates and URLs are
+allowed; prefer a canonical `mori://` reference for registered replacements.
+
 ## OKF Bundles
 
 Declare OKF knowledge bundles with `okfBundles`, not `bundles`:
@@ -59,12 +84,18 @@ Declare OKF knowledge bundles with `okfBundles`, not `bundles`:
   ]
 ```
 
-After registration:
+Registration catalogs each bundle and indexes its concepts and links, so they
+become searchable across projects and addressable as
+`mori://<namespace>/<project>/okf/<bundle>`. A declared `profile` adds advisory
+validation that never fails registration.
 
 ```bash
 mori registry bundles my-project
 mori registry concepts my-project
+mori registry concepts --search <term>
 ```
+
+See [OKF Bundles](/docs/guides/okf) for the full picture.
 
 See [Schema Reference](/docs/guides/schema-reference) for field-by-field details.
 

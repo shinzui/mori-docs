@@ -40,5 +40,14 @@ mori show --json | jq '.packages[].canonicalRef'
 Doc references in JSON use flattened string fields for easier downstream
 processing: `kind`, `audience`, `location`, and `locationType`.
 
+## Lifecycle and deprecation
+
+`mori show --full` prints the project's lifecycle and, when present, its
+`Alternative` / `Details` [deprecation
+guidance](/docs/guides/schema-reference#deprecation). Each package prints its
+own lifecycle; a package with no override shows the project's lifecycle marked
+`(inherited)`, followed by any package-specific guidance (which is never
+inherited).
+
 The same convention is used by [`mori registry show --full`](/docs/commands/registry#mori-registry-show)
 and `mori registry show --json`.

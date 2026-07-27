@@ -46,22 +46,28 @@ The check covers:
 - `mori.dhall` — project-level `docs`, per-package `docs`, augmented
   `Dependency.extraDocs`
 - `mori/cookbook.dhall` — cookbook entries
-- `mori/checklist.dhall` — checklist source docs
+- `mori/checklist.dhall` — checklist source docs and per-item `docs`
 
 Output is grouped by source with a per-ref `✓ / ✗ / ⚠` indicator. Tags name
 the source location (e.g. `Project.docs[3] <key>`,
 `Package.foo.docs[1] <key>`, `Dependency.streamly.extraDocs[0] <key>`,
-`Cookbook.entries[i] <key>`, `Checklist.checks[i].sourceDoc <key>`).
+`Cookbook.entries[i] <key>`, `Checklist.checks[i].sourceDoc <key>`,
+`Checklist.checks[i].items[j].docs[k] <checklist-key>/<item-key>`).
+
+`okf` refs are checked at both the bundle and the nested
+`…/concepts/<segment>` grain. A concept ref that matches more than one indexed
+concept fails with an ambiguity message naming the candidates — the bundle has
+duplicate document IDs, so address one by its concept path instead.
 
 Exit codes:
 
 | Code | Meaning |
 |------|---------|
 | `0`  | Every canonical ref resolved |
-| `1`  | At least one ref failed (missing project, missing artifact key) |
+| `1`  | At least one ref failed (missing project, missing artifact key, ambiguous concept) |
 
-Refs of an unsupported artifact kind produce a ⚠ warning but do not fail
-the check.
+A malformed ref carrying a nested sub-key on a kind with no nested grammar
+produces a ⚠ warning but does not fail the check.
 
 ## Flags
 

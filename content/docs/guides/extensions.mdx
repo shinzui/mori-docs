@@ -343,7 +343,9 @@ projects needing richer metadata use the extension.
 
 The checklist extension catalogs ordered procedures such as install, deploy,
 monitor, onboard, release, and incident workflows. Each step has a kind,
-optional command text, success criteria, preconditions, and tags.
+optional command text, success criteria, preconditions, tags, and a `docs` list
+of step-specific documentation references. A step's `docs` can use
+`DocLocation.Canonical "mori://…"` to point at a registered mori doc.
 
 ```bash
 mori checklist list
@@ -356,8 +358,10 @@ mori checklist print-schema
 
 The CLI renders checklist commands; it does not execute step commands.
 Registration validates duplicate keys, empty titles, and preconditions that
-refer to missing or later steps. See [Checklist](/docs/guides/checklist) for
-configuration examples.
+refer to missing or later steps. `mori validate --check-refs` additionally
+resolves each item's canonical `docs` references — and the checklist-level
+`sourceDoc` — against the local registry. See
+[Checklist](/docs/guides/checklist) for configuration examples.
 
 ---
 

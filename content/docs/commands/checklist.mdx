@@ -39,8 +39,10 @@ mori checklist show install --step enter-devshell
 mori checklist show install --config path/to/checklist.dhall
 ```
 
-The detail view prints ordered steps, kind, command text, success criteria, and
-preconditions. Command steps are rendered only; mori does not execute them.
+The detail view prints ordered steps, kind, command text, success criteria,
+preconditions, and any step-level `docs`. `--step` zooms in on one step with
+every field, including its full `Docs` list. Command steps are rendered only;
+mori does not execute them.
 
 ## `mori checklist print-schema`
 

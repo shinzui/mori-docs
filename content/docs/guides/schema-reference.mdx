@@ -53,6 +53,7 @@ Project identity. The `(namespace, name)` pair forms the unique registry key.
 | `description` | `Optional Text` | Brief description |
 | `language` | `Language` | Primary language |
 | `lifecycle` | `Lifecycle` | Project lifecycle stage |
+| `deprecation` | `Optional Deprecation` | Project replacement or migration guidance |
 | `domains` | `List Text` | Domain tags (e.g., `"Billing"`, `"Platform"`) |
 | `owners` | `List Text` | Team or individual owners |
 | `origin` | `Origin` | Ownership classification (`Own`, `ThirdParty`, `Fork`, `Vendored`) |
@@ -63,12 +64,30 @@ Project identity. The `(namespace, name)` pair forms the unique registry key.
 , type = Schema.PackageType.Application
 , description = Some "Handles payment processing"
 , language = Schema.Language.Haskell
-, lifecycle = Schema.Lifecycle.Active
+, lifecycle = Schema.Lifecycle.Deprecated
+, deprecation = Some Schema.Deprecation::{
+  , alternative = Some "mori://acme/payment-service-v2"
+  , details = Some "Move new payment flows to v2."
+  }
 , domains = [ "Billing", "Platform" ]
 , owners = [ "team-payments" ]
 , origin = Schema.Origin.Own
 }
 ```
+
+### Deprecation
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `alternative` | `Optional Text` | Replacement project/package, URL, or external coordinate |
+| `details` | `Optional Text` | Migration instructions or additional context |
+
+A present deprecation record must contain at least one non-blank value and is
+valid only when the item's effective lifecycle is `Deprecated`. A package with
+no lifecycle override inherits the project lifecycle, but it does **not**
+inherit the project's deprecation record. Alternatives are free-form text, so
+external URLs and package coordinates work; prefer a canonical `mori://`
+project or package reference when the replacement is in the registry.
 
 ## repos
 
@@ -106,7 +125,8 @@ dependencies, and configuration.
 | `description` | `Optional Text` | Brief description |
 | `visibility` | `Visibility` | Access scope |
 | `runtime` | `Runtime` | Runtime characteristics |
-| `lifecycle` | `Lifecycle` | Package lifecycle stage (`Active`, `Experimental`, `Deprecated`, `Archived`) |
+| `lifecycle` | `Optional Lifecycle` | Override (`Active`, `Experimental`, `Deprecated`, `Archived`); inherits the project lifecycle when absent |
+| `deprecation` | `Optional Deprecation` | Package-specific replacement or migration guidance; never inherited |
 | `runtimeEnvironment` | `Optional RuntimeEnvironment` | Runtime execution environment |
 | `apiSource` | `Optional ApiSource` | API source for Client-type packages |
 | `dependencies` | `List Dependency` | Package-level dependencies |
@@ -119,6 +139,11 @@ dependencies, and configuration.
   , language = Schema.Language.Haskell
   , path = Some "payments-core"
   , description = Some "Core payment logic"
+  , lifecycle = None Schema.Lifecycle
+  , deprecation = Some Schema.Deprecation::{
+    , alternative = Some "mori://acme/new-service/packages/client"
+    , details = Some "Use the generated v2 client."
+    }
   , visibility = Schema.Visibility.Internal
   , runtime = { deployable = False, exposesApi = False }
   , dependencies =

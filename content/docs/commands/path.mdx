@@ -40,6 +40,15 @@ package-qualified `project:package` shorthand, and full canonical refs.
 - For docs whose `location` is a `DocLocation.Canonical "mori://..."` arm,
   follows the canonical ref through the registry to the target's filesystem
   path (via the effectful `resolveDocLocationE`)
+- For an [OKF](/docs/guides/okf) bundle ref, prints the bundle directory; for a
+  nested `…/concepts/<segment>` ref, prints that concept's Markdown file. A
+  concept whose bundle is no longer registered is an explicit error rather than
+  a guessed path
+- For a plan ref (`masterplans/…`, `plans/…`), prints the plan Markdown under
+  the project's `docs/` directory
+- A nested concept ref matching more than one indexed concept is an ambiguity
+  error naming the candidates
+- Both files and directories are accepted when checking existence
 - Ambiguous bare names produce a disambiguation prompt
 
 ## Interactive Selection

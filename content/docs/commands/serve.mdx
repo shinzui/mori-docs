@@ -1,0 +1,66 @@
+---
+title: mori serve
+description: Run the mori HTTP API server
+icon: Server
+---
+
+`mori serve` starts the mori HTTP API — a Servant + Warp server that exposes the
+registry, reactions, workflows, repositories, groups, apps, and signed ingest
+over HTTP.
+
+```bash
+mori serve
+mori serve --port 9000
+mori serve -p 9000
+```
+
+On startup it prints the listen address:
+
+```text
+mori-api listening on http://localhost:8080 (application endpoints under /v1; probes under /health)
+```
+
+## Flags
+
+| Flag | Description |
+|------|-------------|
+| `--port`, `-p PORT` | Port to listen on. Defaults to `$MORI_API_PORT`, then `8080` |
+
+## Requirements
+
+`MORI_PG_CONNECTION_STRING` must be set; the server refuses to start without it,
+since it opens the kiroku store as well as the registry pool.
+
+## Surface
+
+| Path | Purpose |
+|------|---------|
+| `/health/*` | Standard, unversioned operational probes |
+| `/v1/health`, `/v1/health/db` | Versioned health compatibility surface, including a database smoke check |
+| `/v1/openapi.json` | Generated OpenAPI 3.1 document for the served API |
+| `/v1/projects`, `/v1/reactions`, `/v1/workflows`, `/v1/repositories`, `/v1/groups`, `/v1/apps`, `/v1/ingest` | Application resources |
+
+Fallible routes return typed [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457)
+problem documents rather than bare error strings. Requests are instrumented with
+OpenTelemetry.
+
+## Serving from the automation daemon
+
+You do not need a second process: the [automation
+daemon](/docs/commands/automate#mori-automate-daemon) can serve the same API on
+one more concurrent leg, sharing its pool and kiroku store.
+
+```bash
+mori automate daemon --serve
+mori automate daemon --api-port 9000
+```
+
+Serving from the daemon is opt-in — enabled by `--serve`, by an explicit
+`--api-port`, or by setting `MORI_API_PORT`. With none of those the daemon opens
+no socket. Ctrl-C cancels the server thread and closes the listen socket along
+with the rest of the daemon.
+
+## Related
+
+- [`mori automate`](/docs/commands/automate) — the daemon and its `--serve` flag
+- [Automation Daemon](/docs/guides/automation-daemon) — running the daemon in practice

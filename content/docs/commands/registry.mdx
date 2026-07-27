@@ -35,6 +35,10 @@ mori registry list --observed
 | `--docs-only` | Show only docs-only projects (no packages) |
 | `--observed` | Show only projects with a linked repository (`repo_id` set by `mori observe`) |
 
+The table includes a **Lifecycle** column. JSON output carries `lifecycle` plus
+a `deprecation` object (`alternative` and `details`, `null` when absent) — see
+[Deprecation guidance](/docs/guides/schema-reference#deprecation).
+
 ## `mori registry show`
 
 Show details of a registered project. Accepts a project name, `namespace/name`,
@@ -57,6 +61,12 @@ mori registry show <project> --full --json
 |------|-------------|
 | `--json` | JSON output |
 | `--full` | Show full details including packages, dependencies, bundles, docs, skills, subagents, extensions, and cookbook entries. Prints a [canonical `mori://` ref](/docs/concepts/canonical-refs) under each artifact (text mode) or as a `canonicalRef` field on each artifact object (JSON mode) |
+
+Both the summary and `--full` renderings print the project's **Lifecycle** and,
+when present, its `Alternative` / `Details` deprecation guidance; JSON output
+carries the same under `lifecycle` and `deprecation`. In `--full` text output
+each package shows its own lifecycle, marked `(inherited)` when the package
+declares no override, followed by any package-specific guidance.
 
 ## `mori registry search`
 
@@ -154,21 +164,42 @@ mori registry bundles <project> --json
 
 ## `mori registry concepts`
 
-Walk a project's registered OKF bundle directories and list the concepts parsed
-from disk.
+List or search [OKF concepts](/docs/guides/okf). The command has two
+mutually-exclusive modes: a project argument walks that project's bundle
+directories live from disk, while `--search` / `--id` query the concept index
+stored at registration time across every registered project.
 
 ```bash
+# Live, one project, always current
 mori registry concepts <project>
 mori registry concepts <project> --bundle team-knowledge
 mori registry concepts <project> --json
+
+# Indexed, cross-project
+mori registry concepts --search postgres
+mori registry concepts --search postgres --json
+mori registry concepts --id ADR-7
+mori registry concepts --id ADR-7 --json
 ```
 
 ### Flags
 
 | Flag | Description |
 |------|-------------|
+| `NAME` | Project name or `namespace/name` — live disk mode |
+| `--bundle BUNDLE` | Live mode only: list concepts from the named OKF bundle |
+| `--search TERM` | Search indexed concepts across all registered bundles |
+| `--id DOCUMENT-ID` | Find every indexed concept with this exact document ID |
 | `--json` | JSON output |
-| `--bundle BUNDLE` | Only list concepts from the named OKF bundle |
+
+`--search` matches canonical concept IDs, document IDs, labels, and
+descriptions. `--id` returns *every* match, because a document-ID handle may be
+legitimately reused across bundles. Indexed rows include the project, bundle,
+concept ID, optional document ID, label, type, description, resource, tags, and
+the nested canonical `ref`.
+
+Indexed results reflect the last `mori observe` / `mori register`; editing
+concept Markdown does not change them until the project is re-registered.
 
 ## `mori registry exec`
 

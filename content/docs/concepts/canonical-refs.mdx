@@ -32,28 +32,50 @@ synonym for `<namespace>/<name>#package:<package>`.
 The kinds are pinned in the schema. The order matches the Dhall union arms in
 `Schema.MoriArtifactKind` and the Haskell mirror.
 
-| Kind | URI segment | Compact |
-|------|-------------|---------|
-| Doc | `docs` | `doc` |
-| Package | `packages` | `package` |
-| Repo | `repos` | `repo` |
-| Skill | `skills` | `skill` |
-| Subagent | `subagents` | `subagent` |
-| Api | `apis` | `api` |
-| Cookbook | `cookbook` | `cookbook` |
-| Template | `templates` | `template` |
-| OkfBundle | `okf` | `okf` |
-| MasterPlan | `masterplans` | `masterplan` |
-| ExecPlan | `plans` | `plan` |
+| Kind | URI segment | Compact | Dhall arm |
+|------|-------------|---------|-----------|
+| Doc | `docs` | `doc` | `Doc` |
+| Package | `packages` | `package` | `Package` |
+| Repo | `repos` | `repo` | `Repo` |
+| Skill | `skills` | `skill` | `Skill` |
+| Subagent | `subagents` | `subagent` | `Subagent` |
+| Api | `apis` | `api` | `Api` |
+| Cookbook | `cookbook` | `cookbook` | `Cookbook` |
+| Template | `templates` | `template` | `Template` |
+| MasterPlan | `masterplans` | `masterplan` | URI only |
+| ExecPlan | `plans` | `plan` | URI only |
+| OkfBundle | `okf` | `okf` | URI only |
 
 `cookbook` and `okf` are the segments that do not pluralise: the cookbook
 artifact is "the cookbook entry" (and its extension already uses the singular
-form), and `okf` names the OKF format rather than a plural noun. The
-`OkfBundle` kind addresses an [OKF knowledge bundle](/docs/guides/okf) and
-resolves against the `mori.okf_bundles` read model. The `MasterPlan` and
-`ExecPlan` kinds are added by the [agent-plans
-extension](/docs/guides/agent-plans); their trailing key is the plan's
-`<id>-<slug>` segment.
+form), and `okf` names the OKF format rather than a plural noun.
+
+The last three kinds are **URI-only**. The CLI parses, renders, and resolves
+them, but they have no arm in the Dhall `Schema.MoriArtifactKind` union, so
+they cannot be stored in a typed `MoriRef` value in a config file — only as
+canonical `Text`. The `MasterPlan` and `ExecPlan` kinds come from the
+[agent-plans extension](/docs/guides/agent-plans); their trailing key is the
+plan's `<id>-<slug>` segment. The `OkfBundle` kind addresses an [OKF knowledge
+bundle](/docs/guides/okf).
+
+### Nested OKF concept refs
+
+`okf` is the only kind with a nested grammar. A ref may address one concept
+inside a bundle:
+
+```
+mori://<namespace>/<name>/okf/<bundle>/concepts/<segment>
+```
+
+The segment after `concepts/` is the concept's rename-stable **document ID**
+(such as `IR-1`) when its profile declares one, and its **concept ID** (the
+file's bundle-relative path with `.md` stripped, which may contain `/`)
+otherwise. Both forms resolve — resolution matches the document ID first and
+falls back to the concept path — so URIs written before stable handles existed
+keep working. Nested refs always render canonically, because the compact
+grammar has no lossless nested representation. Two concepts in one bundle
+sharing a handle is an OKF profile violation; mori reports an ambiguity error
+naming both candidates rather than picking one.
 
 ## Examples
 
@@ -68,6 +90,8 @@ A cookbook entry:                mori://shinzui/streamly/cookbook/postgres-pool
 A seihou template:               mori://shinzui/streamly/templates/scaffold-app
 An OKF bundle:                   mori://shinzui/streamly/okf/architecture
 Compact form for the same OKF:   shinzui/streamly#okf:architecture
+A concept (handle form):         mori://shinzui/mori/okf/improvement-requests/concepts/IR-1
+A concept (path form):           mori://shinzui/streamly/okf/architecture/concepts/tables/users
 A masterplan:                    mori://shinzui/mori/masterplans/9-agent-plans-extension
 An exec plan:                    mori://shinzui/mori/plans/70-agent-plans-dhall-schema-and-uri-kinds
 ```
@@ -81,6 +105,12 @@ be registered locally:
 ```bash
 mori register ~/code/streamly
 ```
+
+Every kind in the table above resolves through a registry read model, including
+`apis` and `cookbook` (both projected) and the two plan kinds, which resolve to
+a path under the project's `docs/` directory. The "unsupported kind" warning
+survives only for a malformed ref carrying a nested sub-key on a kind that has
+no nested grammar — today `okf` is the only kind that has one.
 
 ## Where refs are accepted
 
@@ -132,9 +162,11 @@ mori validate --check-refs
 The check walks `mori.dhall`, `mori/cookbook.dhall`, and
 `mori/checklist.dhall`, printing a per-source ✓/✗/⚠ report. It exits zero
 if every ref resolves through the local registry; it exits 1 if any ref
-names a project that is not registered or a missing artifact key. Refs of
-an artifact kind whose registry projection is not yet wired produce a
-warning but do not fail the check.
+names a project that is not registered or a missing artifact key. This
+includes `okf` refs at both the bundle and the nested concept grain, and
+checklist item-level `docs` references. A nested concept ref that matches
+more than one indexed concept fails the check with an ambiguity message
+naming the candidates.
 
 ## Read-model tables
 

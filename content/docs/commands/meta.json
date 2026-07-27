@@ -27,6 +27,8 @@
 		"checklist",
 		"upstream-issues",
 		"plans",
+		"improvement-requests",
+		"serve",
 		"alias",
 		"completions",
 		"help",

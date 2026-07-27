@@ -57,8 +57,10 @@ manifest field and [Schema Reference](/docs/guides/schema-reference) for the
 
 ## Registering and viewing bundles
 
-`mori observe` (or `mori register`) reads `okfBundles` from the manifest and
-projects each bundle into the `mori.okf_bundles` read model. After that:
+`mori observe` (or `mori register`) reads `okfBundles` from the manifest, walks
+each bundle with okf-core, projects the bundle into the `mori.okf_bundles` read
+model, and indexes the concepts and links inside it (see [Under the
+hood](#under-the-hood)). After that:
 
 ```bash
 mori show <project> --full              # an "OKF Bundles" section, separate
@@ -72,20 +74,54 @@ Each row in `mori registry bundles` carries its canonical
 bundle](#addressing-a-bundle)); the JSON form includes that string under a
 `ref` key.
 
-## Listing concepts
+## Listing and searching concepts
 
-`mori registry concepts` walks each bundle live from disk with okf-core and
-lists the concepts inside (id and type):
+`mori registry concepts` has two kinds of mode, and the difference matters:
 
 ```bash
+# Live: walks the working tree with okf-core, always current
 mori registry concepts <project>                 # every bundle
 mori registry concepts <project> --bundle <name> # one named bundle
 mori registry concepts <project> --json
+
+# Indexed: queries what registration stored, across every registered project
+mori registry concepts --search <term>
+mori registry concepts --search <term> --json
+mori registry concepts --id <document-id>
+mori registry concepts --id <document-id> --json
 ```
 
+Project mode reflects the Markdown on disk right now. `--search` and `--id`
+read the stored index, so **editing concept Markdown does not change their
+results until you re-run `mori observe`** (or `mori register`). In exchange,
+they span every registered project rather than one.
+
+`--search` matches canonical concept IDs, document IDs, labels, and
+descriptions. `--id` looks up an exact document ID and returns *every* match,
+because a handle can be legitimately reused across bundles. Indexed rows carry
+the project, bundle, concept ID, optional document ID, label, type,
+description, resource, tags, and the nested canonical `ref`.
+
 A bundle that cannot be read prints a non-fatal "could not read bundle" line
-and the command continues with the others. Cross-bundle concept search and a
-stored concept index are deferred.
+and the command continues with the others.
+
+## Document IDs: stable handles
+
+A concept's identity is its **concept ID** — the file's path inside the bundle
+with `.md` stripped. That is stable enough for most uses, but it changes when
+the file moves.
+
+A profile can additionally declare a **document ID**: a rename-stable handle
+such as `IR-1` or `ADR-7`. This needs two things in the okf-profiles
+descriptor — a profile-wide `idField` naming the frontmatter key that holds the
+handle, and an `idPrefix` on the type rule that opts that concept type in.
+Concepts in a bundle with no profile, or under a profile that declares neither,
+have no handle; they stay fully searchable and addressable by concept ID.
+
+Handles are indexed but not required to be globally unique, because reusing a
+handle across two bundles is legitimate. A handle duplicated *within* one
+bundle is an advisory profile violation, and mori reports resolving it as an
+ambiguity error naming both concept paths rather than silently picking one.
 
 ## Advisory profile validation
 
@@ -104,27 +140,96 @@ remote okf-profiles URL that does not resolve) all degrade to advisory lines
 and leave the exit code unchanged. A bundle with no declared `profile` is
 skipped silently.
 
-## Addressing a bundle
-
-A registered bundle is addressable with the `okf` artifact kind:
+Indexing problems report on their own stderr line, printed *before* the profile
+advisories, because a bundle can index fine and still deviate from its profile
+(or the reverse):
 
 ```text
-Canonical:  mori://<namespace>/<project>/okf/<bundle>
-Compact:    <namespace>/<project>#okf:<bundle>
+Warning: could not index OKF bundle '<bundleName>': <reason>
 ```
 
-For example `mori://shinzui/mori/okf/architecture`. The `okf` segment does not
-pluralise (it names the format, not a plural noun). These refs resolve against
-the local registry to the stored bundle row; an unknown bundle name resolves to
-a not-found error. See [Canonical Refs](/docs/concepts/canonical-refs) for the
-full ref grammar.
+Both channels are diagnostics only; neither changes the exit code. A bundle
+that cannot be walked contributes no indexed rows while the other bundles still
+index.
 
-Nested concept URIs (`mori://…/okf/<bundle>/concepts/<concept-id>`) are deferred
-along with the concept index; today addressing is flat at the bundle grain.
+If you want enforcement, run a strict OKF profile check as its own CI step
+before `mori observe`, and use [`mori improvement-requests
+validate`](/docs/commands/improvement-requests) for the semantic checks
+specific to improvement requests.
+
+## Addressing bundles and concepts
+
+A registered bundle is addressable with the `okf` artifact kind, and a single
+concept inside it with the nested `concepts/` form:
+
+```text
+Bundle (canonical):  mori://<namespace>/<project>/okf/<bundle>
+Bundle (compact):    <namespace>/<project>#okf:<bundle>
+Concept by handle:   mori://shinzui/mori/okf/improvement-requests/concepts/IR-1
+Concept by path:     mori://shinzui/mori/okf/architecture/concepts/tables/users
+```
+
+The `okf` segment does not pluralise (it names the format, not a plural noun).
+Bundle refs resolve against the local registry to the stored bundle row; nested
+concept refs resolve through the stored concept index. An unknown bundle or
+concept resolves to a not-found error.
+
+The segment after `concepts/` is the concept's **document ID** when it has one
+and its **concept ID** otherwise, and it may itself contain `/`. Both forms
+resolve: resolution matches the document ID first and falls back to the concept
+path, so a URI copied before a rename keeps working and mori round-trips its
+own output exactly. Nested refs always print in canonical form — the compact
+grammar has no lossless nested representation.
+
+Both grains work wherever mori accepts a ref:
+
+```bash
+mori path mori://shinzui/mori/okf/improvement-requests
+#   → the bundle directory on disk
+
+mori path mori://shinzui/mori/okf/improvement-requests/concepts/IR-1
+#   → that concept's Markdown file
+
+mori validate --check-refs
+#   → checks okf refs at both grains alongside every other kind
+```
+
+A concept ref whose bundle is no longer registered fails with an explanatory
+message instead of a guessed path. `mori browse` has no forge URL for either
+grain and says so rather than opening the wrong page.
+
+## Under the hood
+
+Registration stores three read models, replaced atomically per project on every
+re-registration:
+
+| Table | Contents |
+|-------|----------|
+| `mori.okf_bundles` | one row per declared bundle |
+| `mori.okf_concepts` | one row per concept: concept ID, optional document ID, label, type, description, resource, tags, preserved frontmatter |
+| `mori.okf_concept_edges` | one row per concept-to-concept link |
+
+Bundle walking and profile loading happen *before* the projection transaction,
+and the resulting snapshot travels inside the event (`ProjectRegistered` for a
+fresh registration, `ProjectOkfKnowledgeReplaced` when an already-registered
+project's OKF knowledge changed), so replays and projection rebuilds reproduce
+exactly what was indexed instead of re-reading the filesystem. Because the
+tables are replaced as one unit, a removed concept disappears rather than
+lingering.
+
+An existing installation needs the tracked migrations applied plus one
+re-registration per project before `--search` and `--id` return anything.
+
+## Improvement requests
+
+Profile-governed concepts of type `Improvement Request` get a stable
+bundle-scoped `IR-N` handle and a typed query surface of their own. See the
+[Improvement Requests guide](/docs/guides/improvement-requests).
 
 ## Related
 
 - [`mori registry`](/docs/commands/registry) — `registry bundles` and `registry concepts`
+- [`mori improvement-requests`](/docs/commands/improvement-requests) — typed requests and target-plan linkage
 - [Canonical Refs](/docs/concepts/canonical-refs) — the `okf` ref kind and grammar
 - [Project Configuration](/docs/guides/project-config) — the `okfBundles` manifest field
 - [Schema Reference](/docs/guides/schema-reference) — the `OkfBundle` record

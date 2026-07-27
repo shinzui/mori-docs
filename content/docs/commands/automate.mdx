@@ -78,6 +78,17 @@ See [Automation Daemon](/docs/guides/automation-daemon) for details.
 | `--refresh-interval SECONDS` | Interval between config refresh cycles. Default: `60` |
 | `--ingest-interval SECONDS` | Interval between auto-ingest cycles for observed projects. Default: `300`; use `0` to disable |
 | `--queued-concurrency N` | Number of FIFO worker instances for `queued = True` automations. Default: `3` |
+| `--serve` | Also serve the [HTTP API](/docs/commands/serve) from this daemon process |
+| `--api-port PORT` | Port for the embedded HTTP API. Default: `8080`, or `$MORI_API_PORT` |
+
+### Serving the HTTP API
+
+Serving is opt-in: it is enabled by `--serve`, by an explicit `--api-port`, or
+by setting `MORI_API_PORT`. With none of those the daemon opens no socket. The
+server runs as one more concurrent leg on the daemon's *shared* pool and kiroku
+store, and Ctrl-C cancels it along with the rest of the daemon. If no kiroku
+store is configured the daemon prints `HTTP API: not served — no kiroku store
+(set MORI_PG_CONNECTION_STRING)` and continues without it.
 
 ## `mori automate register`
 

@@ -6,7 +6,8 @@ icon: Link
 
 Canonical cross-project references use the `mori://` URI scheme. They identify
 artifacts owned by registered projects: docs, packages, repos, skills,
-subagents, APIs, cookbook entries, seihou templates, and OKF bundles.
+subagents, APIs, cookbook entries, seihou templates, plans, and OKF knowledge
+bundles (and the concepts inside them).
 
 ```text
 mori://<namespace>/<name>/<kind-plural>[/<key>][#<anchor>]
@@ -29,6 +30,8 @@ mori://shinzui/streamly/packages/streamly-core
 mori://shinzui/streamly/cookbook/postgres-pool
 mori://shinzui/streamly/templates/scaffold-app
 mori://shinzui/streamly/okf/architecture
+mori://shinzui/streamly/okf/architecture/concepts/tables/users
+mori://shinzui/mori/okf/improvement-requests/concepts/IR-1
 mori://shinzui/mori/masterplans/9-agent-plans-extension
 mori://shinzui/mori/plans/70-agent-plans-dhall-schema-and-uri-kinds
 shinzui/streamly#doc:effects-cookbook
@@ -42,6 +45,17 @@ For `masterplans/<id>-<slug>` and `plans/<id>-<slug>` (the agent-plans
 extension's MasterPlan and ExecPlan kinds), the trailing key is the full
 `<id>-<slug>`, not the slug alone. Cross-project dep URIs must use the
 exact segment as it appears on disk. See [Agent Plans](/docs/guides/agent-plans).
+
+The `okf` kind addresses an [OKF knowledge bundle](/docs/guides/okf), and the
+nested `…/concepts/<segment>` form addresses one concept inside it — by its
+stable document ID when the bundle's profile declares one, otherwise by its
+bundle-relative concept ID. Both forms resolve, and nested refs always print
+canonically.
+
+Improvement-request `originPlan` and `targetPlan` fields accept only canonical,
+unanchored `masterplans/<id>-<slug>` or `plans/<id>-<slug>` references, and the
+[improvement-request validator](/docs/guides/improvement-requests) additionally
+checks project ownership and exact registration.
 
 ## Where Refs Work
 

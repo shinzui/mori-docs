@@ -161,6 +161,27 @@ in  Schema.Project::{
 | `lifecycle` | `Active`, `Experimental`, `Deprecated`, `Archived` |
 | `visibility` | `Public`, `Internal`, `Private` |
 
+### Deprecating a project or package
+
+When something is no longer recommended, mark its lifecycle and optionally add
+replacement or migration guidance:
+
+```dhall
+, lifecycle = Schema.Lifecycle.Deprecated
+, deprecation = Some Schema.Deprecation::{
+  , alternative = Some "mori://acme/payments-v2"
+  , details = Some "Move new payment flows to v2."
+  }
+```
+
+Packages use the same `deprecation` field. A package that omits its lifecycle
+inherits the project lifecycle, but it never inherits the project's guidance —
+declare package-specific guidance explicitly, preferably with a canonical
+replacement such as `mori://acme/new-service/packages/client`. A present record
+must contain at least one non-blank string and is valid only for an effective
+`Deprecated` lifecycle. Alternatives may also be URLs or external package
+coordinates.
+
 ---
 
 ## 2. Validate and Show

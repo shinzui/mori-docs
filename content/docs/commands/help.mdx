@@ -30,6 +30,7 @@ mori help <topic> --width 100
 | `registry-groups` | First-class project groups (members, packages, docs, extensions) |
 | `registry-templates` | Browse seihou templates across the registry (list, show, filter) |
 | `registry-exec` | Run a command in every registered project, with `--group` filtering |
+| `okf` | OKF knowledge bundles: declaring `okfBundles`, discovery commands, advisory profile validation, `mori://` addressing |
 | `seihou-templates` | First-class seihou scaffold catalog (declaration, auto-discovery, filter) |
 | `corpus-learning` | Leverage corpus projects for debugging, API discovery, and best practices |
 | `aliases` | How to configure and use command aliases |
@@ -41,10 +42,15 @@ mori help <topic> --width 100
 | `schema-types` | All Dhall union types with constructors |
 | `schema-records` | All Dhall record types with fields |
 | `schema-modification` | How to edit mori.dhall (Dhall syntax guide) |
+| `mori-refs` | Canonical `mori://` references for cross-project artifacts |
 | `extensions` | Dynamic schema extensions (define, query, add new) |
+| `tech-radar` | Tech-radar extension: package recommendations + cross-registry search |
 | `cookbook` | Cookbook extension for code examples, patterns, and guides |
+| `ddd` | DDD modeling extension: subdomains, bounded contexts, aggregates, context maps, message flows, glossary |
+| `agent-plans` | Agent-plans extension: cross-project plan dependencies + next-implementable |
+| `improvement-requests` | Cross-project OKF improvement requests and plan linkage |
 | `checklist` | Checklist extension for structured procedures (install, deploy, monitor, …) |
-| `mori-refs` | Canonical `mori://` URI scheme — cross-project artifact pointers |
+| `upstream-issues` | Upstream-issues extension for known upstream defects with local workarounds |
 
 ### Automation
 
@@ -62,5 +68,12 @@ mori help <topic> --width 100
 | `automation-daemon` | Multi-repo automation daemon usage and architecture |
 | `kit` | Managing Claude Code skills and subagents (install, update, status) |
 | `apps` | Mori Apps: webhook delivery to external applications |
+
+### Agents
+
+| Topic | Description |
+|-------|-------------|
+| `bootstrap-extensions` | Overview of `mori agent bootstrap-<ext>` commands and the schema-staleness guard |
+| `agent-ask` | Cross-project Claude sessions about a registered project |
 
 Use `mori <command> --help` for command-specific help.

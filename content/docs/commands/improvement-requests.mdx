@@ -1,0 +1,129 @@
+---
+title: mori improvement-requests
+description: Query, validate, and plan-link cross-project OKF improvement requests
+icon: Lightbulb
+---
+
+`mori improvement-requests` is the typed query and maintenance surface for
+cross-repository improvement requests, which mori models as profile-governed
+[OKF concepts](/docs/guides/okf) of type `Improvement Request`. See the
+[Improvement Requests guide](/docs/guides/improvement-requests) for the
+workflow; this page is the flag reference.
+
+`list` and `show` read the stored OKF concept index, so they reflect the last
+`mori observe` / `mori register`. `validate` and `link-plan` read and write the
+working tree and take a `--path` to the project root.
+
+## `mori improvement-requests list`
+
+List registered improvement requests across every registered project.
+
+```bash
+mori improvement-requests list
+mori improvement-requests list --project shinzui/mori
+mori improvement-requests list --origin mori://shinzui/keiro
+mori improvement-requests list --status proposed
+mori improvement-requests list --planning-state unplanned
+mori improvement-requests list --json
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--project NAMESPACE/NAME` | Restrict to one target project |
+| `--origin MORI_URI` | Restrict to one canonical origin URI |
+| `--status STATUS` | Filter by request status |
+| `--planning-state STATE` | Filter by `planned`, `unplanned`, or `invalid` |
+| `--json` | Emit JSON instead of a table |
+
+Status values are `proposed`, `accepted`, `in_progress`, `completed`,
+`declined`, and `superseded`.
+
+The table has TARGET PROJECT, BUNDLE, ID, CONCEPT, STATUS, PLANNING, ORIGIN,
+ORIGIN PLAN, TARGET PLAN, and PLAN STATUS columns; unset fields print `—`.
+Requests that failed to decode or validate are listed under a "Validation
+errors" section after the table. JSON output keeps optional fields as `null`.
+
+## `mori improvement-requests show`
+
+Show one registered improvement request.
+
+```bash
+mori improvement-requests show --project shinzui/mori --id IR-1
+mori improvement-requests show --project shinzui/mori --bundle improvement-requests --id IR-1
+mori improvement-requests show --project shinzui/mori --id IR-1 --json
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--project NAMESPACE/NAME` | Target project identity (required) |
+| `--bundle NAME` | Disambiguate when the project has more than one matching bundle |
+| `--id IR-N` | Stable improvement-request handle (required) |
+| `--json` | Emit JSON instead of text |
+
+An ID that matches more than one bundle in the project is an error asking for
+`--bundle`.
+
+## `mori improvement-requests validate`
+
+Validate the improvement requests declared in a local project's OKF bundles.
+
+```bash
+mori improvement-requests validate --path .
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--path PATH` | Project root containing `mori.dhall` (required) |
+
+Checks the closed status set, the UTC timestamp, canonical `mori://`
+references, artifact kinds, project ownership, and exact plan registration.
+Every invalid request is reported and the command exits non-zero; a clean run
+prints `OK: <n> improvement request(s)`.
+
+This is the Mori semantic layer only. Run strict OKF profile enforcement
+first for bundle shape, required fields, ID prefix, uniqueness, and path rules.
+
+## `mori improvement-requests link-plan`
+
+Attach a registered target plan to a request, editing only the `targetPlan`
+frontmatter field.
+
+```bash
+mori improvement-requests link-plan --path . --id IR-1 \
+  --plan mori://shinzui/mori/plans/150-add-agent-action
+
+mori improvement-requests link-plan --path . --id IR-1 \
+  --plan mori://shinzui/mori/plans/150-add-agent-action --dry-run
+
+mori improvement-requests link-plan --path . --id IR-1 \
+  --plan mori://shinzui/mori/plans/151-replacement --replace
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--path PATH` | Project root containing `mori.dhall` (required) |
+| `--bundle NAME` | Select an improvement-request bundle |
+| `--id IR-N` | Stable improvement-request handle (required) |
+| `--plan MORI_PLAN_URI` | Canonical registered target-plan URI (required) |
+| `--dry-run` | Print the proposed edit without writing |
+| `--replace` | Replace a different existing `targetPlan` link |
+
+The plan must already be registered and owned by the local bundle's project.
+Mori locates the concept through OKF's stable-ID API, serializes through OKF,
+and replaces the file atomically. Reapplying the same link prints `unchanged:`
+and succeeds; changing a *different* existing link requires `--replace`. The
+command never changes request status and never registers the project.
+
+## Related
+
+- [Improvement Requests guide](/docs/guides/improvement-requests)
+- [OKF Bundles](/docs/guides/okf) — bundles, the concept index, and `mori://` addressing
+- [`mori plans`](/docs/commands/plans) — the plan registry that `targetPlan` points into

@@ -1,0 +1,156 @@
+---
+title: Improvement Requests
+description: Track cross-repository improvement requests as OKF concepts with stable handles and plan links
+icon: Lightbulb
+---
+
+An **improvement request** is a change one project wants from another,
+recorded where the *receiving* project can act on it. Mori models them as
+profile-governed [OKF concepts](/docs/guides/okf) of type
+`Improvement Request`, which means they are ordinary Markdown files in a
+registered bundle — reviewable in a pull request, searchable across every
+registered project, and addressable with a `mori://` URI.
+
+The embedded reference is `mori help improvement-requests`; the exact flags
+live on the [`mori improvement-requests`](/docs/commands/improvement-requests)
+command page.
+
+## Identity: the `IR-N` handle
+
+A request has a rename-stable `IR-N` handle within its owning bundle. Its full
+identity is the target project, the bundle name, and the handle together — the
+Markdown path is the OKF concept identity and may change without changing the
+handle.
+
+That is why the `conceptRef` reported by `list` and `show` addresses the request
+by handle:
+
+```text
+mori://<namespace>/<name>/okf/<bundle>/concepts/IR-1
+```
+
+This ref survives a file rename. The `conceptId` field still reports the
+path-derived OKF identity, which does not. A ref naming the old concept path
+stops resolving after a rename; a handle-form ref keeps working.
+
+Handles exist only because the bundle's profile declares an `idField` and a
+matching `idPrefix` — see [Document IDs](/docs/guides/okf#document-ids-stable-handles).
+
+## Authoring a request
+
+Each request is one Markdown concept whose frontmatter carries:
+
+| Field | Required | Meaning |
+|-------|----------|---------|
+| `requestId` | yes | The `IR-N` handle; must agree with the indexed document ID |
+| `title` | yes | Short summary |
+| `description` | yes | The request itself |
+| `timestamp` | yes | UTC timestamp |
+| `status` | yes | `proposed`, `accepted`, `in_progress`, `completed`, `declined`, or `superseded` |
+| `origin` | yes | Canonical `mori://` ref to the requesting project or one of its packages |
+| `originPlan` | no | An exactly registered MasterPlan or ExecPlan owned by the origin project |
+| `targetPlan` | no | An exactly registered plan owned by the project that declares the bundle |
+
+The bundle itself is declared in `okfBundles` like any other OKF bundle, and
+registration indexes it:
+
+```dhall
+, okfBundles =
+  [ Schema.OkfBundle::{
+    , name = "improvement-requests"
+    , path = "docs/improvement-requests"
+    , profile = Some "mori/improvement-requests-profile.dhall"
+    , okfVersion = "0.1"
+    , description = Some "Cross-repository improvement requests"
+    }
+  ]
+```
+
+## Validating
+
+Validation has two explicit layers, and both are worth running in CI:
+
+```bash
+# 1. OKF profile enforcement — bundle shape, required fields,
+#    ID prefix, uniqueness, path rules
+#    (strict okf-core profile check, run as its own step)
+
+# 2. Mori semantics
+mori improvement-requests validate --path .
+```
+
+The Mori layer checks the closed status set, the UTC timestamp, canonical
+`mori://` references, artifact kinds, project ownership, and exact plan
+registration. It reports *every* invalid request rather than stopping at the
+first, and exits non-zero. A clean run ends with:
+
+```text
+OK: 12 improvement request(s)
+```
+
+Origins may name a project or one of its packages. `originPlan`, when present,
+must be an exactly registered plan owned by that origin project; `targetPlan`
+must be an exactly registered plan owned by the project that declares the
+bundle.
+
+## Querying
+
+```bash
+mori improvement-requests list
+mori improvement-requests list --project shinzui/mori
+mori improvement-requests list --origin mori://shinzui/keiro
+mori improvement-requests list --status proposed
+mori improvement-requests list --planning-state unplanned --json
+
+mori improvement-requests show --project shinzui/mori --id IR-1
+```
+
+These read the stored OKF concept index, so they reflect the last
+`mori observe` / `mori register` rather than uncommitted edits on disk.
+
+**Planning state is derived, not authored.** `unplanned` means no `targetPlan`
+is present; `planned` means the exact linked plan is registered under the target
+project; `invalid` means metadata or reference resolution failed. Invalid
+requests are never reported as unplanned, so `--planning-state unplanned` is a
+trustworthy queue of real work rather than a mix of gaps and broken files.
+
+## Linking a target plan
+
+Once the receiving project has a plan for a request, link it rather than hand-
+editing the frontmatter:
+
+```bash
+mori improvement-requests link-plan --path . --id IR-1 \
+  --plan mori://shinzui/mori/plans/150-add-agent-action
+```
+
+The plan must already be registered and owned by the local bundle's project.
+Mori locates the concept through OKF's stable-ID API, edits only `targetPlan`,
+serializes through OKF, and replaces the file atomically — so the rest of the
+document, including frontmatter mori does not understand, comes through
+untouched.
+
+- `--dry-run` prints the canonical URI and the file it would edit, without
+  writing.
+- Reapplying the same link is an `unchanged:` success.
+- Changing a *different* existing link requires `--replace`, so an accidental
+  re-link cannot silently overwrite a deliberate one.
+- The command never changes request status and never registers the project.
+
+## A typical loop
+
+1. The requesting project opens a PR against the receiving project adding one
+   concept file with `status = proposed` and an `origin` ref back to itself.
+2. CI runs the OKF profile check and `mori improvement-requests validate --path .`.
+3. The receiving project re-registers, so the request lands in the index.
+4. `mori improvement-requests list --planning-state unplanned` becomes the
+   backlog review.
+5. When a plan is written, `link-plan` attaches it and the request moves to
+   `planned`.
+
+## Related
+
+- [`mori improvement-requests`](/docs/commands/improvement-requests) — full flag reference
+- [OKF Bundles](/docs/guides/okf) — bundles, the concept index, and addressing
+- [Agent Plans](/docs/guides/agent-plans) — the plan registry `targetPlan` points into
+- [Mori References](/docs/guides/mori-refs) — the `mori://` grammar

@@ -44,6 +44,10 @@ in  Checklist.ChecklistCatalog::{
             , command = Some "cabal build all"
             , preconditions = [ "enter-devshell" ]
             , successCriteria = Some "Exit code 0"
+            , docs =
+              [ Schema.DocLocation.Canonical
+                  "mori://shinzui/haskell-jitsurei/docs/core-custom-prelude"
+              ]
             }
           ]
         }
@@ -65,6 +69,11 @@ shape as the core schema, so record completion fills default-valued fields.
 | `successCriteria` | What done looks like |
 | `preconditions` | Keys of earlier steps that must be completed first |
 | `tags` | Free-form labels |
+| `docs` | Step-specific documentation references (`List DocLocation`) |
+
+`docs` attaches documentation to a *single* step, unlike the checklist-level
+`sourceDoc`, which names one companion runbook for the whole procedure. Use
+`DocLocation.Canonical "mori://…"` to point at a registered mori doc.
 
 ## Inspect Checklists
 
@@ -86,6 +95,14 @@ user's or agent's job.
 The checklist loader validates duplicate checklist keys, duplicate item keys,
 empty titles, and preconditions that reference missing or later steps.
 Validation runs during `mori register` and during checklist commands.
+
+`mori validate --check-refs` additionally resolves every
+`DocLocation.Canonical "mori://…"` reference against the local registry — both
+a checklist's `sourceDoc` and each item's `docs` list. Canonical item docs are
+tagged `Checklist.checks[i].items[j].docs[k] <checklist-key>/<item-key>` in the
+report. Non-canonical docs (`LocalFile`, `LocalDir`, `RepoPath`, `Url`) are
+rendered by `mori checklist show` but are not registry references, so
+`--check-refs` skips them.
 
 After registration, cross-project queries are available:
 

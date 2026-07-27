@@ -146,6 +146,27 @@ simple — one type describes what something _is_ at any level.
 Agents and tooling can use lifecycle to adjust behavior — for example, an agent
 might warn before modifying a deprecated project.
 
+### Deprecation guidance
+
+Deprecated projects and packages can explain what replaces them and how to
+migrate. Both strings are individually optional, but a present record must have
+at least one non-blank value:
+
+```dhall
+, lifecycle = Schema.Lifecycle.Deprecated
+, deprecation = Some Schema.Deprecation::{
+  , alternative = Some "mori://acme/new-service"
+  , details = Some "Move new integrations to new-service."
+  }
+```
+
+Guidance is valid only for an effective `Deprecated` lifecycle. Package
+lifecycle inherits from the project when its override is absent; package
+deprecation guidance does **not** inherit and must be declared on the package
+when it differs from the project. `alternative` is free-form text, so external
+URLs and package coordinates work, but prefer canonical `mori://` project or
+package references for registered replacements.
+
 ---
 
 ## Repositories
@@ -251,6 +272,24 @@ root (single-package project), use `None Text`. If it lives in a subdirectory:
 
 ```dhall
 , path = Some "packages/payments-core"
+```
+
+### Package lifecycle and deprecation
+
+Set a package's `lifecycle` only when it differs from its parent project;
+omitting it means inheritance. The following package inherits a deprecated
+project status while publishing package-specific replacement guidance:
+
+```dhall
+Schema.Package::{
+, name = "legacy-client"
+, type = Schema.PackageType.Client
+, language = Schema.Language.Haskell
+, lifecycle = None Schema.Lifecycle
+, deprecation = Some Schema.Deprecation::{
+  , alternative = Some "mori://acme/new-service/packages/client"
+  }
+}
 ```
 
 ---
