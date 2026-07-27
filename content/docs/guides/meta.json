@@ -5,6 +5,7 @@
 		"automation",
 		"automation-daemon",
 		"automation-test-repos",
+		"ingest-health",
 		"cross-repo-workflows",
 		"reaction-history",
 		"extensions",

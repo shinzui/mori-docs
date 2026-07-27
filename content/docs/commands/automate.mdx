@@ -24,6 +24,40 @@ mori automate ingest git --path /path/to/repo
 - Appends to local event store
 - Updates cursor position
 
+A commit that fails to parse does not stall the repo: it is recorded as a
+`MalformedCommitSkipped` event and the cursor advances past it. Ingest failures
+are classified and recorded — see [Ingest Health](/docs/guides/ingest-health).
+
+## `mori automate reset-checkpoint`
+
+Reset a project's ingest cursor. This is the recovery path when the stored
+cursor is no longer in `HEAD`'s ancestry — typically after a force-push, rebase,
+or other history rewrite, which surfaces as the `orphaned` ingest error class.
+
+```bash
+mori automate reset-checkpoint my-app
+mori automate reset-checkpoint shinzui/my-app --to-head
+mori automate reset-checkpoint my-app --to-commit 9f2c1ab
+mori automate reset-checkpoint my-app --to-root
+```
+
+The project argument is a bare name, or `namespace/name` when the bare name is
+ambiguous.
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--to-head` | Reset the cursor to current `HEAD` (**default**) |
+| `--to-commit SHA` | Reset to a specific commit; validated with `git cat-file -e` |
+| `--to-root` | Re-ingest the entire repository from scratch |
+
+Prefer `--to-head`: it clears the orphaned cursor and resumes from the current
+tip. `--to-root` is heavy and re-emits the full history, which can produce
+duplicate webhook deliveries to registered Mori Apps.
+
+`mori observe --reingest` is an alias for the `--to-root` form.
+
 ## `mori automate run`
 
 Run single-repo automation (ingest + subscriptions).

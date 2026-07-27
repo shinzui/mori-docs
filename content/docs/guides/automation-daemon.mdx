@@ -17,6 +17,7 @@ mori automate daemon --ingest-interval 30      # faster cycle for development
 mori automate daemon --ingest-interval 0       # disable auto-ingest
 mori automate daemon --refresh-interval 120    # config-refresh cycle
 mori automate daemon --queued-concurrency 6    # FIFO queued automation workers
+mori automate daemon --serve                   # also serve the HTTP API
 ```
 
 ### Flags
@@ -26,6 +27,12 @@ mori automate daemon --queued-concurrency 6    # FIFO queued automation workers
 | `--refresh-interval SECONDS` | 60 | Interval between config-refresh cycles |
 | `--ingest-interval SECONDS` | 300 | Interval between auto-ingest cycles (`0` to disable) |
 | `--queued-concurrency N` | 3 | Number of FIFO worker instances for `queued = True` automations |
+| `--serve` | off | Also serve the [HTTP API](/docs/commands/serve) from this process |
+| `--api-port PORT` | 8080 / `$MORI_API_PORT` | Port for the embedded HTTP API |
+
+Serving the API is opt-in — enabled by `--serve`, an explicit `--api-port`, or
+`MORI_API_PORT`. It runs as one more concurrent leg on the daemon's shared pool
+and store, and shuts down with the rest of the daemon.
 
 ## How It Works
 
@@ -85,6 +92,12 @@ automation config, so Mori Apps also receive events from observed repos.
 Use `--ingest-interval SECONDS` to control the cycle time, or
 `--ingest-interval 0` to disable auto-ingest and rely on manual
 `mori automate ingest git` calls instead.
+
+A repo whose ingest keeps failing goes quiet rather than loud — no events, so no
+reactions and no webhook deliveries. Failures are classified and recorded in
+`mori.repository_ingest_status`; audit them with `mori doctor --ingest` and
+recover an orphaned cursor with `mori automate reset-checkpoint`. See [Ingest
+Health](/docs/guides/ingest-health).
 
 ## Registering with the Daemon
 

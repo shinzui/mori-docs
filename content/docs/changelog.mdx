@@ -9,6 +9,21 @@ features, commands, and schema changes.
 
 ---
 
+## 2026-07-26 (documentation audit)
+
+### Added: ingest health and recovery (previously undocumented)
+- New [Ingest Health guide](/docs/guides/ingest-health) — the five ingest failure classes (`orphaned`, `malformed-commit`, `missing`, `transient`, `unknown`), the `mori.repository_ingest_status` read model, the stuck definition (3 consecutive failures, or no success in 6 hours), and recovery
+- Documented [`mori automate reset-checkpoint`](/docs/commands/automate#mori-automate-reset-checkpoint) with `--to-head` (default), `--to-commit SHA`, and `--to-root`, including the duplicate-webhook-delivery cost of `--to-root`
+- Documented `MalformedCommitSkipped`: a bad commit is recorded and the cursor advances past it rather than stalling the repo
+
+### Added: missing command pages
+- [`mori observe`](/docs/commands/observe) — `--path`, `--skip-ingest`, `--reingest`, and `mori observe list`; plus how it differs from `mori automate register`
+- [`mori backfill`](/docs/commands/backfill) — `content-hashes`, which appends `ContentHashAttached` sidecars for events predating the inline hash field
+- [`mori automate daemon`](/docs/guides/automation-daemon) now documents `--serve` / `--api-port` in the guide as well as the command page
+- Added the OKF concept, ingest-status, and changeset-index read models to the [Event Sourcing](/docs/concepts/event-sourcing) runtime-shape reference
+
+---
+
 ## 2026-07-26
 
 ### OKF concept index and nested concept refs

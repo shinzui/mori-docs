@@ -1,0 +1,110 @@
+---
+title: Ingest Health
+description: Monitor VCS ingest, classify failures, and recover a stuck repository
+icon: HeartPulse
+---
+
+The [automation daemon](/docs/guides/automation-daemon) re-ingests git history
+for every observed project on a fixed cycle. A repo whose ingest keeps failing
+goes quiet rather than loud: no new events, so no reactions, no webhook
+deliveries, and no obvious error unless you are reading daemon logs. This guide
+covers how mori records ingest failures, how to detect a stuck repo, and how to
+recover one.
+
+## Failure classes
+
+Every uncaught failure in an ingest tick is classified into one of five stable
+classes, stored verbatim in the read model:
+
+| Class | Meaning | Recovery |
+|-------|---------|----------|
+| `orphaned` | The stored cursor is not in `HEAD`'s ancestry — history was rewritten (force-push, rebase) | Structural: [reset the cursor](#recovering-a-stuck-repo) |
+| `malformed-commit` | A commit failed to parse (e.g. a non-ISO timestamp) | Automatic: the commit is skipped and the cursor advances past it |
+| `missing` | The repo's working directory is gone from disk | Structural: the project was moved or deleted |
+| `transient` | Git exited non-zero for a non-structural reason — network, lock, signal | Automatic: retried next tick |
+| `unknown` | The classifier could not categorise the failure | Retried next tick; investigate the logged detail |
+
+`transient` and `unknown` clear themselves when the underlying condition passes.
+`orphaned` and `missing` do not — they need you.
+
+Malformed commits are worth calling out: rather than stalling the repo forever
+on one bad commit, mori records a `MalformedCommitSkipped` event and moves the
+cursor past it. The skip is durable and auditable, not silent.
+
+## The status read model
+
+`mori.repository_ingest_status` holds one row per repo:
+
+| Column | Meaning |
+|--------|---------|
+| `repo_id` | The repo this row describes |
+| `last_ingest_attempt_at` | When ingest last ran |
+| `last_ingest_success_at` | When ingest last succeeded |
+| `last_ingest_error_class` | One of the five classes above |
+| `last_ingest_error_detail` | Short free-form detail, truncated for greppability |
+| `consecutive_ingest_failures` | Reset to zero on success |
+| `last_ingest_stuck_emitted_at` | When a `RepositoryIngestStuck` event was last emitted |
+
+A repo counts as **stuck** when `consecutive_ingest_failures >= 3` or it has had
+no successful ingest in the last 6 hours.
+
+## Detecting a stuck repo
+
+```bash
+mori doctor --ingest
+```
+
+This skips the baseline database checks and audits ingest health only. It exits
+`2` when any repo is stuck and `0` otherwise, so cron and CI can distinguish an
+unhealthy fleet (exit `2`) from a doctor error (exit `1`). Stuck repos are
+printed with their failure count, last error class and detail, and how long they
+have been stuck.
+
+`mori observe list` shows the same health per project alongside its config
+state, in its `LastSuccess` and `IngestStatus` columns.
+
+## Recovering a stuck repo
+
+An `orphaned` cursor is the common case — someone force-pushed and the commit
+mori was resuming from no longer exists.
+
+```bash
+# Preferred: clear the orphaned cursor, resume from the current tip
+mori automate reset-checkpoint my-app --to-head
+
+# Resume from a specific commit instead
+mori automate reset-checkpoint my-app --to-commit 9f2c1ab
+
+# Last resort: re-ingest the entire history
+mori automate reset-checkpoint my-app --to-root
+mori observe --reingest              # the same thing, from inside the repo
+```
+
+`--to-head` is the default and almost always what you want. `--to-root` re-emits
+the repo's full history, which means **duplicate webhook deliveries** to every
+registered Mori App that matches those events. Reach for it only when you
+actually need the history re-observed.
+
+A `missing` repo is not a cursor problem — restore the working directory at the
+recorded path, or deregister the project.
+
+## Changeset deduplication
+
+Changesets are deduplicated by content hash, so a re-ingest does not produce
+duplicate changeset rows. Events written before the hash became an inline field
+carry none, and are invisible to the index until backfilled:
+
+```bash
+mori backfill content-hashes
+```
+
+The backfill appends a `ContentHashAttached` sidecar per affected event — it
+never rewrites history — and is safe to re-run. See
+[`mori backfill`](/docs/commands/backfill).
+
+## Related
+
+- [`mori doctor`](/docs/commands/doctor) — `--ingest` exit codes
+- [`mori automate`](/docs/commands/automate) — `ingest` and `reset-checkpoint`
+- [`mori observe`](/docs/commands/observe) — observing projects and `observe list`
+- [Automation Daemon](/docs/guides/automation-daemon) — the auto-ingest loop

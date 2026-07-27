@@ -1,0 +1,36 @@
+---
+title: mori backfill
+description: One-shot backfills of read-model tables after schema changes
+icon: DatabaseZap
+---
+
+`mori backfill` runs one-shot repairs of read-model tables that a schema change
+left incomplete. Backfills are safe to re-run.
+
+## `mori backfill content-hashes`
+
+Populate `mori.changeset_content_index` for every historical
+`ChangesetObserved` event.
+
+```bash
+mori backfill content-hashes
+```
+
+Changeset deduplication keys on a content hash. Events written before the hash
+became an inline field carry no hash, so they are invisible to the index and
+cannot participate in dedup. This command scans the `repository` category,
+computes the hash for each such event, and emits a `ContentHashAttached`
+sidecar event for it — history is appended to, never rewritten.
+
+Output reports how many messages were scanned, how many `ChangesetObserved`
+events were seen, and how many sidecars were emitted, then points at the live
+index:
+
+```sql
+SELECT count(*) FROM mori.changeset_content_index;
+```
+
+## Related
+
+- [Ingest Health](/docs/guides/ingest-health) — changeset dedup and ingest recovery
+- [Event Sourcing](/docs/concepts/event-sourcing) — read models and rebuild semantics

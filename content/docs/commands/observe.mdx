@@ -1,0 +1,73 @@
+---
+title: mori observe
+description: Link a project to a repo id and ingest its VCS history
+icon: Eye
+---
+
+`mori observe` makes a project **observed**: it registers the project (the same
+idempotent path as `mori register`), ensures a `mori/repo-id` exists, emits the
+`ProjectRepoLinked` event that records the repo in the projects read model, and
+runs an initial git ingest.
+
+Once a project is observed, the [automation
+daemon](/docs/commands/automate#mori-automate-daemon) auto-ingests its new
+commits every cycle, and events flow to [Mori Apps](/docs/guides/apps) — no
+automation config required.
+
+```bash
+mori observe
+mori observe --path /path/to/repo
+mori observe --skip-ingest
+mori observe --reingest
+```
+
+## Flags
+
+| Flag | Description |
+|------|-------------|
+| `--path`, `-p DIR` | Project directory containing `mori.dhall` (default: current directory) |
+| `--skip-ingest` | Assign the repo id and link only; skip the initial VCS ingest |
+| `--reingest` | Reset the ingest cursor and re-ingest from scratch — an alias for `mori automate reset-checkpoint <project> --to-root` |
+
+## Behavior
+
+- Registration runs first and is idempotent; the project's identity comes back
+  directly rather than from the read model, so the asynchronous registry
+  projection does not have to have caught up.
+- Linking is idempotent on the same repo id. Re-running prints
+  `Already observed`. If `mori/repo-id` disagrees with the link already
+  recorded, the command warns and names both ids rather than silently
+  re-pointing the project.
+- Progress lines go to stderr, so the command composes cleanly in scripts.
+
+## `mori observe list`
+
+List observed projects and their last-seen config and ingest state.
+
+```bash
+mori observe list
+mori observe list --json
+```
+
+Columns: Project, Path, RepoId, Config, Automation, Sel (selector count), Rxn
+(reaction count), ConfigObserved, LastSuccess, and IngestStatus. The last two
+come from the `mori.repository_ingest_status` read model — see [Ingest
+Health](/docs/guides/ingest-health).
+
+## `observe` vs `automate register`
+
+| Command | Links repo id | Initial ingest | Attaches automation config |
+|---------|---------------|----------------|----------------------------|
+| `mori observe` | yes | yes (unless `--skip-ingest`) | no |
+| `mori automate register` | yes | no | yes |
+
+Use `mori observe` when you want a project's events flowing without an
+automation config. Use `mori automate register` when the repo has a
+`mori.automation.dhall`; it skips the initial ingest to stay fast, and the
+daemon picks the history up on its next cycle.
+
+## Related
+
+- [`mori automate`](/docs/commands/automate) — ingest, daemon, and cursor recovery
+- [Ingest Health](/docs/guides/ingest-health) — status read model and stuck-repo recovery
+- [Automation Daemon](/docs/guides/automation-daemon) — the auto-ingest loop
