@@ -83,7 +83,9 @@ Project identity. The `(namespace, name)` pair forms the unique registry key.
 | `details` | `Optional Text` | Migration instructions or additional context |
 
 A present deprecation record must contain at least one non-blank value and is
-valid only when the item's effective lifecycle is `Deprecated`. A package with
+valid only when the item's effective lifecycle is `Deprecated`. `Maintenance` is
+a supported state and takes no deprecation record — a maintained project is
+still the right thing to depend on, so it has no replacement to name. A package with
 no lifecycle override inherits the project lifecycle, but it does **not**
 inherit the project's deprecation record. Alternatives are free-form text, so
 external URLs and package coordinates work; prefer a canonical `mori://`
@@ -125,7 +127,7 @@ dependencies, and configuration.
 | `description` | `Optional Text` | Brief description |
 | `visibility` | `Visibility` | Access scope |
 | `runtime` | `Runtime` | Runtime characteristics |
-| `lifecycle` | `Optional Lifecycle` | Override (`Active`, `Experimental`, `Deprecated`, `Archived`); inherits the project lifecycle when absent |
+| `lifecycle` | `Optional Lifecycle` | Override (`Active`, `Experimental`, `Maintenance`, `Deprecated`, `Archived`); inherits the project lifecycle when absent |
 | `deprecation` | `Optional Deprecation` | Package-specific replacement or migration guidance; never inherited |
 | `runtimeEnvironment` | `Optional RuntimeEnvironment` | Runtime execution environment |
 | `apiSource` | `Optional ApiSource` | API source for Client-type packages |
@@ -284,7 +286,7 @@ knowledge through registry commands and canonical refs.
 | `name` | `Text` | Bundle name, unique within the project |
 | `path` | `Text` | Project-relative directory containing the bundle |
 | `profile` | `Optional Text` | URL or path to the OKF profile the bundle should follow |
-| `okfVersion` | `Text` | OKF format version, such as `"0.1"` |
+| `okfVersion` | `Text` | OKF format version, such as `"0.2"` |
 | `description` | `Optional Text` | Human-readable description |
 
 ```haskell
@@ -292,7 +294,7 @@ knowledge through registry commands and canonical refs.
   , name = "team-knowledge"
   , path = "knowledge/team"
   , profile = Some "https://raw.githubusercontent.com/shinzui/okf-profiles/main/profiles/team.dhall"
-  , okfVersion = "0.1"
+  , okfVersion = "0.2"
   , description = Some "Shared team knowledge bundle"
   }
 ]
@@ -509,7 +511,7 @@ Application | Library | Client | Worker | Tool | Other <text>
 ### Lifecycle
 
 ```
-Active | Experimental | Deprecated | Archived
+Active | Experimental | Maintenance | Deprecated | Archived
 ```
 
 ### Visibility

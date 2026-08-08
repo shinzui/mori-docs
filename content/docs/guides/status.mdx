@@ -5,8 +5,12 @@ icon: Activity
 ---
 
 `mori status` prints a single health report for the mori project in the current
-directory. It is the fastest way to answer whether schema pins are current,
-the project is registered, and automation observation is healthy.
+directory. It answers four questions in one command:
+
+1. Are this project's schema pins current for this CLI?
+2. Is the project registered in the local registry?
+3. Is the project observed, with a linked repo id and a current config row?
+4. Are the reaction execution legs healthy?
 
 ```bash
 mori status
@@ -21,9 +25,34 @@ mori status --json
 | Schema | `mori.dhall`, extension configs, and `mori.automation.dhall` pins |
 | Registry | Whether `(namespace, name)` exists in the read model |
 | Observation | Whether the project has a linked `mori/repo-id` and a current config row |
+| Automation execution | Whether any reaction execution leg is stuck or has an open halt |
 
 Observation states include `observed`, `linked, no automation configured`,
 `linked, no config row yet`, and `not observed`.
+
+## Automation Execution
+
+The automation-execution line reports `ok` when no reaction execution leg is
+stuck or halted. When it is unhealthy it shows the number of affected legs,
+degrades the verdict to `attention`, and adds an issue pointing at
+`mori doctor --reactions`.
+
+Diagnose before repairing:
+
+```bash
+mori doctor --reactions
+```
+
+Fix the reported cause first, then use the recovery command doctor names —
+[`mori reaction recover --dead-letters`](/docs/guides/reaction-history#recover-parked-events)
+for parked events, or
+[`mori reaction recover --clear-halt <leg>`](/docs/guides/reaction-history#clear-a-halted-leg)
+for a halted leg — and re-run the audit to confirm.
+
+Note the scope difference: this line is fleet-wide reaction execution health,
+not something specific to the project you are standing in. It appears in
+`mori status` because an unhealthy executor means *this* project's reactions are
+not running either.
 
 ## Remediation
 
@@ -42,7 +71,10 @@ Use `--json` for scripts:
 ```bash
 mori status --json | jq '.verdict'
 mori status --json | jq '.issues'
+mori status --json | jq '.automationExecution'
 ```
 
-Exit code `0` means healthy, `1` means attention is needed, and `2` means
-`mori.dhall` is missing or unparseable.
+`automationExecution` carries `{"healthy": true|false, "unhealthyLegs": 0}`.
+
+Exit code `0` means healthy, `1` means attention is needed (including unhealthy
+automation execution), and `2` means `mori.dhall` is missing or unparseable.

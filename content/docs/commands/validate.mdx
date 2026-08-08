@@ -18,6 +18,28 @@ mori validate --check-refs
 - Schema compatibility
 - Internal reference integrity
 - `apiSource.project` must appear in project-level `dependencies`
+- Recorded schema semantic hash (advisory, see below)
+
+### Recorded schema hash
+
+When `mori.dhall` pins its schema by URL with a recorded hash, `validate`
+computes the semantic hash of the schema embedded in this binary and warns on
+stderr when the two differ:
+
+```text
+warning: mori.dhall records schema hash
+  sha256:…
+but the schema embedded in this binary has semantic hash
+  sha256:…
+mori ignores this hash (the embedded schema is authoritative), but external
+Dhall tooling will reject the import. If the hash was written by an older
+`mori schema upgrade --latest`, re-run `mori schema upgrade` to repair it.
+```
+
+This is advisory and does not change the exit code. Mori itself resolves schema
+imports from its embedded copy, so a stale recorded hash does not break `mori` —
+but it *will* break `dhall` and anything else that honors the pin, which is why
+it is worth repairing.
 
 ### `--check-deps`
 

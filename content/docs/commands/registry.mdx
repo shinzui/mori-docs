@@ -15,6 +15,7 @@ mori registry list
 mori registry list --json
 mori registry list --type library
 mori registry list --origin ThirdParty
+mori registry list --lifecycle maintenance
 mori registry list --namespace shinzui
 mori registry list --domain Automation
 mori registry list --group my-group
@@ -29,14 +30,23 @@ mori registry list --observed
 | `--json` | JSON output |
 | `--type` | Filter by project type |
 | `--origin` | Filter by origin (`Own`, `ThirdParty`, `Fork`, `Vendored`) |
+| `--lifecycle` | Filter by lifecycle (`active`, `experimental`, `maintenance`, `deprecated`, `archived`; case-insensitive) |
 | `--namespace`, `-n` | Filter by namespace |
 | `--domain` | Filter by domain tag (repeatable; AND semantics, case-insensitive) |
 | `--group` | Filter by group membership (single value; see `mori registry group`) |
 | `--docs-only` | Show only docs-only projects (no packages) |
 | `--observed` | Show only projects with a linked repository (`repo_id` set by `mori observe`) |
+| `--has-templates` | Show only projects shipping at least one seihou template |
 
-The table includes a **Lifecycle** column. JSON output carries `lifecycle` plus
-a `deprecation` object (`alternative` and `details`, `null` when absent) — see
+All filters compose with AND semantics. Unlike the exact-match `--type` and
+`--origin` filters, `--lifecycle` matches case-insensitively, because lifecycle
+is stored capitalized but is natural to type in lowercase.
+
+The table includes a **Lifecycle** column, with `Deprecated` styled pale red and
+`Maintenance` pale yellow so both stand out in a long listing. The same styling
+appears in `mori show`, `mori registry show`, and `mori registry search`. JSON
+output carries `lifecycle` plus a `deprecation` object (`alternative` and
+`details`, `null` when absent) — see
 [Deprecation guidance](/docs/guides/schema-reference#deprecation).
 
 ## `mori registry show`

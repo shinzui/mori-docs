@@ -9,6 +9,82 @@ features, commands, and schema changes.
 
 ---
 
+## 2026-08-07
+
+### `Maintenance` lifecycle stage
+- `Lifecycle` gained a fifth stage between `Experimental` and `Deprecated`: **`Maintenance`** — supported and receiving fixes, but not new features. Agents should read it as "fix bugs, don't propose features"
+- `Maintenance` takes **no** `deprecation` record. A maintained project is still the right thing to depend on, so it has no replacement to name; guidance remains valid only for an effective `Deprecated` lifecycle
+- [`mori registry list --lifecycle`](/docs/commands/registry#mori-registry-list) filters by stage, matched case-insensitively (`active`, `experimental`, `maintenance`, `deprecated`, `archived`) and composing with every other filter
+- `Maintenance` renders in pale yellow alongside the existing pale-red `Deprecated` across `mori show`, `mori registry list`, `mori registry show`, and `mori registry search`
+- Documented in [Getting Started](/docs/getting-started), the [Schema Guide](/docs/schema-guide#lifecycle), [Schema Reference](/docs/guides/schema-reference#lifecycle), and [Project Configuration](/docs/guides/project-config)
+
+### `Decision` reaction action (new)
+- New [`Decision`](/docs/guides/automation#decision) action runs a tool-neutral decision producer, durably checkpoints its structured result, and maps only *declared* outcomes to signals
+- The producer speaks a `mori-decision/1` envelope on stdout (or via `resultFile`), with `status` of `ok`, `skip`, or `error`. `ok` requires exactly one outcome; `skip` derives the reserved outcome `skip`; `error` always fails
+- Spawn failure, timeout, nonzero exit, invalid or oversized JSON (default cap 1 MiB), an unknown protocol, or trailing stdout fails the action **before any route dispatches**
+- Routes are declarative — producer output never supplies signal types or targets. Payloads may interpolate `{{decision.status}}`, `{{decision.outcome}}`, and scalars below `{{decision.data.*}}`; all matching routes render successfully before any is dispatched
+- The canonicalized envelope is checkpointed with a SHA-256 digest before routing, so a retry after the checkpoint converges every routed signal on the same logical identity
+- Deliberately absent from the nested `ScheduledAction` union: use the reaction-level `schedule` field to defer a whole Decision
+- `mori reaction show` prints the recorded outcome, digest, message, envelope, and routed emissions; `mori automate inspect` and `mori automate explain --json` show declared routes
+
+### Signal delivery: structured payloads, predicates, consent, and bounds
+- `SignalAction` gained `payloadJson`, a structured JSON document validated at config load time. The flat `payload` map is unchanged and both forms travel with the delivery
+- `SignalSelector.signalTypes` entries are now **globs** (`"Schema*"`); `sourceProjects` remains an exact qualified-name match
+- New [`payloadPredicates`](/docs/guides/cross-repo-workflows#payload-predicates) narrow a selector by payload content — `Equals`, `Prefix`, and `Exists` over a dotted JSON path, combined with AND. A one-segment path falls back to the flat payload
+- New target-side [`consent`](/docs/guides/cross-repo-workflows#target-consent): `allowSignalsFrom` accepts qualified projects or bare namespaces. Absent means allow-all; a declared empty list denies all. A refusal is a terminal failed delivery with a `consent:` reason, never retried
+- New emitter-side [`signalBounds`](/docs/guides/cross-repo-workflows#delivery-safety-bounds): `maxFanOut` (default 25) and `maxChainDepth` (default 8). Fan-out is all-or-nothing, and ancestor content digests catch repeated content as a cycle before the depth limit is reached
+- New [`mori signal list`](/docs/commands/signal) command, with `--failed`, listing delivery id, signal type, source → target, state, retries, and failure reason
+
+### Workflow chain tracing
+- [`mori workflow trace`](/docs/commands/workflow#mori-workflow-trace) now walks to the chain root and renders every descendant workflow and target step as a tree — it can be started from any workflow in the chain
+- New flags: `--flat` (the original single-workflow detail view), `--json`, `--mermaid` (a `flowchart LR` diagram), and `--max-depth N` (default 32)
+- The HTTP equivalent is `GET /v1/workflows/<WORKFLOW_ID>/chain`. History predating workflow parent correlation is shown honestly as independent roots rather than guessed into a tree
+
+### Reaction execution health and recovery
+- New [`mori doctor --reactions`](/docs/commands/doctor#--reactions) audits reaction execution: stuck legs, open halts, and parked dead letters. Exits `2` when unhealthy, `0` otherwise
+- [`mori reaction recover`](/docs/commands/reaction#mori-reaction-recover) gained two modes beyond the single-reaction one: `--dead-letters [--limit N]` reprocesses parked events through the live admission guard and executor, and `--clear-halt <leg>` closes a halt after its cause is repaired
+- [`mori status`](/docs/commands/status) gained an **Automation execution** section and an `automationExecution` JSON field (`{"healthy", "unhealthyLegs"}`). An unhealthy line degrades the verdict to `attention` and points at `mori doctor --reactions`
+- `mori doctor`'s baseline now prints the host identity and decodes every active automation registration, naming any that no longer decode
+
+### `ProjectSelector` (new)
+- New [`ProjectSelector`](/docs/guides/automation#projectselector) matches the normalized semantic envelope derived from committed Project and Project-artifact events, selecting typed aggregate boundaries, semantic families, artifact kinds, and actions instead of private event constructor names
+- Bootstrap `Imported` facts are distinct from `Added` facts and stay suppressed unless `includeImported = True`
+- Configuration loading, validation, and matching are available now; live Project-stream subscription and durable delivery remain disabled until the shared signal-delivery infrastructure lands
+
+### Event-store operations commands (new)
+- [`mori projections`](/docs/commands/projections) — `rebuild` (offline and destructive; requires `--yes`, supports `--model GROUP` and `--dry-run`) and `seed-checkpoints` (seeds side-effecting subscriptions at the store head so they never replay history)
+- [`mori project`](/docs/commands/project) — `bootstrap-functional-streams` (with `--dry-run`) and `audit-functional-streams`
+- [`mori replay-audit`](/docs/commands/replay-audit) — read-only replay sweep with `--mode full|targeted`, `--event-type`, `--category`, `--max-streams`, `--parallelism`, `--resume-from`, and `--json`. Exits non-zero on any replay failure or seed divergence
+
+### Daemon subscription observability
+- [`mori automate daemon --metrics-port PORT`](/docs/commands/automate#mori-automate-daemon) (or `MORI_METRICS_PORT`) starts Kiroku's own metrics, health, and subscription-status server: `/metrics`, `/metrics/prometheus`, `/health/live`, `/health/ready`, `/subscriptions`
+- Mori does not mirror or translate this surface — use Kiroku's released operator client against the same wire contract. `mori doctor`, `mori status`, and the HTTP API's probes keep their existing scopes
+- **This server listens on all interfaces**, unlike the loopback-first HTTP API. Expose it only on a trusted network or behind an authenticated proxy
+
+### Structural schema migrations
+- `mori schema migrate` now selects targets from the parsed Dhall AST and splices exact source spans. Comments and formatting outside an edited span are preserved; overlapping, out-of-bounds, or non-parsing edit sets are rejected before any file is written
+- Ambiguous targets no longer block safe ones: a legacy per-action `Schedule` wrapper migrates automatically when a reaction has exactly one, a non-negative delay, and no existing `schedule`, while mixed reactions are named for manual review and their safe siblings still migrate
+- Unknown `mori/*.dhall` extension files are refused rather than guessed to be project files
+- New [`mori schema check-compat --against REF|PATH`](/docs/commands/schema#mori-schema-check-compat) classifies changes at the normalized Dhall type level, with a three-way exit: `0` additive, `1` breaking, `2` needs review. `--json` emits the classified changes
+- [`mori validate`](/docs/commands/validate#recorded-schema-hash) warns when a URL-pinned `mori.dhall` records a schema hash that differs from the binary's embedded semantic hash. Advisory only — mori ignores the pin, but external Dhall tooling will not
+
+### OKF profile compilation
+- Profiles are now **compiled before the bundle is read** — a field cannot be both required and recommended, a conditional rule cannot name an undeclared sibling, a reference policy cannot name a prefix no type owns. One advisory per independent mistake; a profile that fails to compile skips that bundle's rules without affecting indexing or other bundles
+- Validation runs in okf-core's **permissive** mode: required rules and all constraints on present values are checked, while an absent `recommended` field stays silent
+- Deviations name values by indexed structural path (`reviews[2].outcome`), zero-based
+- Document references resolve local handles inside the bundle; an external URI is checked only for shape and permitted scheme (case-insensitively) and is **never resolved** — observe-time validation performs no `mori://` lookup, no network call, and no access outside the bundle directory
+- Bundle examples now declare `okfVersion = "0.2"`
+- Documented in the [OKF Bundles guide](/docs/guides/okf#advisory-profile-validation)
+
+### Removed
+- **`mori history`** and the legacy MessageDB path are gone. Kiroku is the only event store; `mori doctor` no longer checks the `message_store` schema, and pages that described the migration boundary now describe verification and rebuild via [`mori replay-audit`](/docs/commands/replay-audit) and [`mori projections`](/docs/commands/projections) instead
+
+### Also
+- New `mori automate migrate-named` imports legacy registrations into the named `Automation` aggregate. Defaults to `--dry-run`; `--apply` additionally requires `--i-stopped-the-daemon`
+- The [automation test repos](/docs/guides/automation-test-repos) fixture gained `decide.sh` and `handan-adapter.sh` for exercising Decision outcome routing end to end
+
+---
+
 ## 2026-07-26 (documentation audit)
 
 ### Added: ingest health and recovery (previously undocumented)
@@ -113,7 +189,7 @@ features, commands, and schema changes.
 
 ### New command references
 - Added [`mori diagram`](/docs/commands/diagram), which renders aggregate lifecycles as Mermaid `stateDiagram-v2` blocks or a Markdown atlas
-- Added [`mori history`](/docs/commands/history), an operator command for transforming and verifying event history during the message-db to kiroku migration
+- Added `mori history`, an operator command for transforming and verifying event history during the message-db to kiroku migration (removed 2026-08-07 with the legacy MessageDB path)
 
 ### CLI behavior notes
 - `mori show --json` now flattens doc reference fields into string-friendly `kind`, `audience`, `location`, and `locationType` fields

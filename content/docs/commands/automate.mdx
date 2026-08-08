@@ -91,6 +91,7 @@ Run multi-repo automation daemon.
 mori automate daemon
 mori automate daemon --ingest-interval 60
 mori automate daemon --queued-concurrency 6
+mori automate daemon --metrics-port 9464
 ```
 
 ### Behavior
@@ -114,6 +115,18 @@ See [Automation Daemon](/docs/guides/automation-daemon) for details.
 | `--queued-concurrency N` | Number of FIFO worker instances for `queued = True` automations. Default: `3` |
 | `--serve` | Also serve the [HTTP API](/docs/commands/serve) from this daemon process |
 | `--api-port PORT` | Port for the embedded HTTP API. Default: `8080`, or `$MORI_API_PORT` |
+| `--metrics-port PORT` | Port for Kiroku's metrics, health, and subscription-status server, or `$MORI_METRICS_PORT`. Off when neither is set |
+
+### Serving Kiroku's operator surface
+
+`--metrics-port` starts Kiroku's own server, which exposes `/metrics`,
+`/metrics/prometheus`, `/health/live`, `/health/ready`, and `/subscriptions`.
+The command-line option takes precedence over `MORI_METRICS_PORT`; with neither
+set the daemon opens no observability socket.
+
+This server listens on **all interfaces**, unlike the loopback-first HTTP API —
+expose it only on a trusted network or behind an authenticated proxy. See
+[Automation Daemon › Subscription Observability](/docs/guides/automation-daemon#subscription-observability).
 
 ### Serving the HTTP API
 
@@ -208,6 +221,29 @@ mori automate migrate
 - Registers each discovered config via the event store
 - Idempotent — safe to run multiple times
 
+## `mori automate migrate-named`
+
+One-time migration: import legacy registrations into the named `Automation`
+aggregate.
+
+```bash
+mori automate migrate-named
+mori automate migrate-named --dry-run
+mori automate migrate-named --apply --i-stopped-the-daemon
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--dry-run` | Report the changes without writing (the default) |
+| `--apply` | Apply the import and carrier rewrites |
+| `--i-stopped-the-daemon` | Required with `--apply`: acknowledge that no automation daemon is running |
+
+`--apply` rewrites carriers that a running daemon would be reading concurrently,
+so `--i-stopped-the-daemon` is an acknowledgement rather than a switch. Run the
+default dry run first and read what it reports.
+
 ## `mori automate inspect`
 
 Inspect automation configuration.
@@ -222,6 +258,8 @@ mori automate inspect --json
 - Automation config status and hash
 - Execution policy (local/CI)
 - Registered event selectors
+- Declared [`Decision`](/docs/guides/automation#decision) routes, when a reaction
+  has any
 
 ## `mori automate explain`
 
@@ -239,6 +277,10 @@ mori automate explain <global-position> --json
 |------|-------------|
 | `--config`, `-c` | Path to automation config |
 | `--json` | JSON output |
+
+`--json` includes the declared
+[`Decision`](/docs/guides/automation#decision) routes on matched reactions, so
+you can confirm which outcome would route where before the producer ever runs.
 
 ## `mori automate generate`
 

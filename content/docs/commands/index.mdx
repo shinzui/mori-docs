@@ -56,10 +56,18 @@ Complete reference for all `mori` CLI commands, organized by domain.
 | [automate](/docs/commands/automate) | VCS event ingestion, reactive automation, and daemon management |
 | [reaction](/docs/commands/reaction) | Inspect reaction execution history |
 | [workflow](/docs/commands/workflow) | Cross-repo workflow observability |
+| [signal](/docs/commands/signal) | Inspect cross-repository signal deliveries |
 | [app](/docs/commands/app) | Manage Mori Apps (webhook receivers for event delivery) |
 | [diagram](/docs/commands/diagram) | Render aggregate lifecycles as Mermaid state diagrams |
-| [history](/docs/commands/history) | Transform and verify event history during store migrations |
 | [backfill](/docs/commands/backfill) | One-shot backfills of read-model tables after schema changes |
+
+## Event Store Operations
+
+| Command | Description |
+|---------|-------------|
+| [projections](/docs/commands/projections) | Rebuild read models and seed subscription checkpoints |
+| [project](/docs/commands/project) | Functional Project model administration |
+| [replay-audit](/docs/commands/replay-audit) | Replay every selected aggregate stream without writing |
 
 ## Extensions
 

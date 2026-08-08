@@ -57,10 +57,18 @@ Automation =
 { events : List EventSelector
 , reactions : List Reaction
 , execution : ExecutionPolicy
+, consent : Optional SignalConsent
+, signalBounds : Optional SignalBounds
 }
 ```
 
 No project metadata is duplicated here.
+
+`consent` and `signalBounds` are the two safety declarations for cross-repository
+signals: `consent` is the *target* side (which sources may signal this project),
+`signalBounds` is the *emitting* side (how wide and how deep a signal may
+propagate). Both are optional and both default to the historical behavior. See
+[Cross-Repo Workflows](/docs/guides/cross-repo-workflows#target-consent).
 
 ## Event Selection
 
@@ -71,8 +79,23 @@ EventSelector =
   < ChangesetObserved : ChangesetObservedSelector
   | ChangesetRewritten : ChangesetRewrittenSelector
   | RefObserved : RefObservedSelector
+  | Signal : SignalSelector
+  | Project : ProjectSelector
   >
 ```
+
+The first three select **repository** facts. The last two select facts that are
+not about a commit at all: `Signal` selects typed events delivered from another
+project, and `Project` selects the normalized semantic envelope derived from
+committed Project and Project-artifact events — typed aggregate boundaries,
+semantic families, artifact kinds, and actions, rather than private event
+constructor names.
+
+Project selection distinguishes bootstrap `Imported` facts from genuine `Added`
+facts and suppresses the former by default, so a one-time backfill does not read
+as a project gaining a hundred packages. See
+[Automation › ProjectSelector](/docs/guides/automation#projectselector) for the
+field-level schema and its current availability.
 
 ### ChangesetObserved Selector
 
@@ -136,8 +159,18 @@ ReactionAction =
   | EmitEvent : EmitEventAction
   | Notify : NotifyAction
   | Schedule : ScheduleAction
+  | Signal : SignalAction
+  | Decision : DecisionAction
   >
 ```
+
+Two of these cross a repository boundary rather than acting locally:
+`Signal` hands a typed event to another project through mori's durable delivery
+domain, and `Decision` runs an external producer, records its structured verdict,
+and maps *declared* outcomes onto signals. See
+[Cross-Repo Workflows](/docs/guides/cross-repo-workflows) and
+[Automation › Decision](/docs/guides/automation#decision) for their exact
+schemas.
 
 ### RunCommand
 
@@ -190,6 +223,12 @@ ScheduleAction =
 ```
 
 Allows deferred execution without embedding queue semantics.
+
+The nested action is a strict subset: it cannot be another `Schedule` (no
+recursive scheduling) and it cannot be a `Decision`, because a deferred child
+runs after its parent reaction may already be terminal and so cannot append the
+checkpoint a `Decision` requires. Deferring a whole reaction — including a
+`Decision` — is what the reaction-level `schedule` field is for.
 
 ## Execution Policy
 

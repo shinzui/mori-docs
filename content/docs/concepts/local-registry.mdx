@@ -46,10 +46,9 @@ mori.* read-model tables
 registry, deps, path, agent, and extension commands
 ```
 
-Legacy MessageDB history can still be transformed and verified with
-[`mori history`](/docs/commands/history), but new registry behavior should be
-understood in terms of the keiro/kiroku event runtime and PostgreSQL read
-models.
+Registry behavior is entirely a matter of the keiro/kiroku event runtime and the
+PostgreSQL read models derived from it. The legacy MessageDB path has been
+retired.
 
 ## Database Setup
 
@@ -69,10 +68,9 @@ Verify the baseline:
 mori doctor
 ```
 
-The current doctor baseline checks PostgreSQL connectivity and legacy
-MessageDB compatibility. That compatibility check remains because migration
-tooling and mixed-runtime deployments can still read old `message_store`
-history.
+The doctor baseline checks PostgreSQL connectivity and decodes every active
+automation registration. Use `mori doctor --ingest` and `mori doctor --reactions`
+for the focused ingest and reaction-execution audits.
 
 ## Populating The Registry
 
@@ -166,7 +164,9 @@ mori deps explain <dependency>
 If the source `mori.dhall` changed, rerun `mori register` or `mori observe` so
 the new events can update the projections.
 
-### You need to inspect legacy history
+### You need to verify a projection against its events
 
-Use [`mori history`](/docs/commands/history). Direct SQL against
-`message_store.messages` is only appropriate for legacy migration debugging.
+Use [`mori replay-audit`](/docs/commands/replay-audit) to prove that streams
+still fold cleanly without writing anything, and
+[`mori projections rebuild`](/docs/commands/projections) to rebuild a read model
+from the event log when it has genuinely drifted.

@@ -44,6 +44,9 @@ mori reaction show <REACTION_ID>
 - For scheduled reactions, the `scheduled_at`, `run_at`, coalesce key, and queue message id
 - For skipped reactions, the idempotency check's exit code and stderr
 - For cancelled reactions, the cancellation reason
+- For [`Decision`](/docs/guides/automation#decision) actions, the recorded
+  outcome, envelope digest, message, canonicalized envelope, and the signal
+  emissions its matching routes produced
 
 ## `mori reaction cancel`
 
@@ -106,6 +109,19 @@ mori reaction scheduled show <REACTION_ID> --json
 
 ## `mori reaction recover`
 
+`recover` has three modes, selected by how you invoke it:
+
+```bash
+mori reaction recover <REACTION_ID> [--retry]
+mori reaction recover --dead-letters [--limit N]
+mori reaction recover --clear-halt <LEG>
+```
+
+Diagnose first with [`mori doctor --reactions`](/docs/commands/doctor#--reactions);
+it names which mode applies.
+
+### Recover one stuck reaction
+
 Unstick a reaction stuck at `status: triggered` because of an older daemon
 build that did not catch executor exceptions (pre-`76c9f6f`). Marks the row
 `failed` with the canonical error `manually recovered via mori reaction
@@ -130,6 +146,50 @@ state (exit code 2, "nothing to recover"). It updates the `checkpoints`
 table directly, so stop the daemon first if you're unsure — `recover` is
 safe against a genuinely stuck (non-advancing) subscription, but racing a
 live consumer can collide. The command is idempotent on non-triggered rows.
+
+### Recover parked events
+
+Reprocess events parked by the immediate reaction executor, after you have
+repaired what made them fail.
+
+```bash
+mori reaction recover --dead-letters
+mori reaction recover --dead-letters --limit 5
+```
+
+| Flag | Description |
+|------|-------------|
+| `--dead-letters` | Reprocess parked events for the reaction executor |
+| `--limit N` | Maximum parked events to process (default: `20`) |
+
+Each parked `ReactionTriggered` is decoded and sent through the same admission
+guard and executor the live daemon uses, so a reaction that already settled is
+skipped without repeating its actions. Successfully handled rows are removed;
+events that still cannot decode or execute stay parked with a diagnostic so
+their evidence is preserved.
+
+Stop the daemon first so a live consumer is not working the same execution leg
+concurrently. The command is safe to repeat.
+
+### Clear a halted leg
+
+Close an executor halt after repairing its cause and reset that leg to healthy.
+
+```bash
+mori reaction recover --clear-halt immediate-executor
+mori reaction recover --clear-halt schedule-timer
+```
+
+| Flag | Description |
+|------|-------------|
+| `--clear-halt LEG` | Clear a recorded executor halt after repairing its cause |
+
+Common leg names are `immediate-executor`, `schedule-timer`, and `queued-fifo`.
+Restart the daemon afterwards so the halting event is redelivered under the
+configured retry policy, then run `mori doctor --reactions` again to verify.
+
+Clearing a halt whose cause is still present simply halts the leg again on the
+next delivery, so repair before clearing.
 
 See [Reaction History](/docs/guides/reaction-history) for the workflow,
 status lifecycle, and the schedule lifecycle states (`scheduled`, `skipped`,

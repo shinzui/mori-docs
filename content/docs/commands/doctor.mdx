@@ -9,19 +9,77 @@ Check system health.
 ```bash
 mori doctor
 mori doctor --ingest
+mori doctor --reactions
 ```
 
-By default, `mori doctor` runs baseline database checks:
+## Baseline checks
 
-- **PostgreSQL connection** — verifies database connectivity via `MORI_PG_CONNECTION_STRING`
-- **Legacy MessageDB compatibility** — verifies the `message_store` schema is present
+With no flags, `mori doctor` prints the CLI version and this machine's host
+identity, then runs the baseline checks:
 
-The compatibility check is still part of the current CLI because migration and
-mixed-runtime deployments can read legacy MessageDB history. The current event
-runtime is the keiro/kiroku stack; see [Event Sourcing](/docs/concepts/event-sourcing)
-and [`mori history`](/docs/commands/history).
+- **PostgreSQL connection** — verifies database connectivity via
+  `MORI_PG_CONNECTION_STRING`
+- **Automation registrations** — decodes every active automation registration
+  and reports the count. A registration whose config no longer decodes is named
+  with its repo, automation name, config path, and decode error
 
-`mori doctor --ingest` skips the baseline checks and audits repository ingest
-health from `mori.repository_ingest_status`. It exits `2` when any repo is stuck
-after repeated failures or no successful ingest in the health window, which makes
-it suitable for cron and CI monitoring.
+Exit code `1` when any baseline check fails, `0` otherwise.
+
+## `--ingest`
+
+```bash
+mori doctor --ingest
+```
+
+Skips the baseline checks and audits repository ingest health from
+`mori.repository_ingest_status`. Healthy fleets print one line:
+
+```text
+ingest: all repos healthy
+```
+
+A stuck repo — three or more consecutive ingest failures, or no successful
+ingest in the last six hours — prints how long it has been stuck and its last
+error class and detail. Exit code `2` when any repo is stuck, `0` otherwise,
+which makes it suitable for cron and CI.
+
+See [Ingest Health](/docs/guides/ingest-health) for the failure classes and the
+recovery path.
+
+## `--reactions`
+
+```bash
+mori doctor --reactions
+```
+
+Skips the baseline checks and audits reaction execution health. It reports three
+independent conditions:
+
+- **Stuck legs** — an execution leg with consecutive failures, printed with how
+  long it has been stuck and its last error class and detail
+- **Open halts** — a leg that halted, printed with its error class, detail, and
+  halt time. A halted leg is not also reported as stuck
+- **Parked dead letters** — the count of events the immediate reaction executor
+  could not process
+
+Healthy fleets print one line:
+
+```text
+reaction execution: all legs healthy
+```
+
+Exit code `2` when any leg is stuck or halted or any dead letters are parked,
+`0` otherwise.
+
+Repair the reported cause first, then recover with
+[`mori reaction recover --dead-letters`](/docs/commands/reaction#recover-parked-events)
+or
+[`mori reaction recover --clear-halt <leg>`](/docs/commands/reaction#clear-a-halted-leg),
+and run `mori doctor --reactions` again to confirm.
+
+## Related
+
+- [`mori status`](/docs/commands/status) — per-project health, including an
+  automation-execution line that points here
+- [Event Sourcing](/docs/concepts/event-sourcing) — the keiro/kiroku runtime the
+  checks read from

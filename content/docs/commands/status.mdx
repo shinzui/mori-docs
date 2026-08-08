@@ -20,17 +20,23 @@ mori status --json
 | Schema | `mori.dhall`, known extension configs, and automation schema pins |
 | Registry | Whether `(namespace, name)` exists in the read model |
 | Observation | Whether the project is linked with `mori/repo-id` and has current observation state |
+| Automation execution | Whether any reaction execution leg is stuck or has an open halt |
 
 Schema files can be `current`, `stale`, `unpinned`, or `missing`. `unpinned`
 means the file uses a local import, which is expected in dogfooding setups and
 is not treated as an error.
+
+The automation-execution line reports `ok` when no leg is stuck or halted. When
+it is unhealthy it shows how many legs are affected, degrades the verdict to
+`attention`, and adds an issue pointing at
+[`mori doctor --reactions`](/docs/commands/doctor#--reactions).
 
 ## Exit Codes
 
 | Code | Meaning |
 |------|---------|
 | `0` | Healthy |
-| `1` | Attention needed: stale pin, not registered, not observed, or automation config not observed |
+| `1` | Attention needed: stale pin, not registered, not observed, automation config not observed, or unhealthy automation execution |
 | `2` | `mori.dhall` is missing or unparseable |
 
 Use `--json` in scripts or CI:
@@ -38,6 +44,9 @@ Use `--json` in scripts or CI:
 ```bash
 mori status --json | jq '.verdict'
 mori status --json | jq '.issues'
+mori status --json | jq '.automationExecution'
 ```
+
+`automationExecution` carries `{"healthy": true|false, "unhealthyLegs": 0}`.
 
 See [Status](/docs/guides/status) for remediation guidance.

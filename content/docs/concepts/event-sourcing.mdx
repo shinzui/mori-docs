@@ -19,10 +19,9 @@ projections. The current runtime is built around the keiro-runtime family:
 - **pgmq** backs delayed work, FIFO queued automations, webhook delivery, and
   dead-letter queues.
 
-Legacy MessageDB support still exists where mori needs compatibility with old
-event history or staged migration. That boundary is explicit: `mori history`
-transforms and verifies legacy MessageDB streams into kiroku, and `mori doctor`
-still checks the legacy `message_store` schema in its baseline health check.
+Kiroku is the only event store. The legacy MessageDB path — its streams, its
+compatibility check in `mori doctor`, and the `mori history` transformation
+command — has been retired.
 
 ## Runtime Shape
 
@@ -151,43 +150,52 @@ definitions, so the queue name, JSON codec, retry policy, and dead-letter
 configuration live with the job definition. Webhook delivery still uses its
 bespoke pgmq adapter.
 
-## Migration Boundary
+## Verifying and Rebuilding Derived State
 
-The MessageDB-to-kiroku migration is an operational concern, not the steady-state
-mental model for new features.
-
-Use [`mori history`](/docs/commands/history) for migration work:
+Because read models are derived, they are also reproducible — which makes both
+verification and repair ordinary operations rather than emergencies.
 
 ```bash
-mori history transform-context project
-mori history verify-context project --axis both
-mori history transform-all
-mori history verify-all
+mori replay-audit                       # read-only: do streams still fold cleanly?
+mori projections rebuild --dry-run      # what would a rebuild touch?
+mori projections rebuild --model project --yes
+mori project audit-functional-streams   # fixed audit over the functional aggregates
 ```
 
-The command can read legacy MessageDB history, write kiroku streams, and verify
-the migrated history by folding both sides. This is why some code and docs still
-refer to MessageDB: they are describing the compatibility path, not the current
-runtime architecture.
+[`mori replay-audit`](/docs/commands/replay-audit) writes nothing; it hydrates
+streams and reports failures and seed divergences, which is what you run after
+touching a codec, an upcaster, or a fold.
+[`mori projections rebuild`](/docs/commands/projections) is the destructive
+counterpart and refuses to run without `--yes`.
+
+Side-effecting subscriptions — the executor, routers, webhook fan-out — must
+never replay from position zero, so a newly introduced one is seeded at the
+current head with `mori projections seed-checkpoints`.
 
 ## Operational Checks
 
 ```bash
 mori doctor
 mori doctor --ingest
+mori doctor --reactions
 ```
 
-`mori doctor` checks the baseline database connection and legacy MessageDB
-compatibility. `mori doctor --ingest` checks `mori.repository_ingest_status` and
-exits `2` when repos appear stuck, making it suitable for monitoring.
+`mori doctor` checks the baseline database connection and decodes every active
+automation registration. `mori doctor --ingest` checks
+`mori.repository_ingest_status`, and `mori doctor --reactions` checks reaction
+execution legs; both exit `2` when unhealthy, making them suitable for
+monitoring.
 
 For day-to-day runtime health, also watch:
 
 - daemon logs from `mori automate daemon`
 - stuck ingest rows through `mori doctor --ingest`
+- stuck or halted execution legs through `mori doctor --reactions`
 - pending scheduled reactions with `mori reaction scheduled list`
 - failed or cancelled reactions with `mori reaction list --status failed`
+- failed signal deliveries with `mori signal list --failed`
 - queued/dead-letter tables when pgmq jobs exhaust retry policy
+- Kiroku subscription lag through `mori automate daemon --metrics-port`
 
 ## Design Invariants
 
@@ -196,5 +204,5 @@ For day-to-day runtime health, also watch:
 3. CLI write paths route through the configured event backend.
 4. Long-running work is supervised by the daemon runtime.
 5. Deferred work is explicit in pgmq-backed queues.
-6. Legacy MessageDB references should be read as migration compatibility unless
-   a command page says the command still checks it directly.
+6. Kiroku is the only event store; MessageDB references belong to retired
+   history.

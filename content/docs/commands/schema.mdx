@@ -84,3 +84,38 @@ extension hash). With `--emit-json`, emits a single-line JSON document with a
 stable key order (`moriSchemaCommit`, `mainSchemaHash`,
 `agentPlansExtensionHash`) intended for machine consumption — mina's
 `just check-schema-pin` drift detector relies on the byte sequence.
+
+## `mori schema check-compat`
+
+Compare the binary's embedded schema against a git ref or a local checkout, and
+classify each change at the normalized **Dhall type** level rather than
+textually.
+
+```bash
+mori schema check-compat --against v1.4.0
+mori schema check-compat --against ../mori-schema
+mori schema check-compat --against v1.4.0 --json
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--against REF\|PATH` | Git ref of mori-schema, or a local directory containing a mori-schema checkout (required) |
+| `--json` | Emit the classified changes as JSON |
+
+An existing directory is always treated as a local checkout; any other value is
+resolved as a git ref. The command runs from any directory — it does not need to
+be inside a project.
+
+### Exit codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | Every change is additive |
+| `1` | At least one breaking change |
+| `2` | At least one change needs human review |
+
+The three-way exit is the point: a schema change that is neither provably
+additive nor provably breaking gets its own code, so CI can gate on `1` while
+still surfacing `2` for a human to look at.

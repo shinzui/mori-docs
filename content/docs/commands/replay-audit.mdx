@@ -1,0 +1,82 @@
+---
+title: mori replay-audit
+description: Replay every selected aggregate stream without writing
+icon: ScanSearch
+---
+
+Rehydrate aggregate streams from the event log and check that they still fold
+cleanly, without writing anything. This is the safety gate for event-schema
+work: run it after changing a codec, an upcaster, or a fold, and before
+promoting the change.
+
+```bash
+mori replay-audit
+mori replay-audit --json
+mori replay-audit --category project
+mori replay-audit --mode targeted --event-type PackageAdded
+```
+
+`mori replay-audit` is read-only. It hydrates streams and compares outcomes; it
+never appends events and never touches read models. For the destructive
+counterpart, see [`mori projections rebuild`](/docs/commands/projections).
+
+## Flags
+
+| Flag | Description |
+|------|-------------|
+| `--mode full\|targeted` | Audit every stream (`full`, the default), or only streams touched by the supplied event types (`targeted`) |
+| `--event-type TYPE` | Stored event type affected by a targeted replay change. Repeatable; required with `--mode targeted` |
+| `--category CATEGORY` | Limit the audit to one runtime category. Repeatable; defaults to every catalogued category |
+| `--max-streams N` | Stop after at most `N` streams per category |
+| `--parallelism N` | Maximum concurrent stream hydrations (default: `4`) |
+| `--resume-from GLOBAL_POSITION` | Resume after a prior audit checkpoint |
+| `--json` | Emit a machine-readable JSON report |
+
+An unknown value passed to `--category` is an error that names the unknown
+categories rather than silently auditing everything.
+
+## Modes
+
+**Full** is the default and the right choice for a release gate: every stream in
+every selected category is hydrated.
+
+**Targeted** narrows the sweep to the streams that carry at least one of the
+named event types. Use it when a change is provably confined to a few event
+types and a full sweep would be too slow:
+
+```bash
+mori replay-audit --mode targeted --event-type PackageAdded --event-type PackageRemoved
+```
+
+`--mode targeted` without any `--event-type` is rejected — an empty affected set
+would silently audit nothing.
+
+## Output
+
+The text report prints one summary line per category, followed by up to twenty
+failure lines for that category:
+
+```text
+replay-audit-failure stream="…" outcome=…
+```
+
+Categories whose snapshot policy is `never` also print a notice, because their
+digest leg stays dormant without a stored seed:
+
+```text
+replay-audit notice category=project snapshot-policy=never digest-leg=dormant-without-stored-seed
+```
+
+`--json` emits one object per category with `category`, `mode`,
+`streamsSelected`, `streamsSkipped`, `failures`, `divergences`, `checkpoint`,
+`results`, and `rejectedStreams`.
+
+## Exit codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | Every selected stream replayed cleanly |
+| non-zero | At least one replay failure or seed divergence was found |
+
+Use the checkpoint from a report with `--resume-from` to continue a large audit
+that was interrupted, rather than starting the sweep over.

@@ -1,0 +1,61 @@
+---
+title: mori signal
+description: Inspect cross-repository signal deliveries
+icon: Radio
+---
+
+Inspect the durable delivery records behind cross-repository signals. Every
+`Signal` reaction action (and every routed `Decision` outcome) produces one
+delivery row per resolved target, and this command is how you read them.
+
+For how signals are declared, matched, and bounded, see
+[Cross-Repo Workflows](/docs/guides/cross-repo-workflows).
+
+## `mori signal list`
+
+```bash
+mori signal list
+mori signal list --failed
+```
+
+| Flag | Description |
+|------|-------------|
+| `--failed` | Show only deliveries in the `failed` state |
+
+Without `--failed`, the command lists deliveries in every state — `pending`,
+`delivered`, `failed`, and `expired` — sorted by request time.
+
+Each row prints on one line:
+
+```text
+DELIVERY_ID  SIGNAL_TYPE  source/project → target/project  STATE  retries=N/MAX
+```
+
+A failed delivery appends its diagnostic:
+
+```text
+…  failed  retries=3/3  last_error=consent: shinzui/source not allowed by shinzui/target
+```
+
+## Delivery states
+
+| State | Meaning |
+|-------|---------|
+| `pending` | Accepted and awaiting a delivery attempt |
+| `delivered` | Handed to the target repository's reaction path |
+| `failed` | Terminally failed; `last_error` names the cause |
+| `expired` | Exceeded its delivery window without succeeding |
+
+Terminal refusals are recorded rather than retried. A target that declines the
+source through [`consent`](/docs/guides/cross-repo-workflows#target-consent)
+fails with a `consent:` reason, and a delivery that breaches
+[`signalBounds`](/docs/guides/cross-repo-workflows#delivery-safety-bounds)
+fails with a fan-out, depth, or cycle reason.
+
+## Related
+
+- [`mori workflow trace`](/docs/commands/workflow) — the causal chain a signal
+  belongs to
+- [`mori reaction show`](/docs/commands/reaction) — the reaction that emitted or
+  received it
+- [`mori doctor --reactions`](/docs/commands/doctor) — execution-leg health

@@ -17,11 +17,6 @@ icon: Rocket
 export MORI_PG_CONNECTION_STRING="host=localhost port=5432 dbname=mori_dev"
 ```
 
-Some migration and compatibility paths still read legacy MessageDB history. The
-current `mori doctor` baseline check therefore verifies both PostgreSQL
-connectivity and the legacy `message_store` schema. See [`mori history`](/docs/commands/history)
-for the MessageDB-to-kiroku migration command surface.
-
 **Verify your setup:**
 
 ```bash
@@ -31,15 +26,20 @@ mori doctor
 Expected output:
 
 ```
-mori v0.1.0
+mori v2.0.0.0
 
-PostgreSQL connection... [OK]
-MessageDB installation... [OK]
+System Health Check
+  Host identity: host_…
+
+  PostgreSQL connection... ✓ OK
+  Automation registrations... ✓ OK (3 active)
 
 All checks passed.
 ```
 
-If either check shows `[FAIL]`, fix the indicated issue before continuing.
+If a check shows `FAIL`, fix the indicated issue before continuing. See
+[`mori doctor`](/docs/commands/doctor) for the focused `--ingest` and
+`--reactions` audits.
 
 ---
 
@@ -158,7 +158,7 @@ in  Schema.Project::{
 |---|---|
 | `type` | `Application`, `Library`, `Client`, `Worker`, `Tool`, `Other` |
 | `language` | `Haskell`, `TypeScript`, `JavaScript`, `Python`, `Go`, `Rust`, `Java`, `Kotlin`, `Swift`, `Ruby`, `Elixir`, `Clojure`, `Scala`, `Dhall`, `Nix`, `SQL`, `Shell`, `Other` |
-| `lifecycle` | `Active`, `Experimental`, `Deprecated`, `Archived` |
+| `lifecycle` | `Active`, `Experimental`, `Maintenance`, `Deprecated`, `Archived` |
 | `visibility` | `Public`, `Internal`, `Private` |
 
 ### Deprecating a project or package
@@ -903,7 +903,7 @@ mori automate explain 15
 
 | Command | Description | Requires DB |
 |---|---|---|
-| `mori doctor` | Check database connectivity and legacy MessageDB compatibility | Yes |
+| `mori doctor` | Check database connectivity and automation registrations | Yes |
 | `mori init [--name NAME]` | Create `mori.dhall` scaffold | No |
 | `mori validate` | Type-check `mori.dhall` | No |
 | `mori show [--json] [--full]` | Display project summary | No |

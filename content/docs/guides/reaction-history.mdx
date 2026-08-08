@@ -19,7 +19,8 @@ guide covers both immediate and scheduled reactions.
 | `mori reaction cancel` | Cancel a pending scheduled reaction |
 | `mori reaction scheduled list` | List pending scheduled reactions |
 | `mori reaction scheduled show` | Show details of one pending scheduled reaction |
-| `mori reaction recover` | Unstick a reaction stuck in `status=triggered` |
+| `mori reaction recover` | Unstick a stuck reaction, reprocess parked events, or clear a halted leg |
+| `mori doctor --reactions` | Audit reaction execution health before recovering |
 
 ## List
 
@@ -67,6 +68,11 @@ For scheduled reactions, `show` also prints `scheduled_at`, `run_at`, the
 coalesce key, and the queue message id. For skipped reactions, it prints
 the idempotency check's exit code and stderr. For cancelled reactions, it
 prints the cancellation reason.
+
+For [`Decision`](/docs/guides/automation#decision) actions, `show` prints the
+recorded outcome, the envelope digest, the message, the canonicalized envelope,
+and the emissions its matching routes dispatched — which is how you confirm that
+only the declared route for the actual outcome fired.
 
 The reaction ID is a TypeID starting with `rxn_` — copy it from the ID
 column of `mori reaction list`.
@@ -138,9 +144,22 @@ removes the row from `mori.pending_scheduled_reactions`.
 
 ## Recover
 
+`recover` has three modes:
+
 ```bash
 mori reaction recover <REACTION_ID> [--retry]
+mori reaction recover --dead-letters [--limit N]
+mori reaction recover --clear-halt <LEG>
 ```
+
+Always diagnose first. `mori doctor --reactions` reports stuck legs, open
+halts, and parked dead letters, and names the recovery mode that applies:
+
+```bash
+mori doctor --reactions
+```
+
+### Recover one stuck reaction
 
 Unsticks a reaction that is stuck in `status=triggered`. Older daemon
 builds (before the executor wrapped its action loop in an exception
@@ -170,12 +189,50 @@ non-triggered rows.
 > subscription (which by definition is not advancing), but stop the
 > daemon first if unsure.
 
-### Example
+#### Example
 
 ```bash
 mori reaction recover rxn_01hy3x...           # Skip the stuck event
 mori reaction recover rxn_01hy3x... --retry   # Skip and re-fire
 ```
+
+### Recover parked events
+
+```bash
+mori reaction recover --dead-letters
+mori reaction recover --dead-letters --limit 5
+```
+
+When the immediate reaction executor cannot process an event, the event is
+parked rather than dropped, so its evidence survives. Use `--dead-letters`
+*after* fixing the cause — a missing binary, a bad path, a broken command.
+
+Mori reads the newest 20 parked events by default, decodes each
+`ReactionTriggered`, and sends it through the same admission guard and executor
+that live delivery uses. A reaction that already settled is skipped safely.
+Successfully handled rows are removed; events that still cannot decode or
+execute remain parked and are reported.
+
+Stop the daemon before recovering dead letters so a live consumer is not working
+the same execution leg concurrently. The command is safe to repeat: the
+admission guard suppresses settled work, and deleted rows no longer appear.
+
+### Clear a halted leg
+
+```bash
+mori reaction recover --clear-halt immediate-executor
+mori reaction recover --clear-halt schedule-timer
+```
+
+A halted leg has stopped consuming entirely, so nothing behind the halting event
+advances. Clear a halt only after repairing its reported cause: the command
+closes the open halt record and resets that leg's execution state to healthy,
+but it does not fix what caused the halt.
+
+Restart the daemon afterwards so Kiroku redelivers the halting event under the
+configured retry policy, then run `mori doctor --reactions` again to verify
+recovery. Common leg names are `immediate-executor`, `schedule-timer`, and
+`queued-fifo`.
 
 ## Status Values
 
@@ -210,5 +267,8 @@ debounce.
 
 - [Automation guide](/docs/guides/automation) — automation config structure, event selectors, and scheduled reactions
 - [`mori reaction`](/docs/commands/reaction) — command reference
+- [`mori doctor --reactions`](/docs/commands/doctor#--reactions) — execution-leg health audit
+- [`mori signal list`](/docs/commands/signal) — delivery records for signals a reaction emitted
+- [`mori status`](/docs/commands/status) — per-project view that flags unhealthy automation execution
 - `mori automate inspect` — config summary and aggregate reaction stats
 - `mori automate explain` — which selectors match a specific event

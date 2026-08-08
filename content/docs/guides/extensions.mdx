@@ -271,6 +271,16 @@ For cookbook files, the bulk pipeline runs both
 dry-run reports `would migrate` for each cookbook file that any of these
 passes needs to touch.
 
+Migration rules select Dhall syntax nodes and splice exact source spans, so
+comments and formatting outside an edited span are preserved, and overlapping
+edits or output that does not parse are rejected before any file is written.
+Unknown `mori/*.dhall` extension files are refused rather than guessed to be
+project files.
+
+Per-extension failures are reported but do not flip the per-project status —
+extension drift is an inconvenience, not a blocker. Re-running is safe:
+structural preconditions make files already in mk form a no-op.
+
 See [Schema Migrations](/docs/guides/schema-migrations) for how the
 per-extension migration pipeline handles additive field changes.
 

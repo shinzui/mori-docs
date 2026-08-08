@@ -18,6 +18,7 @@ mori automate daemon --ingest-interval 0       # disable auto-ingest
 mori automate daemon --refresh-interval 120    # config-refresh cycle
 mori automate daemon --queued-concurrency 6    # FIFO queued automation workers
 mori automate daemon --serve                   # also serve the HTTP API
+mori automate daemon --metrics-port 9464       # also serve Kiroku's operator surface
 ```
 
 ### Flags
@@ -29,10 +30,49 @@ mori automate daemon --serve                   # also serve the HTTP API
 | `--queued-concurrency N` | 3 | Number of FIFO worker instances for `queued = True` automations |
 | `--serve` | off | Also serve the [HTTP API](/docs/commands/serve) from this process |
 | `--api-port PORT` | 8080 / `$MORI_API_PORT` | Port for the embedded HTTP API |
+| `--metrics-port PORT` | off / `$MORI_METRICS_PORT` | Port for Kiroku's metrics, health, and subscription-status server |
 
 Serving the API is opt-in — enabled by `--serve`, an explicit `--api-port`, or
 `MORI_API_PORT`. It runs as one more concurrent leg on the daemon's shared pool
 and store, and shuts down with the rest of the daemon.
+
+## Subscription Observability
+
+Kiroku owns subscription state, lag semantics, metrics, and the operator wire
+contract. Mori does not translate or mirror that surface — it just lets you turn
+Kiroku's own server on:
+
+```bash
+mori automate daemon --metrics-port 9464
+```
+
+`MORI_METRICS_PORT=9464` does the same thing; the command-line option wins when
+both are set. With neither set, the daemon opens no observability socket at all.
+
+Native endpoints:
+
+| Endpoint | Content |
+|----------|---------|
+| `/metrics` | JSON metrics snapshot: subscription lag, database errors, stop reasons, dead-letter counts |
+| `/metrics/prometheus` | Prometheus text exposition |
+| `/health/live` | Kiroku server liveness |
+| `/health/ready` | Kiroku dependency readiness detail |
+| `/subscriptions` | Live subscription phase and cursor rows |
+
+Kiroku's released operator client speaks the same wire contract:
+
+```bash
+kiroku subscriptions status --remote-url http://127.0.0.1:9464
+```
+
+> **Exposure.** A nonzero port uses Kiroku's native server, which listens on
+> **all interfaces**. Expose it only on a trusted network or behind an
+> authenticated proxy. This is a different perimeter from the HTTP API served by
+> `--serve`, which is loopback-first.
+
+`mori doctor`, `mori status`, and the HTTP API's own health probes keep their
+existing scopes and do **not** report Kiroku subscription status — that is what
+this surface is for.
 
 ## How It Works
 
@@ -47,10 +87,8 @@ and store, and shuts down with the rest of the daemon.
    automation configs, the daemon picks up changes automatically —
    fully event-driven with no filesystem polling.
 
-4. Repository-event processors receive observed VCS and config events from the
-   current event runtime. During migration, compatible legacy pollers may still
-   serve contexts that have not been moved, but the steady-state daemon path is
-   the keiro/kiroku worker host. For each event the daemon:
+4. A Kiroku reactor on the repository event category receives all repository
+   events. For each event the daemon:
    - Extracts the RepoId from the event payload
    - Looks up the matching RepoConfig in the registry
    - Runs the automation matcher against that repo's config
@@ -125,7 +163,18 @@ mori automate list
 
 # One-time migration: discover and register all existing configs
 mori automate migrate
+
+# One-time migration: import legacy registrations into the named Automation aggregate
+mori automate migrate-named --dry-run
+mori automate migrate-named --apply --i-stopped-the-daemon
 ```
+
+`migrate-named` imports registrations created before automations became
+first-class named aggregates. It defaults to `--dry-run`, reporting the changes
+it would make and writing nothing. `--apply` additionally requires
+`--i-stopped-the-daemon`, which is exactly what it says: the flag is an
+acknowledgement, not a switch, and the import rewrites carriers that a running
+daemon would be reading concurrently.
 
 `--path <dir>` is authoritative: the config file is read from `<dir>` (so
 `--config` resolves relative to it) and the repo TypeID is derived from

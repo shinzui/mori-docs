@@ -36,13 +36,46 @@ mori workflow status
 
 ## `mori workflow trace`
 
-Trace a specific workflow's execution.
+Trace a workflow's complete causal chain.
 
 ```bash
 mori workflow trace <WORKFLOW_ID>
+mori workflow trace <WORKFLOW_ID> --flat
+mori workflow trace <WORKFLOW_ID> --json
+mori workflow trace <WORKFLOW_ID> --mermaid
+mori workflow trace <WORKFLOW_ID> --max-depth 8
 ```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--flat` | Show only the requested workflow, in the original detail view |
+| `--json` | Emit the nested workflow chain as JSON |
+| `--mermaid` | Emit the chain as a Mermaid `flowchart LR` diagram |
+| `--max-depth N` | Maximum ancestor and descendant traversal depth (default: `32`) |
 
 ### Output
 
-- Workflow metadata (ID, signal, source, targets, status, timing)
+By default `trace` walks to the chain root and renders every descendant workflow
+and target step as a tree, so it can be started from any workflow in the chain.
+
+- Workflow metadata (ID, signal, source project, source reaction, targets,
+  status, timing)
 - All steps with status, reaction ID, duration, errors
+
+With `--flat`, only the requested workflow is shown, in the original detail view.
+
+The HTTP equivalent is `GET /v1/workflows/<WORKFLOW_ID>/chain`, whose JSON field
+names use the API's snake_case convention — see [`mori serve`](/docs/commands/serve).
+
+History recorded before workflow parent correlation was introduced has no
+reconstructible chain edge and is shown honestly as independent roots. Tracing
+covers the Kiroku functional automation path.
+
+## Related
+
+- [`mori signal list`](/docs/commands/signal) — the durable delivery records
+  underneath a workflow
+- [`mori reaction show`](/docs/commands/reaction) — a single step's execution
+  detail

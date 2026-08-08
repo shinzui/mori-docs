@@ -12,19 +12,44 @@ migrate` command detects what changed and can apply updates automatically.
 
 ## How It Works
 
-Migrations operate on the **raw text** of your `mori.dhall` before Dhall
-parsing. This is necessary because Dhall parsing is strict (all-or-nothing) — a
-file missing a required field won't parse at all, so the migration must fix it
-first.
+Migrations are **structural**. A rule selects its targets from the parsed Dhall
+AST and identifies each replacement through a parser-owned **source span** — a
+half-open byte range plus the text to put there. The engine checks that every
+edit is in bounds and non-overlapping, applies them to the original source in
+descending offset order, and re-parses the complete result before returning it.
+
+This is what makes an edit provable rather than plausible. Substring searches and
+brace counting can produce a wrong-but-still-parseable change when a manifest
+contains a single-line record, a brace inside a string or comment, or a
+field-like word in unrelated prose; selecting the syntax node cannot.
+
+Because only the spans it edits are rewritten, **every byte outside an edited
+span is preserved** — comments, blank lines, and your formatting all survive.
+Full-file pretty printing is deliberately not a migration output mechanism:
+Dhall's AST keeps comments only in selected trivia fields, so reprinting a whole
+expression would silently drop them.
 
 Each migration is **content-based**: it checks whether the expected fields are
 already present in your file. There is no version number to track. This makes
-migrations idempotent — running `migrate` twice is always safe.
+migrations idempotent — running `migrate` twice is always safe, and structural
+preconditions make an already-migrated file a no-op rather than a second edit.
 
-Each step is **parse-guarded**: after applying a change, the engine re-parses the
-result as Dhall. If the output doesn't parse, the step is automatically reverted
-and reported as `ApplyFailed`, so later migrations still run against un-corrupted
-text.
+A rule is **all-or-nothing**. A fatal parse, span, overlap, or re-parse error
+applies none of that rule, so a failed step can never leave a half-edited file
+behind; the failure is reported and later migrations still run against the
+un-corrupted source.
+
+### Ambiguous targets do not block safe ones
+
+Some structural migrations have a mixed safety boundary. Lifting a legacy
+per-action `Schedule` wrapper into the reaction-level `schedule` field is
+unambiguous when a reaction has exactly one such action, and needs human
+judgement when it has several or mixes action kinds.
+
+Rather than refusing the whole file, the migrator names the ambiguous targets —
+by reaction name — for manual review, and migrates the safe siblings in the same
+file. See
+[Automation › Migrating a legacy `Schedule` wrapper](/docs/guides/automation#migrating-a-legacy-schedule-wrapper).
 
 ---
 
@@ -229,24 +254,35 @@ find ~/projects -name "mori.dhall" -exec mori schema migrate --apply --file {} \
 
 ### Migration reports "ApplyFailed"
 
-Two common causes:
+Common causes:
 
-1. **Anchor field not found.** The migration could not locate the anchor field
-   it uses to determine insertion position. This happens if your `mori.dhall`
-   has unusual formatting or is missing the expected surrounding fields.
-2. **Step produced unparseable Dhall.** The engine's parse guard detected that a
-   step's output doesn't parse. The step was automatically reverted and later
-   migrations still ran against the un-corrupted text. The error message
-   includes the Dhall parse error to help diagnose the issue.
+1. **Target node not found.** The rule could not select the syntax node it
+   anchors to — usually because the surrounding record is not shaped the way the
+   rule expects, or the file is missing the fields it keys off.
+2. **Overlapping or out-of-bounds edits.** The rule produced an edit set the
+   engine refused to apply. None of that rule was applied.
+3. **Result did not re-parse.** The engine re-parses the complete edited source
+   before returning it. If that fails, the whole rule is discarded and later
+   migrations still run against the un-corrupted source. The error message
+   includes the Dhall parse error.
 
 **Fix:** add the field manually following the guidance in the error message, then
 run `mori validate`.
 
 ### File already has the field but in a different position
 
-The migration detects fields by name, not by position. If `origin` already
-exists anywhere in the file (with the pattern `, origin =` or `{ origin =`),
-the migration reports it as already applied regardless of where it appears.
+The migration selects fields structurally, not by position. If `origin` already
+exists in the target record, the migration reports it as already applied
+regardless of where in the record it appears — and, because the check is
+structural, a field-like word inside a comment or string will not be mistaken
+for it.
+
+### An extension file was refused
+
+Unknown `mori/*.dhall` extension files are refused rather than guessed to be
+project files. Classification is explicit: checklist, upstream-issues, cookbook,
+tech-radar, and the other known extension shapes are recognized by name, and
+anything else is left alone rather than migrated on a hunch.
 
 ### Migration applied but `mori validate` fails
 

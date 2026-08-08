@@ -51,13 +51,21 @@ Publishes the signal graph. Declares a package `openapi-schema` in its
 emits an `OpenApiSchemaChanged` signal with `targets = [ "*dependents*" ]`
 so the dispatcher expands dynamically.
 
+The same selector also runs a [`Decision`](/docs/guides/automation#decision)
+fixture. Its proceed route emits `ReleaseClassificationReady` to
+`mori-test-target`; its hold route names an intentionally **unregistered**
+target, which makes it easy to prove that only the matching route exists.
+
 | File | Purpose |
 |---|---|
 | `flake.nix` | devShell with `just`, `coreutils` |
 | `mori.dhall` | identity + `openapi-schema` package |
 | `mori.automation.dhall` | `ChangesetSelector` → `SignalAction` |
 | `openapi.json` | tiny stub OpenAPI doc (touched to trigger ingest) |
+| `decide.sh` | generic `mori-decision/1` proceed/hold/fail producer |
+| `handan-adapter.sh` | Handan-shaped exit-zero proceed/hold adapter fixture |
 | `justfile` | `default` help task |
+| `README.md` | fixture behavior and Decision notes |
 | `.mori-test-fixture` | bootstrap marker (do not delete) |
 
 ### `mori-test-target`
@@ -118,10 +126,38 @@ Both checks happen before any side effects, so the guard is safe to trust.
 | Register-implies-observe | `mori-test-target` (run `mori automate register --path .` fresh, no prior `observe`; confirm `ProjectRepoLinked` fires and `*dependents*` expansion resolves) |
 | Nix devshell wrapping | `mori-test-target` (register, trigger the signal, confirm `just rebuild` runs through `nix develop --command`) |
 | Executor fault tolerance | `mori-test-target-broken` (register, trigger the signal, confirm the reaction is recorded as failed with stderr captured and the subscription advances) |
+| Decision outcome routing | `mori-test-source` (`decide.sh`; see below) |
 
 The bootstrap script never calls `mori observe`, `mori automate register`,
 or `mori automate ingest git` itself — different scenarios need different
 starting registration states, so you stay in control of the order.
+
+## Decision routing fixture
+
+The source fixture defaults to `args = [ "proceed" ]` for `./decide.sh`.
+Register it, touch `openapi.json`, ingest the commit, and inspect the resulting
+reaction:
+
+```bash
+mori reaction show REACTION_ID
+```
+
+You should see the proceed checkpoint and exactly one
+`ReleaseClassificationReady` emission — and **no** hold emission, which is the
+part worth confirming.
+
+Change the argument to exercise the other paths:
+
+| Argument | Exercises |
+|---|---|
+| `proceed` | Successful outcome with a matching route |
+| `hold` | Successful hold outcome |
+| `fail` | Nonzero operational failure — no checkpoint, no emission |
+
+`./handan-adapter.sh proceed` and `./handan-adapter.sh hold` both exit zero and
+emit valid `mori-decision/1` envelopes. Point the Decision command at that
+script to exercise the `mori://shinzui/handan` adapter-shaped fixture without a
+Handan checkout or gated-exit behavior.
 
 ## Cleaning up
 

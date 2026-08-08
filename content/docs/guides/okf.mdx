@@ -32,7 +32,7 @@ okfBundles =
     , name = "team-knowledge"
     , path = "knowledge/team"
     , profile = Some "https://raw.githubusercontent.com/shinzui/okf-profiles/main/profiles/team.dhall"
-    , okfVersion = "0.1"
+    , okfVersion = "0.2"
     , description = Some "Shared team knowledge bundle"
     }
   ]
@@ -43,7 +43,7 @@ okfBundles =
 | `name` | `Text` | Bundle name, unique within the project |
 | `path` | `Text` | Project-relative directory of the bundle |
 | `profile` | `Optional Text` | Reference (URL or path) to an okf-profiles Dhall profile the bundle should follow |
-| `okfVersion` | `Text` | OKF format version (e.g. `"0.1"`) |
+| `okfVersion` | `Text` | OKF format version (e.g. `"0.2"`) |
 | `description` | `Optional Text` | Human-readable summary |
 
 `path` is resolved relative to the project root, so a bundle's absolute
@@ -126,8 +126,9 @@ ambiguity error naming both concept paths rather than silently picking one.
 ## Advisory profile validation
 
 When a bundle declares a `profile`, `mori observe` / `mori register` loads that
-profile with okf-core, walks the bundle, runs okf-core's profile check, and
-prints any deviation as a one-line advisory to standard error:
+profile with okf-core, **compiles** it, walks the bundle, runs okf-core's
+profile check, and prints any deviation as a one-line advisory to standard
+error:
 
 ```text
 okf: <bundleName>: <deviation>
@@ -135,10 +136,10 @@ okf: <bundleName>: <deviation>
 
 This validation is **advisory only** — it matches OKF's permissive model and
 mori's existing warning channel. It **never fails registration**: a profile
-deviation, an unparsable bundle, or a missing/unreachable profile (e.g. a
-remote okf-profiles URL that does not resolve) all degrade to advisory lines
-and leave the exit code unchanged. A bundle with no declared `profile` is
-skipped silently.
+deviation, an unparsable bundle, a missing/unreachable profile (e.g. a
+remote okf-profiles URL that does not resolve), or a profile that contradicts
+itself all degrade to advisory lines and leave the exit code unchanged. A bundle
+with no declared `profile` is skipped silently.
 
 Indexing problems report on their own stderr line, printed *before* the profile
 advisories, because a bundle can index fine and still deviate from its profile
@@ -152,8 +153,87 @@ Both channels are diagnostics only; neither changes the exit code. A bundle
 that cannot be walked contributes no indexed rows while the other bundles still
 index.
 
-If you want enforcement, run a strict OKF profile check as its own CI step
-before `mori observe`, and use [`mori improvement-requests
+### The profile is compiled before the bundle is read
+
+Compiling a profile means checking the descriptor against *itself*: a field
+cannot be both required and recommended, a conditional rule cannot name a
+sibling the profile never declares, a reference policy cannot point at a
+document-ID prefix no concept type owns. Those are mistakes in the profile
+rather than in your bundle, so mori reports them **before it reads a single
+file**:
+
+```text
+okf: adrs: invalid profile definition docs/adr/profile.dhall — skipping profile checks (type Architecture Decision Record frontmatter: local reference prefix at references is not declared by any type: IR)
+```
+
+You get one line per independent mistake, so fixing them is not a game of
+whack-a-mole. When a profile fails to compile, that bundle's profile rules are
+skipped for the run — indexing and every other bundle are unaffected.
+
+### Permissive mode: required rules run, recommendations stay quiet
+
+mori validates in okf-core's **permissive** mode:
+
+- A missing `required` field is reported.
+- Every constraint on a value that *is* present is checked — vocabulary,
+  scalar-versus-list shape, named format, reference policy.
+- A missing `recommended` field is **silent**. Authoring recommendations are for
+  the person writing the document, not for the machine observing the repository.
+
+### Field paths point at the exact value
+
+A deviation inside a list, or inside a record nested in a list, names the value
+structurally rather than in prose:
+
+```text
+okf: reviews: decisions/adopt-postgres: value at reviews[2].outcome must be one of [accepted, rejected], found "maybe"
+okf: reviews: decisions/adopt-postgres: missing required frontmatter field reviews[0].reviewer
+```
+
+`reviews[2].outcome` is the `outcome` key of the third element of the `reviews`
+list. Indexes are zero-based.
+
+### Document references
+
+A profile field can declare a **reference policy**: each value is either a local
+document handle carrying one declared prefix, or an absolute URI whose scheme
+the policy explicitly permits.
+
+Local handles resolve **inside the same bundle**, so a handle with the right
+prefix and no owner here is reported as dangling:
+
+```text
+okf: adrs: decisions/source: references[1] references ADR-99, which does not exist in this bundle
+okf: adrs: decisions/source: references[2] references IR-3, which must use prefix ADR
+okf: adrs: decisions/source: self reference at references[6] is not allowed: ADR-1
+```
+
+External targets are the opposite: checked for **shape and permission**, never
+resolved. A policy permitting `mori` accepts
+`mori://shinzui/mina/okf/adrs/concepts/ADR-4` — scheme comparison is
+case-insensitive, so `MORI://…` passes too — and names what it rejects:
+
+```text
+okf: adrs: decisions/source: external reference at references[4] uses scheme 'https', allowed schemes: [mori]
+```
+
+**Observe-time validation performs no `mori://` lookup** — no network call, no
+registry query, no filesystem access outside the bundle directory. Keeping the
+two layers separate is deliberate: okf validates the local bundle and can run
+offline in any checkout, while mori's registry is the layer that *can* resolve a
+`mori://` target ([`mori path`](/docs/commands/path),
+[`mori validate --check-refs`](/docs/commands/validate)). Passing profile
+validation means a reference is well-formed and permitted, not that it resolves.
+
+A handle owned by two concepts in one bundle still raises the duplicate-handle
+advisory, but it does exist, so a reference to it is not *also* reported as
+dangling.
+
+### If you want enforcement
+
+Run the `okf` CLI's own strict profile check (`--profile-enforce`) as its own CI
+step before `mori observe` — that is the failing gate, and mori's advisories are
+the running commentary. Use [`mori improvement-requests
 validate`](/docs/commands/improvement-requests) for the semantic checks
 specific to improvement requests.
 

@@ -1,0 +1,121 @@
+---
+title: mori projections
+description: Rebuild read models and seed subscription checkpoints
+icon: RefreshCw
+---
+
+Operator commands for the read-model layer. Read models are derived state —
+every row is reproducible from the event log — so rebuilding one is a recovery
+action, not a data-loss event. It is still an offline action: stop the daemon
+first.
+
+For what read models are and where they come from, see
+[Event Sourcing](/docs/concepts/event-sourcing).
+
+## `mori projections rebuild`
+
+Rebuild catalogued read models from the Kiroku event log.
+
+```bash
+mori projections rebuild --dry-run
+mori projections rebuild --model project --dry-run
+mori projections rebuild --model project --yes
+```
+
+| Flag | Description |
+|------|-------------|
+| `--model GROUP` | Limit the rebuild to one aggregate group. Repeatable; defaults to every catalogued group |
+| `--dry-run` | Print the destructive plan without writing |
+| `--yes` | Confirm the daemon is stopped and execute the rebuild |
+
+Without `--dry-run` or `--yes`, the command refuses to run:
+
+```text
+Error: rebuild is offline and destructive; stop the daemon and re-run with --yes
+```
+
+The catalogued groups are `app`, `group`, `automation`, `project`,
+`project-artifact`, `reaction`, `repository`, and `workflow`. An unknown
+`--model` value is rejected by name before anything is planned.
+
+### Reading the plan
+
+`--dry-run` prints the groups and stream categories in scope, then each target
+read model tagged with how it will be rebuilt, then the exclusions and why they
+were excluded:
+
+```text
+groups: project
+categories: projectRoot
+read-model targets:
+  [truncate] project-project_functional_status -> mori.project_functional_status (modules-projects-inline)
+  [truncate] project-projects -> mori.projects (mori-project-functional-registry-live)
+excluded:
+  … — …
+```
+
+Multi-table projections appear once per physical table by design, so the
+destructive fence can never hide a table behind an aggregate-level nickname.
+
+`[truncate]` models are emptied and replayed from position zero.
+`[reconcile]` models are reconciled in place, because truncating them would
+discard state the event log cannot reproduce on its own.
+
+### Reading the report
+
+Each rebuilt group reports the models touched, the number of events applied, and
+the final head position per category:
+
+```text
+rebuilt project models=2 applies=18234 heads=projectRoot:18234
+```
+
+## `mori projections seed-checkpoints`
+
+Seed missing checkpoints for side-effecting subscriptions to the store head.
+
+```bash
+mori projections seed-checkpoints --dry-run
+mori projections seed-checkpoints
+mori projections seed-checkpoints --name mori-reaction-executor-store
+```
+
+| Flag | Description |
+|------|-------------|
+| `--name SUBSCRIPTION` | Limit seeding to one catalogued subscription. Repeatable; defaults to every side-effecting subscription |
+| `--dry-run` | Report missing checkpoints without inserting them |
+
+Side-effecting subscriptions must never replay history from position zero: doing
+so would re-run every command, notification, and webhook delivery the fleet has
+ever processed. Seeding writes a checkpoint at the current store head so a newly
+introduced subscription starts from *now* instead of from the beginning.
+
+The catalogued side-effecting subscriptions are:
+
+```text
+mori-automation-router
+mori-automation-config-registry
+mori-automation-debounce-router
+mori-reaction-executor-store
+mori-app-webhook-fanout-store
+```
+
+Each one reports what happened:
+
+```text
+seeded mori-reaction-executor-store -> 18234
+exists mori-automation-router -> 18110
+would-seed mori-app-webhook-fanout-store -> 18234
+```
+
+`would-seed` only appears under `--dry-run`. An unknown `--name` value is
+rejected by name.
+
+## Related
+
+- [`mori replay-audit`](/docs/commands/replay-audit) — read-only verification
+  that streams still fold cleanly
+- [`mori backfill`](/docs/commands/backfill) — one-shot backfills of specific
+  read-model columns
+- [`mori project`](/docs/commands/project) — functional Project model
+  administration

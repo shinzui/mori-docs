@@ -1,0 +1,87 @@
+---
+title: mori project
+description: Functional Project model administration
+icon: Boxes
+---
+
+Operator commands for the functional Project aggregate — the event-sourced model
+behind `mori.projects` and every project artifact table. These are one-time and
+audit operations, not day-to-day project commands. For everyday project work use
+[`mori register`](/docs/commands/register), [`mori show`](/docs/commands/show),
+and [`mori registry`](/docs/commands/registry).
+
+## `mori project bootstrap-functional-streams`
+
+Seed and verify functional Project and artifact streams from pre-activation
+Kiroku projections.
+
+```bash
+mori project bootstrap-functional-streams --dry-run
+mori project bootstrap-functional-streams
+```
+
+| Flag | Description |
+|------|-------------|
+| `--dry-run` | Validate source rows, existing streams, counts, and hashes without appending events or evidence |
+
+The bootstrap is a one-time seeding step for a store whose Project history
+predates the functional model. It reads the pre-activation projections, checks
+them against whatever streams already exist, and appends only what is missing.
+Anything that does not reconcile stops the run rather than writing a partial
+result:
+
+```text
+Error: functional Project bootstrap refused to continue: …
+```
+
+A successful run prints the counts it reconciled and the evidence it recorded:
+
+```text
+Functional Project bootstrap passed.
+Bootstrap version: …
+Source position: 18234
+Source manifest: sha256:…
+Projects: 42
+Packages: 118
+OKF bundles: 3
+OKF concepts: 61
+OKF edges: 12
+Missing streams: 0
+Matching streams: 42
+Streams appended: 0
+Evidence already recorded: yes
+Status: bootstrap evidence only; ordinary writes use functional reconciliation.
+```
+
+`--dry-run` performs every check and prints the same summary under
+`Functional Project bootstrap dry run passed.`, but appends nothing. Run it
+first.
+
+Ordinary registration does not go through this command — after bootstrap,
+`mori register` and `mori observe` write through functional reconciliation.
+
+## `mori project audit-functional-streams`
+
+Full-replay every active functional App, Group, Reaction, Project, and artifact
+stream.
+
+```bash
+mori project audit-functional-streams
+```
+
+The audit takes no flags. It rehydrates each active stream, prints a report, and
+exits non-zero when the audit does not pass — which makes it usable as a gate in
+CI or a release checklist.
+
+Where [`mori replay-audit`](/docs/commands/replay-audit) is the general,
+tunable sweep across catalogued categories, `audit-functional-streams` is the
+fixed audit over the functional aggregates specifically.
+
+## Related
+
+- [`mori projections`](/docs/commands/projections) — rebuild read models and
+  seed subscription checkpoints
+- [`mori replay-audit`](/docs/commands/replay-audit) — read-only replay sweep
+  with category, event-type, and budget controls
+- [Event Sourcing](/docs/concepts/event-sourcing) — how streams and read models
+  relate

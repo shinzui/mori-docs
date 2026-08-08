@@ -140,11 +140,13 @@ simple — one type describes what something _is_ at any level.
 |-------|---------|
 | `Active` | Under active development and maintenance |
 | `Experimental` | Not yet stable, may change significantly |
+| `Maintenance` | Supported and receiving fixes, but not new features |
 | `Deprecated` | Still functional but no longer recommended |
 | `Archived` | Frozen, read-only, kept for reference |
 
 Agents and tooling can use lifecycle to adjust behavior — for example, an agent
-might warn before modifying a deprecated project.
+might warn before modifying a deprecated project, and should read `Maintenance`
+as the signal to fix bugs but not propose new features.
 
 ### Deprecation guidance
 
@@ -160,7 +162,10 @@ at least one non-blank value:
   }
 ```
 
-Guidance is valid only for an effective `Deprecated` lifecycle. Package
+Guidance is valid only for an effective `Deprecated` lifecycle. In particular
+`Maintenance` is a supported state and takes no `deprecation` record: a
+maintained project is still the right thing to depend on, so it has no
+replacement to point at. Package
 lifecycle inherits from the project when its override is absent; package
 deprecation guidance does **not** inherit and must be declared on the package
 when it differs from the project. `alternative` is free-form text, so external
@@ -561,7 +566,7 @@ resolution.
     , name = "team-knowledge"
     , path = "knowledge/team"
     , profile = Some "https://raw.githubusercontent.com/shinzui/okf-profiles/main/profiles/team.dhall"
-    , okfVersion = "0.1"
+    , okfVersion = "0.2"
     , description = Some "Shared team knowledge bundle"
     }
   ]

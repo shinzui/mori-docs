@@ -178,6 +178,52 @@ Matches `RefObserved` events (branch/tag pointer changes).
 | `refPatterns` | `List Text` | Ref name patterns (e.g., `"main"`, `"release/*"`). Empty = match all. |
 | `kinds` | `List Text` | `"branch"`, `"tag"`, or both. Empty = match all. |
 
+### SignalSelector
+
+Matches cross-repository signals delivered from another project. See
+[Cross-Repo Workflows](/docs/guides/cross-repo-workflows#signal-selectors) for
+signal type globs, payload predicates, and target consent.
+
+### ProjectSelector
+
+Matches the normalized semantic envelope derived from committed Project root and
+Project artifact events. It selects typed aggregate boundaries, semantic
+families, artifact kinds, and actions, so a selector does not have to depend on
+private event constructor names.
+
+| Field | Type | Behavior |
+|-------|------|----------|
+| `name` | `Text` | Unique selector name |
+| `aggregates` | `List ProjectSignalAggregate` | `ProjectRoot` or `ProjectArtifact`. Empty = match all. |
+| `families` | `List ProjectSignalFamily` | Stable family such as `Package`, `OkfConcept`, or `DddContext`. Empty = match all. |
+| `artifactKinds` | `List ProjectArtifactKind` | Typed artifact kind. Empty = match all. |
+| `actions` | `List ProjectSignalAction` | `Imported`, `Added`, `Updated`, or `Removed`. Empty = match all ordinary actions. |
+| `eventTypes` | `List Text` | Exact private event type names. Empty = match all. |
+| `projectIds` | `List Text` | Canonical `proj_` KindID v7 values. Empty = match all. |
+| `references` | `List Text` | Canonical `mori://` project references. Empty = match all. |
+| `includeImported` | `Bool` | Explicitly include bootstrap `Imported` facts. Default `False`. |
+
+```dhall
+Schema.EventSelector.ProjectSelector Schema.ProjectSelector::{
+  name = "package-removals"
+, aggregates = [ Schema.ProjectSignalAggregate.ProjectArtifact ]
+, families = [ Schema.ProjectSignalFamily.Package ]
+, artifactKinds = [ Schema.ProjectArtifactKind.PackageArtifact ]
+, actions = [ Schema.ProjectSignalAction.Removed ]
+, references = [ "mori://shinzui/mori" ]
+}
+```
+
+Empty lists are wildcards, as everywhere else. `Imported` bootstrap facts are
+distinct from `Added` facts and never alias them: they stay suppressed unless you
+set `includeImported = True`, so a one-time backfill does not look like a
+project genuinely gaining a hundred packages.
+
+> **Availability.** ProjectSelector configuration loading, validation, and
+> matching are available now. Live Project-stream subscription and durable
+> delivery remain disabled until the shared signal-delivery infrastructure is
+> implemented, so a ProjectSelector will validate but not yet fire.
+
 ### Glob patterns
 
 - `*` matches any characters within a single path segment (stops at `/`)
@@ -316,6 +362,131 @@ Schema.ReactionAction.Notify Schema.NotifyAction::{
 }
 ```
 
+### Signal
+
+Emit a cross-repository workflow signal through mori's durable delivery domain.
+
+```dhall
+Schema.ReactionAction.Signal Schema.SignalAction::{
+  signalType = "SchemaChanged"
+, targets = [ "shinzui/rei", "shinzui/mori" ]
+, payload = [ { mapKey = "version", mapValue = "v2" } ]
+}
+```
+
+See [Cross-Repo Workflows](/docs/guides/cross-repo-workflows) for dynamic
+targets, the structured `payloadJson` payload, target consent, and fan-out and
+chain-depth bounds.
+
+### Decision
+
+Run a tool-neutral decision producer, durably checkpoint its structured result,
+and map only *declared* outcomes to signals. Use it when the branch a workflow
+should take depends on a judgement some external tool makes — a release
+classifier, a risk check, a policy engine — and you want that judgement recorded
+rather than inferred from an exit code.
+
+```dhall
+Schema.ReactionAction.Decision Schema.DecisionAction::{
+  command = "./decide.sh"
+, timeout = Some +30
+, maxResultBytes = Some +1048576
+, routes =
+    [ Schema.DecisionRoute::{
+        outcome = "proceed"
+      , signalType = "ReleaseReady"
+      , targets = [ "shinzui/release" ]
+      , payload =
+          [ { mapKey = "category"
+            , mapValue = "{{decision.data.category}}"
+            }
+          ]
+      }
+    , Schema.DecisionRoute::{
+        outcome = "hold"
+      , signalType = "ReleaseHeld"
+      , targets = [ "shinzui/release" ]
+      }
+    ]
+}
+```
+
+| Field | Type | Behavior |
+|-------|------|----------|
+| `command` | `Text` | Decision producer program or script (required) |
+| `args` | `List Text` | Command-line arguments |
+| `workingDir` | `Optional Text` | Working directory (`None` = project root) |
+| `timeout` | `Optional Natural` | Timeout in seconds |
+| `env` | `Map Text Text` | Extra environment variables |
+| `resultFile` | `Optional Text` | Read the envelope from this path (relative to `workingDir`) instead of stdout |
+| `maxResultBytes` | `Optional Natural` | Maximum result size (`None` = 1 MiB) |
+| `routes` | `List DecisionRoute` | Declared outcome-to-signal routes |
+
+Execution has the same `nix develop`, working directory, environment, timeout,
+process-group termination, and nonzero-exit behavior as
+[`RunCommand`](#runcommand). By default the producer writes exactly one bounded
+JSON value to stdout; set `resultFile` to read a file after a successful process
+exit instead.
+
+#### The `mori-decision/1` envelope
+
+```json
+{
+  "protocol": "mori-decision/1",
+  "status": "ok",
+  "outcome": "proceed",
+  "data": { "category": "Breaking", "confidence": 0.95 },
+  "message": "release may proceed",
+  "trace": "trace-123"
+}
+```
+
+`protocol` and `status` are required. `status` is `ok`, `skip`, or `error`:
+
+- `ok` requires exactly one string `outcome`.
+- `skip` forbids an outcome and derives the reserved outcome `skip`, so it routes
+  only when you declare a `skip` route.
+- `error` forbids an outcome and always fails the action.
+
+`data`, when present, must be an object. `message` and `trace` are optional
+strings. Spawn failure, timeout, nonzero exit, invalid or oversized JSON, an
+unsupported protocol, trailing non-whitespace on stdout, and `status = "error"`
+all fail the action **before any route dispatches** — a broken producer never
+emits half its signals.
+
+#### Routes
+
+Routes are declarative: producer output supplies the outcome and data, never the
+signal type or the targets. Every route matching the outcome runs, in
+declaration order.
+
+Payload values may interpolate `{{decision.status}}`, `{{decision.outcome}}`, or
+a scalar below `{{decision.data.<path>}}`. A missing, null, object, or array
+value fails validation before the first matching route is emitted, so a
+half-rendered fan-out is not possible.
+
+#### Checkpointing and retries
+
+Mori canonicalizes the validated envelope and checkpoints it with a SHA-256
+digest on the Reaction stream *before* it dispatches any route. A retry before
+that checkpoint may rerun the producer; a retry after it reuses the checkpoint
+and converges every routed signal on the same logical identity. Immediate,
+whole-reaction scheduled, and queued FIFO reactions all behave this way.
+
+Inspect what a Decision did with
+[`mori reaction show REACTION_ID`](/docs/commands/reaction) — the recorded
+outcome, digest, message, envelope, and routed emissions. `mori automate inspect`
+(or `--json`) shows declared routes, and `mori automate explain POSITION --json`
+shows them on matched reactions.
+
+#### Where Decision cannot go
+
+`Decision` is deliberately absent from the nested `ScheduledAction` union. An
+action-level `Schedule` child runs after its parent Reaction may already be
+terminal, so it cannot safely append that Reaction's required checkpoint. When
+the whole Decision should be deferred, use the reaction's
+[`schedule` field](#scheduled-reactions) instead.
+
 ### Schedule (legacy, single-action)
 
 Defer an action for later execution via pgmq + shibuya.
@@ -331,8 +502,9 @@ Schema.ReactionAction.Schedule Schema.ScheduleAction::{
 }
 ```
 
-Scheduled actions can be `RunCommand`, `EmitEvent`, `Notify`, or `Signal` —
-but not another `Schedule` (no recursive scheduling).
+Nested scheduled actions can be `RunCommand`, `EmitEvent`, `Notify`, or
+`Signal` — but not another `Schedule` (no recursive scheduling) and not
+[`Decision`](#where-decision-cannot-go).
 
 > **Prefer per-reaction `schedule` for new code.** The action-level
 > `Schedule` wrapper above is preserved for backwards compatibility, but
@@ -340,6 +512,26 @@ but not another `Schedule` (no recursive scheduling).
 > `schedule` field on the whole reaction) is more expressive: it covers
 > multi-action reactions, supports a pre-execution idempotency check, and
 > supports debounce via a coalesce key.
+
+#### Migrating a legacy `Schedule` wrapper
+
+The schema migrator can lift an unambiguous legacy wrapper into the per-reaction
+`schedule` field:
+
+```bash
+mori schema migrate --apply --file mori.automation.dhall
+```
+
+A reaction migrates automatically only when its `actions` list contains exactly
+one `Schedule` action, its delay is non-negative, and its `schedule` field is
+absent or `None`. The inner action and the comments inside its payload are
+preserved, and `delaySeconds = +30` becomes `schedule.after = Some "PT30S"`.
+
+Mixed or multiple actions, a negative delay, or an already populated `schedule`
+are refused *by reaction name* for manual review — and safe sibling reactions in
+the same file still migrate. Re-running after a successful migration is a no-op,
+and the legacy wrapper remains supported for projects that choose not to
+migrate.
 
 ## Scheduled Reactions
 

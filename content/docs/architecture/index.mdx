@@ -57,10 +57,10 @@ Mori's current event runtime is built from the keiro-runtime family:
 | `shibuya` | supervised queue processors and graceful worker lifecycle |
 | `pgmq` | delayed jobs, FIFO queued automations, webhook delivery, dead-letter queues |
 
-Legacy MessageDB remains visible in migration tooling and compatibility checks.
-For example, `mori history` transforms legacy MessageDB streams into kiroku and
-`mori doctor` still verifies the `message_store` schema. New architecture work
-should use the keiro/kiroku model.
+The legacy MessageDB path has been retired: the migration command and the
+`message_store` compatibility check are both gone, and kiroku is the only event
+store. MessageDB now appears only in older architecture documents kept for
+historical context.
 
 ## Component Diagram
 
@@ -196,15 +196,14 @@ CI uses the same event/runtime model with stricter policy decisions.
 
 ## Migration Status
 
-Mori has moved its event backend onto the keiro/keiki/kiroku/shibuya stack.
-MessageDB references now mean one of three things:
+Mori has moved its event backend onto the keiro/keiki/kiroku/shibuya stack, and
+the migration is complete. The legacy message store, its compatibility checks,
+and the transformation command have all been removed.
 
-- legacy history that can be transformed with `mori history`
-- compatibility checks still present in the current CLI
-- older architecture documents retained for historical context
-
-When those conflict with current command references or source behavior, prefer
-the current command docs and [Event Sourcing](/docs/concepts/event-sourcing).
+Any remaining MessageDB reference in these pages is an older architecture
+document retained for historical context. When one conflicts with a current
+command reference or with source behavior, prefer the command docs and
+[Event Sourcing](/docs/concepts/event-sourcing).
 
 ## Architecture Deep Dives
 

@@ -78,6 +78,26 @@ The `Signal` action fields:
 | `signalType` | `Text` | Domain-meaningful name (e.g., `"SchemaChanged"`, `"ArtifactPublished"`) |
 | `targets` | `List Text` | Project names from the registry, or `"*dependents*"` (see below) |
 | `payload` | `List { mapKey, mapValue }` | Key-value data forwarded to targets |
+| `payloadJson` | `Optional Text` | A structured JSON document, validated when the config loads |
+
+#### Structured payloads
+
+`payload` stays supported and unchanged. Reach for `payloadJson` when the target
+needs nested fields or typed JSON scalars rather than flat strings:
+
+```dhall
+Schema.ReactionAction.Signal Schema.SignalAction::{
+  signalType = "SchemaChanged"
+, targets = [ "*dependents*" ]
+, payload = [ { mapKey = "schema", mapValue = "openapi.yaml" } ]
+, payloadJson = Some "{\"verdict\":{\"category\":\"Breaking\"}}"
+}
+```
+
+Both payload forms travel with the delivery, so you can add `payloadJson` for
+new consumers without breaking targets that read the flat `payload`. The JSON is
+validated at config load time, not at dispatch time — a malformed document is a
+config error, not a runtime surprise.
 
 ### Target Repo: Receiving Signals
 
@@ -112,13 +132,116 @@ in  { events =
     }
 ```
 
+## Signal Selectors
+
 The `SignalSelector` fields:
 
 | Field | Type | Behavior |
 |-------|------|----------|
 | `name` | `Text` | Unique selector name |
-| `signalTypes` | `List Text` | Signal types to match. Empty = match all. |
-| `sourceProjects` | `List Text` | Source project names to match, qualified as `namespace/name` (e.g., `"shinzui/schema-repo"`). Bare project names will not match. Empty = match all. |
+| `signalTypes` | `List Text` | Signal type **globs** to match. Empty = match all. |
+| `sourceProjects` | `List Text` | Source project names to match, qualified as `namespace/name` (e.g., `"shinzui/schema-repo"`). Exact match; bare project names will not match. Empty = match all. |
+| `payloadPredicates` | `List SignalPayloadPredicate` | Payload tests, combined with AND. Empty = match all. |
+
+`signalTypes` entries are globs, so `"Schema*"` matches `SchemaChanged` and
+`SchemaDeprecated` alike. `sourceProjects` stays an exact qualified-name match —
+project identity is not something you want to fuzzy-match.
+
+### Payload predicates
+
+A predicate narrows a selector by what the signal *says*, not just what it is:
+
+```dhall
+Schema.EventSelector.SignalSelector Schema.SignalSelector::{
+  name = "breaking-schema-changes"
+, signalTypes = [ "Schema*" ]
+, sourceProjects = [ "shinzui/schema-repo" ]
+, payloadPredicates =
+    [ Schema.SignalPayloadPredicate::{
+        path = "verdict.category"
+      , test = Schema.SignalPayloadPredicate.PredicateTest.Equals "Breaking"
+      }
+    ]
+}
+```
+
+| Field | Type | Behavior |
+|-------|------|----------|
+| `path` | `Text` | Dot-separated path descending through JSON objects |
+| `test` | `PredicateTest` | `Equals Text`, `Prefix Text`, or `Exists` |
+
+| Test | Matches |
+|------|---------|
+| `Equals text` | A string, number, or boolean whose canonical text is exactly `text` |
+| `Prefix text` | A string, number, or boolean whose canonical text starts with `text` |
+| `Exists` | Any present value, including JSON `null` |
+
+Objects, arrays, and `null` never satisfy `Equals` or `Prefix` — only `Exists`.
+A one-segment path falls back to the flat `payload` map when the structured
+lookup misses, so a predicate on `"schema"` works against either payload form.
+Multiple predicates are combined with AND.
+
+---
+
+## Target Consent
+
+A target project may restrict which sources are allowed to signal it. Declare
+the allowlist on the *target's* `Automation` record:
+
+```dhall
+Schema.Automation::{
+  consent = Some Schema.SignalConsent::{
+    allowSignalsFrom = [ "shinzui/schema-repo", "trusted-team" ]
+  }
+}
+```
+
+Entries are either a qualified project (`namespace/name`) or a bare namespace,
+which admits every project in it.
+
+| Declaration | Effect |
+|-------------|--------|
+| No `consent` field | Allow all sources — the historical behavior |
+| `allowSignalsFrom = [ … ]` | Allow only the listed projects and namespaces |
+| `allowSignalsFrom = [] : List Text` | Deny every source |
+
+A refusal is recorded as a **terminal failed delivery** with a `consent:` reason
+and is never retried — the sender does not get to keep knocking. Inspect
+refusals with [`mori signal list --failed`](/docs/commands/signal).
+
+---
+
+## Delivery Safety Bounds
+
+The *emitting* config bounds how wide and how deep its signals may propagate:
+
+```dhall
+Schema.Automation::{
+  signalBounds = Some Schema.SignalBounds::{
+    maxFanOut = 10
+  , maxChainDepth = 4
+  }
+}
+```
+
+| Field | Default | Behavior |
+|-------|---------|----------|
+| `maxFanOut` | `25` | Maximum resolved targets for one emission |
+| `maxChainDepth` | `8` | Maximum depth of a signal chain |
+
+Fan-out is **all-or-nothing**: exceeding the cap creates a visible failed
+delivery for every resolved target and delivers to none, so you never get a
+half-fanned-out workflow that looks partially successful.
+
+Chains carry ancestor content digests, which gives two distinct protections.
+Repeating equivalent signal content fails with a *cycle* reason — a loop is
+caught immediately rather than after eight hops. Content that changes on every
+hop cannot be recognized as a cycle, so it is stopped by `maxChainDepth`
+instead.
+
+This matters most with `*dependents*`: dynamic resolution means the target count
+is whatever the dependency graph says today, and a bound is what keeps a new
+dependent from silently widening every emission.
 
 ---
 
@@ -225,7 +348,35 @@ yet completed). Includes step details for each active workflow.
 
 ```bash
 mori workflow trace wf_01h455vb4pex5vsknk084sn02q
+mori workflow trace wf_01h455vb4pex5vsknk084sn02q --flat
+mori workflow trace wf_01h455vb4pex5vsknk084sn02q --json
+mori workflow trace wf_01h455vb4pex5vsknk084sn02q --mermaid
+mori workflow trace wf_01h455vb4pex5vsknk084sn02q --max-depth 8
 ```
+
+By default, `trace` renders the **complete causal chain**, not just one
+workflow: it walks up to the chain root and renders every descendant workflow
+and target step as a tree. You can start from any workflow in the chain and get
+the same picture, which is the point — you rarely know which link you happen to
+be holding.
+
+| Flag | Behavior |
+|------|----------|
+| `--flat` | Show only the requested workflow, in the original detail view below |
+| `--json` | Emit the nested chain document as JSON |
+| `--mermaid` | Emit the chain as a Mermaid `flowchart LR` diagram |
+| `--max-depth N` | Bound ancestor and descendant traversal (default: `32`) |
+
+The HTTP equivalent is `GET /v1/workflows/<WORKFLOW_ID>/chain`; JSON field names
+there follow the API's snake_case convention. See
+[`mori serve`](/docs/commands/serve).
+
+History recorded before workflow parent correlation was introduced has no
+reconstructible chain edge. Those workflows are shown honestly as independent
+roots rather than guessed into a tree. Tracing covers the Kiroku functional
+automation path; the removed legacy MessageDB path is not supported.
+
+#### `--flat` detail view
 
 ```
 Workflow Detail
@@ -254,6 +405,21 @@ column echo back whatever target names the source-repo `Signal` action
 listed — bare names work as long as `mori register` has populated the
 registry, since `targets` is resolved by the dispatcher via the dependency
 graph rather than matched against `sourceProjects`.
+
+### Inspect deliveries
+
+Where `mori workflow` shows the causal chain, `mori signal` shows the durable
+delivery records underneath it:
+
+```bash
+mori signal list
+mori signal list --failed
+```
+
+Each row carries the delivery id, signal type, source → target, state
+(`pending`, `delivered`, `failed`, `expired`), retry count, and the failure
+reason when there is one. This is where a consent refusal or a fan-out breach
+surfaces. See [`mori signal`](/docs/commands/signal).
 
 ---
 
@@ -308,6 +474,28 @@ If `mori workflow list` returns no results:
    `shinzui/schema-repo`). Bare project names will silently match nothing —
    `WorkflowSignalReceived` events carry the source project as
    `namespace/name`, so a bare-name filter has no chance of matching.
+
+### Signal delivered but the target never reacted
+
+Check the delivery record first:
+
+```bash
+mori signal list --failed
+```
+
+A `consent:` reason means the target's `allowSignalsFrom` does not admit this
+source — add the source project or its namespace to the target's
+[`consent`](#target-consent), or remove the declaration to allow all.
+
+A fan-out, depth, or cycle reason means the emission breached
+[`signalBounds`](#delivery-safety-bounds). A cycle reason in particular means the
+same signal content came back around; raising the bound will not help, the loop
+needs breaking.
+
+If the delivery shows `delivered` but no reaction ran, the target's selector did
+not match. Re-check `signalTypes` (globs, so `"Schema*"` and `"SchemaChanged"`
+behave differently from a typo) and any `payloadPredicates` — a predicate on a
+path the payload does not carry silently narrows the selector to nothing.
 
 ### `*dependents*` resolves to no targets
 
