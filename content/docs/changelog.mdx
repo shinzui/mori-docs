@@ -76,6 +76,27 @@ features, commands, and schema changes.
 - Bundle examples now declare `okfVersion = "0.2"`
 - Documented in the [OKF Bundles guide](/docs/guides/okf#advisory-profile-validation)
 
+### HTTP API: loopback-first perimeter and Relay pagination
+- [`mori serve`](/docs/commands/serve#security-perimeter) now binds `127.0.0.1` by default and **refuses** a non-loopback bind unless you set `MORI_API_TOKEN` for bearer auth or pass `--insecure-no-auth`. The refusal names the risk: `POST /v1/apps` returns live webhook signing secrets
+- New flags `--host`, `--cors-origin` (repeatable, exact-origin only, no wildcard), and `--insecure-no-auth`; new environment variables `MORI_API_HOST`, `MORI_API_TOKEN`, and `MORI_API_CORS_ORIGINS`
+- Bearer tokens are compared in constant time. `GET /health/live` and `GET /health/ready` stay reachable without a token so orchestrators can probe. The security contract is published in the generated OpenAPI document
+- **Breaking:** eight unbounded collection endpoints (`/v1/projects`, `/v1/reactions`, `/v1/workflows`, `/v1/workflows/active`, `/v1/repositories/configs`, `/v1/repositories/ingest-status`, `/v1/groups`, `/v1/apps`) now return [Relay connections](/docs/commands/serve#pagination) instead of bare arrays, and accept `first`/`after`/`last`/`before`. A stale cursor returns `400` with a Relay page error, distinct from the RFC 9457 problem document used for application errors
+- New `GET /v1/workflows/{id}/chain` — the HTTP equivalent of `mori workflow trace`
+
+### First-class named automations
+- An automation is now identified by `(repo, name)` rather than by repo alone. [`mori automate register`](/docs/commands/automate#named-automations), `deregister`, and `update` accept `--name NAME`, defaulting to `default` — so single-config repos are unaffected
+- A repository can run several independently named automations, each with isolated routing and its own queue group, so a slow or failing automation cannot hold up a sibling
+- `mori automate list` gained `--path` for filtering, and keys rows by `(repo, automation name)`
+
+### Daemon double-start guard
+- [`mori automate daemon`](/docs/commands/automate#one-executor-per-database) and `mori automate run` now take a PostgreSQL session advisory lock on a dedicated supervised connection, and refuse to start when another executor already holds it for the same database
+- Advisory locks are per-database with a constant key, so the guard holds even when two processes reach the same database through differently-spelled connection strings. The lock releases on normal exit, exception, cancellation, or process death, so a crash never strands it
+
+### Schema resolution diagnostics
+- Schema imports resolve **only** from the binary's embedded copy — there is no network fallback. A manifest pinned to a commit the binary does not embed now [fails closed with a version-skew diagnostic](/docs/guides/schema-migrations#version-skew-diagnostics) naming the remedy, instead of producing a raw Dhall error
+- When a file pins the *same* commit the binary embeds, the message says so and points at the import path — a typo, not skew
+- Other config load failures are prefixed with a skew note only when the pins genuinely differ, and semantic validation failures render as actionable sentences
+
 ### Removed
 - **`mori history`** and the legacy MessageDB path are gone. Kiroku is the only event store; `mori doctor` no longer checks the `message_store` schema, and pages that described the migration boundary now describe verification and rebuild via [`mori replay-audit`](/docs/commands/replay-audit) and [`mori projections`](/docs/commands/projections) instead
 

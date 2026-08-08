@@ -250,6 +250,44 @@ find ~/projects -name "mori.dhall" -exec mori schema migrate --apply --file {} \
 
 ---
 
+## Version Skew Diagnostics
+
+Mori resolves schema imports **only** from the copy embedded in the binary. It
+never falls back to the network, which makes resolution deterministic and
+offline — and means a manifest pinned to a schema commit the binary does not
+have is a hard failure rather than a silent fetch.
+
+That failure is reported as version skew rather than as a raw Dhall error:
+
+```text
+schema version skew: this mori binary cannot resolve
+  https://raw.githubusercontent.com/shinzui/mori-schema/<commit>/…
+Remedy: upgrade the mori binary, or re-pin the file to the binary's schema with
+  mori schema migrate --apply --file <the failing file>
+```
+
+When the file pins the *same* commit the binary embeds, the message says so and
+points at the path instead — the import has a typo, not a skew problem.
+
+Any other config load failure is prefixed with a skew note when the pins
+genuinely differ, so a confusing type error carries its likely cause:
+
+```text
+note: this file pins mori-schema commit abc123def456 but this binary embeds
+789abc012def; the failure below may be version skew. Upgrade mori, or run
+  mori schema migrate --apply --file mori.dhall
+```
+
+The note appears **only** when the two commits differ, so it stays signal rather
+than boilerplate. Semantic validation failures are rendered as actionable
+sentences rather than raw decoder output.
+
+Related: [`mori validate`](/docs/commands/validate#recorded-schema-hash) warns
+separately when a URL-pinned manifest records a hash that no longer matches the
+embedded schema, and
+[`mori schema check-compat`](/docs/commands/schema#mori-schema-check-compat)
+classifies what actually changed between two schema versions.
+
 ## Troubleshooting
 
 ### Migration reports "ApplyFailed"

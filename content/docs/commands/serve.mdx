@@ -14,10 +14,11 @@ mori serve --port 9000
 mori serve -p 9000
 ```
 
-On startup it prints the listen address:
+On startup it prints the listen address, the auth mode, and the number of
+allowed CORS origins:
 
 ```text
-mori-api listening on http://localhost:8080 (application endpoints under /v1; probes under /health)
+mori-api listening on http://127.0.0.1:8080 (application endpoints under /v1; probes under /health); auth: disabled; cors origins: 0
 ```
 
 ## Flags
@@ -25,24 +26,110 @@ mori-api listening on http://localhost:8080 (application endpoints under /v1; pr
 | Flag | Description |
 |------|-------------|
 | `--port`, `-p PORT` | Port to listen on. Defaults to `$MORI_API_PORT`, then `8080` |
+| `--host HOST` | Interface to bind. Defaults to `$MORI_API_HOST`, then `127.0.0.1` |
+| `--cors-origin ORIGIN` | Allow this exact browser origin. Repeatable; defaults to `$MORI_API_CORS_ORIGINS` (comma-separated) or none |
+| `--insecure-no-auth` | Allow a non-loopback bind without a bearer token. **Dangerous** — see below |
 
-## Requirements
+## Environment
 
-`MORI_PG_CONNECTION_STRING` must be set; the server refuses to start without it,
-since it opens the kiroku store as well as the registry pool.
+| Variable | Purpose |
+|----------|---------|
+| `MORI_PG_CONNECTION_STRING` | **Required.** The server refuses to start without it, since it opens the kiroku store as well as the registry pool |
+| `MORI_API_PORT` | Default port when `--port` is absent |
+| `MORI_API_HOST` | Default bind interface when `--host` is absent |
+| `MORI_API_TOKEN` | Enables bearer-token authentication. A non-empty value is required for any non-loopback bind |
+| `MORI_API_CORS_ORIGINS` | Comma-separated exact browser origins, used when no `--cors-origin` flag is given |
+
+Flags win over environment variables in every case.
+
+## Security Perimeter
+
+The server is **loopback-first**. It binds `127.0.0.1` by default, and it
+refuses to bind a non-loopback host unless you have made an explicit choice
+about authentication:
+
+```text
+mori serve: refusing to bind non-loopback host "0.0.0.0" without authentication.
+Set MORI_API_TOKEN to enable bearer-token auth, or pass --insecure-no-auth to
+accept unauthenticated remote access (POST /v1/apps returns live webhook
+signing secrets).
+```
+
+Loopback hosts are `127.0.0.1`, `localhost`, and `::1`. The check lives in the
+server itself rather than in the CLI parser, so no caller can bypass it by
+accident.
+
+### Bearer-token authentication
+
+Setting a non-empty `MORI_API_TOKEN` turns on bearer auth for every route
+except the two public probes (`GET /health/live` and `GET /health/ready`, which
+stay open so an orchestrator can reach them). Requests must carry:
+
+```text
+Authorization: Bearer <token>
+```
+
+Tokens are compared in constant time. A missing or wrong token gets `401`.
+
+> **`--insecure-no-auth` is a real risk, not a formality.** `POST /v1/apps`
+> returns live webhook signing secrets. Binding a remote interface without a
+> token hands those secrets to anyone who can reach the port. Use it only on a
+> network you already trust, or behind an authenticated proxy.
+
+### CORS
+
+Cross-origin browser access is denied by default. `--cors-origin` /
+`MORI_API_CORS_ORIGINS` allowlist **exact** origins — there is no wildcard.
+CORS sits outermost in the middleware stack, so an allowlisted browser preflight
+never has to satisfy the auth check.
 
 ## Surface
 
 | Path | Purpose |
 |------|---------|
-| `/health/*` | Standard, unversioned operational probes |
+| `/health/*` | Standard, unversioned operational probes. `/health/live` and `/health/ready` stay reachable without a token |
 | `/v1/health`, `/v1/health/db` | Versioned health compatibility surface, including a database smoke check |
-| `/v1/openapi.json` | Generated OpenAPI 3.1 document for the served API |
+| `/v1/openapi.json` | Generated OpenAPI 3.1 document, including the published security contract |
 | `/v1/projects`, `/v1/reactions`, `/v1/workflows`, `/v1/repositories`, `/v1/groups`, `/v1/apps`, `/v1/ingest` | Application resources |
+| `/v1/workflows/{id}/steps`, `/v1/workflows/{id}/chain` | A workflow's steps, and its complete causal chain — the HTTP equivalent of [`mori workflow trace`](/docs/commands/workflow#mori-workflow-trace) |
 
 Fallible routes return typed [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457)
 problem documents rather than bare error strings. Requests are instrumented with
-OpenTelemetry.
+OpenTelemetry. JSON field names use the API's snake_case convention.
+
+## Pagination
+
+Unbounded collection endpoints return **Relay connections** rather than bare
+arrays, and accept the standard Relay cursor arguments:
+
+| Parameter | Meaning |
+|-----------|---------|
+| `first` | Take N items forward |
+| `after` | Start after this cursor |
+| `last` | Take N items backward |
+| `before` | End before this cursor |
+
+The paginated endpoints are:
+
+```text
+GET /v1/projects
+GET /v1/reactions
+GET /v1/workflows
+GET /v1/workflows/active
+GET /v1/repositories/configs
+GET /v1/repositories/ingest-status
+GET /v1/groups
+GET /v1/apps
+```
+
+A cursor that parses at the HTTP boundary but fails the endpoint's sort
+contract returns `400` with a Relay page error, distinct from the RFC 9457
+problem document used for application errors — so a client can tell "your
+cursor is stale" apart from "your request was wrong".
+
+> **Breaking API change.** These eight endpoints previously returned bare JSON
+> arrays; they now return a connection envelope. Clients that indexed the
+> response directly need to read through the connection's edges.
 
 ## Serving from the automation daemon
 
@@ -60,7 +147,12 @@ Serving from the daemon is opt-in — enabled by `--serve`, by an explicit
 no socket. Ctrl-C cancels the server thread and closes the listen socket along
 with the rest of the daemon.
 
+This is a different perimeter from
+[`--metrics-port`](/docs/guides/automation-daemon#subscription-observability),
+which starts Kiroku's own server and listens on **all** interfaces.
+
 ## Related
 
 - [`mori automate`](/docs/commands/automate) — the daemon and its `--serve` flag
 - [Automation Daemon](/docs/guides/automation-daemon) — running the daemon in practice
+- [`mori workflow`](/docs/commands/workflow) — the CLI equivalent of the chain endpoint

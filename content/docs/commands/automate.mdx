@@ -106,6 +106,27 @@ mori automate daemon --metrics-port 9464
 
 See [Automation Daemon](/docs/guides/automation-daemon) for details.
 
+### One executor per database
+
+Startup acquires a PostgreSQL session advisory lock on a dedicated, supervised
+connection. A second daemon — or a `mori automate run` — pointed at the same
+database refuses to start rather than double-processing events:
+
+```text
+another mori daemon already holds the automation lock for this database;
+refusing to start (advisory lock key 0x6d6f72696461656d)
+```
+
+Advisory locks are scoped per database and the key is a constant, so the guard
+does not depend on how the connection string is spelled — two daemons reaching
+the same database by different URLs still collide. The lock connection is never
+returned to the pool; closing it releases the lock on normal exit, exception,
+cancellation, or process death, so a crashed daemon does not leave the lock
+stranded.
+
+`MORI_PG_CONNECTION_STRING` is required: both the daemon lock and the kiroku
+event store need it.
+
 ### Flags
 
 | Flag | Description |
@@ -145,7 +166,16 @@ Register the current repo's automation config with the daemon.
 mori automate register
 mori automate register --config path/to/config.dhall
 mori automate register --path /path/to/repo
+mori automate register --name release --config mori.release.dhall
 ```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--config`, `-c PATH` | Path to the automation config file or directory. Default: `mori.automation.dhall` |
+| `--path PATH` | Repository path. Defaults to the current directory |
+| `--name NAME` | Stable automation name. Default: `default` |
 
 ### Behavior
 
@@ -157,6 +187,28 @@ mori automate register --path /path/to/repo
 A separate `mori observe` step is no longer required to make a registered repo
 receive signals. Use `mori observe` when you only want a project's identity
 recorded for auto-ingest without attaching an automation config.
+
+### Named automations
+
+An automation is identified by `(repo, name)`, not by repo alone. `--name`
+defaults to `default`, so a single-config repo needs no extra flag and behaves
+exactly as before.
+
+Giving a second config its own name lets one repository run several independent
+automations:
+
+```bash
+mori automate register --name default
+mori automate register --name release --config mori.release.dhall
+```
+
+Each named automation gets isolated routing and its own queue group, so a slow
+or failing automation does not hold up a sibling in the same repo. The name is
+also what `deregister` and `update` address — pass the same `--name` you
+registered with, or you will operate on `default`.
+
+To bring registrations made before automations had named identity onto the
+functional aggregate, run [`mori automate migrate-named`](#mori-automate-migrate-named).
 
 ### `--path` is authoritative
 
@@ -173,13 +225,21 @@ Remove automation registration for a repo.
 ```bash
 mori automate deregister
 mori automate deregister --path /path/to/repo
+mori automate deregister --name release
 ```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--path PATH` | Repository path. Defaults to the current directory |
+| `--name NAME` | Stable automation name. Default: `default` |
 
 ### Behavior
 
 - Writes `AutomationDeregistered` event
-- Daemon stops processing events for this repo
-- Idempotent — deregistering an unregistered repo is a no-op
+- Daemon stops processing events for this automation
+- Idempotent — deregistering an unregistered automation is a no-op
 
 ## `mori automate update`
 
@@ -188,7 +248,16 @@ Update a registered automation config after editing the config file.
 ```bash
 mori automate update
 mori automate update --config path/to/config.dhall
+mori automate update --name release
 ```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--config`, `-c PATH` | Path to the automation config file or directory. Default: `mori.automation.dhall` |
+| `--path PATH` | Repository path. Defaults to the current directory |
+| `--name NAME` | Stable automation name. Default: `default` |
 
 ### Behavior
 
@@ -205,7 +274,18 @@ List all registered automation configs.
 ```bash
 mori automate list
 mori automate list --json
+mori automate list --path /path/to/repo
 ```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--json` | Output in JSON format |
+| `--path PATH` | Filter to the repository at `PATH` |
+
+Rows are keyed by `(repo, automation name)`, so a repo running several named
+automations appears once per automation.
 
 ## `mori automate migrate`
 

@@ -74,6 +74,29 @@ kiroku subscriptions status --remote-url http://127.0.0.1:9464
 existing scopes and do **not** report Kiroku subscription status — that is what
 this surface is for.
 
+## One Executor Per Database
+
+Before anything else, startup takes a PostgreSQL session advisory lock on a
+dedicated, supervised connection. A second daemon — or a `mori automate run` —
+pointed at the same database refuses to start:
+
+```text
+another mori daemon already holds the automation lock for this database;
+refusing to start (advisory lock key 0x6d6f72696461656d)
+```
+
+This is deliberate: two executors on one database would run every reaction
+twice. Advisory locks are scoped per database and the key is a constant, so the
+guard holds even when two processes reach the same database through
+differently-spelled connection strings.
+
+The lock connection is never returned to the pool. Closing it releases the lock
+on normal exit, exception, cancellation, or process death, so a crashed daemon
+does not strand the lock and block the next start. Losing the lock connection
+mid-run is treated as a deliberate stop rather than something to paper over; a
+merely unreachable database is retried, since the database recovering does not
+mean another daemon took ownership.
+
 ## How It Works
 
 1. On startup the daemon bootstraps its config registry from the
@@ -155,8 +178,12 @@ mori automate register --path /path/to/repo
 # pre-EP-4 register flows by re-emitting ProjectRepoLinked)
 mori automate update
 
-# Remove registration
+# Register a second, independently named automation in the same repo
+mori automate register --name release --config mori.release.dhall
+
+# Remove registration (pass the same --name you registered with)
 mori automate deregister
+mori automate deregister --name release
 
 # List all registered configs
 mori automate list
@@ -185,6 +212,17 @@ rule applies to `update`, `deregister`, `run`, and `ingest git`.
 Use `mori observe` only when you want a project's identity recorded for
 auto-ingest **without** attaching an automation config — it remains
 idempotent against an already-registered repo.
+
+### Named automations
+
+An automation is identified by `(repo, name)`. `--name` defaults to `default`,
+so a single-config repo needs no extra flag and behaves exactly as it always
+did. Naming a second config lets one repository run several independent
+automations, each with isolated routing and its own queue group — so a slow or
+failing automation cannot hold up a sibling in the same repo.
+
+`deregister` and `update` address the same name, so pass the `--name` you
+registered with or you will operate on `default`.
 
 ## Prerequisites
 
