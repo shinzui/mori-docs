@@ -203,9 +203,14 @@ mori reaction recover --dead-letters
 mori reaction recover --dead-letters --limit 5
 ```
 
-When the immediate reaction executor cannot process an event, the event is
-parked rather than dropped, so its evidence survives. Use `--dead-letters`
-*after* fixing the cause — a missing binary, a bad path, a broken command.
+When the immediate reaction executor cannot **decode** an event, the event is
+parked rather than dropped, so its evidence survives.
+
+Note what does *not* park: a command that times out, fails to spawn, or exits
+non-zero is recorded as a `failed` reaction and the subscription advances. Those
+never reach the dead-letter table, so `--dead-letters` will not bring them back
+— fix the command and re-trigger instead. See
+[Automation › What each failure class does to the executor](/docs/guides/automation#what-each-failure-class-does-to-the-executor).
 
 Mori reads the newest 20 parked events by default, decodes each
 `ReactionTriggered`, and sends it through the same admission guard and executor

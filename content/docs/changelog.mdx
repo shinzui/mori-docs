@@ -40,6 +40,14 @@ features, commands, and schema changes.
 - New flags: `--flat` (the original single-workflow detail view), `--json`, `--mermaid` (a `flowchart LR` diagram), and `--max-depth N` (default 32)
 - The HTTP equivalent is `GET /v1/workflows/<WORKFLOW_ID>/chain`. History predating workflow parent correlation is shown honestly as independent roots rather than guessed into a tree
 
+### Reaction execution: enforced timeouts, contained processes, classified failures
+- A `RunCommand` without an explicit `timeout` is no longer unbounded. The effective timeout resolves from the action's `timeout`, then `MORI_RUN_COMMAND_DEFAULT_TIMEOUT`, then a bounded **600-second** default. `timeout = Some +0` is now the only way to disable it, and an unparseable override is reported on stderr and ignored
+- Commands run in their own process group. On timeout the executor `SIGTERM`s the **whole group**, waits five seconds, then `SIGKILL`s and reaps it — so a `nix develop --command just …` tree cannot be orphaned and left running behind a reaction recorded as timed out
+- Action `env` is merged **over** the daemon's environment. The same timeout, containment, and merge rules are reused for a scheduled reaction's idempotency check
+- `Notify` requests are bounded by the same timeout policy, and transport problems are preserved rather than swallowed: `curl`'s nonzero exit and stderr, a spawn failure (`127`), and unparseable status output each become actionable command failures
+- New closed [failure taxonomy](/docs/guides/automation#failure-classification) — `timeout`, `spawn-failure`, `nonzero-exit`, `dependency-unavailable`, `decode-failure` — persisted as a wire contract that retry policy and the execution-status read model compare against, and reported by `mori doctor --reactions`
+- The class now [decides the executor's response](/docs/guides/automation#what-each-failure-class-does-to-the-executor): `dependency-unavailable` retries with exponential backoff, `decode-failure` dead-letters, and `timeout`/`spawn-failure`/`nonzero-exit` are acknowledged — a failing command records a failed reaction and advances rather than stalling the leg or parking an event
+
 ### Reaction execution health and recovery
 - New [`mori doctor --reactions`](/docs/commands/doctor#--reactions) audits reaction execution: stuck legs, open halts, and parked dead letters. Exits `2` when unhealthy, `0` otherwise
 - [`mori reaction recover`](/docs/commands/reaction#mori-reaction-recover) gained two modes beyond the single-reaction one: `--dead-letters [--limit N]` reprocesses parked events through the live admission guard and executor, and `--clear-halt <leg>` closes a halt after its cause is repaired

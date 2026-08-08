@@ -332,8 +332,43 @@ Schema.ReactionAction.RunCommand Schema.RunCommandAction::{
 | `command` | `Text` | Executable name or path. Resolved inside the devShell, not the daemon's PATH. |
 | `args` | `List Text` | Command arguments |
 | `workingDir` | `Optional Text` | Working directory. When absent, defaults to the repo root (the directory passed to `mori automate register --path …`). When set, resolves relative to that root. |
-| `timeout` | `Optional Integer` | Timeout in seconds |
-| `env` | `List { mapKey, mapValue }` | Extra environment variables |
+| `timeout` | `Optional Integer` | Timeout in seconds. Absent means the effective default — see below |
+| `env` | `List { mapKey, mapValue }` | Extra environment variables, merged over the daemon's own environment |
+
+#### Timeouts are always enforced
+
+A command without a `timeout` is **not** unbounded. The effective timeout is
+resolved in this order:
+
+1. The action's own `timeout`, when set
+2. `MORI_RUN_COMMAND_DEFAULT_TIMEOUT` in the daemon's environment
+3. A bounded default of **600 seconds** (10 minutes)
+
+`timeout = Some +0` explicitly disables the timeout — that is the only way to
+run genuinely unbounded, and it has to be written down. An unparseable
+`MORI_RUN_COMMAND_DEFAULT_TIMEOUT` is reported on stderr and ignored in favour
+of the default, rather than silently changing the bound.
+
+#### Process trees are contained, not just signalled
+
+Commands are spawned in their own process group. On timeout the executor
+signals `SIGTERM` to the **whole group**, allows a five-second grace period,
+then `SIGKILL`s and reaps the group.
+
+This matters because a reaction usually runs `nix develop --command just …`,
+which is a tree several processes deep. Killing only the direct child would
+leave the real work orphaned and still running while the reaction is recorded
+as timed out.
+
+#### Environment merge order
+
+The action's `env` map is merged **over** the daemon's environment, so an entry
+you declare wins over an inherited one of the same name. The daemon's
+environment is otherwise inherited intact.
+
+The same timeout, containment, and merge rules are reused for a scheduled
+reaction's [idempotency check](#idempotency-check), so a hung check cannot pin
+the schedule worker either.
 
 ### EmitEvent
 
@@ -361,6 +396,76 @@ Schema.ReactionAction.Notify Schema.NotifyAction::{
 , bodyTemplate = Some "{\"text\": \"Build complete\"}"
 }
 ```
+
+`curl` is bounded by the same timeout policy as `RunCommand` (`--max-time`
+resolved from `MORI_RUN_COMMAND_DEFAULT_TIMEOUT`, else 600 seconds), so a
+notification endpoint that stops responding cannot hang the executor.
+
+Transport problems are recorded as actionable failures rather than swallowed:
+
+| Outcome | Recorded as |
+|---------|-------------|
+| Request completed | The HTTP status code. A status of `400` or above fails the reaction |
+| `curl` exited nonzero | A command failure carrying `curl`'s exit code and stderr |
+| `curl` could not be spawned | A command failure with exit code `127` and the spawn error |
+| `curl` printed an unparseable status | A command failure naming the unparsable output |
+
+The distinction that survives into the record is *why* it failed: a `500`
+response classifies as `nonzero-exit` with the HTTP status, while an unreachable
+host classifies from `curl`'s own exit — so "they rejected it" and "we never got
+there" do not look the same afterwards.
+
+### Failure classification
+
+Every failing action is classified into a closed, stable taxonomy. These class
+tags are a wire contract: retry policy and the execution-status read model
+persist and compare them, and they are what
+[`mori doctor --reactions`](/docs/commands/doctor#--reactions) reports as
+`last error`.
+
+| Class | Meaning |
+|-------|---------|
+| `timeout` | The command exceeded its timeout and its process group was killed |
+| `spawn-failure` | The process could not be started at all — missing binary, bad path, no devShell |
+| `nonzero-exit` | The command ran and exited non-zero (including an HTTP status ≥ 400 from `Notify`) |
+| `dependency-unavailable` | A database, queue, or network dependency was unavailable |
+| `decode-failure` | A payload or identifier could not be decoded |
+
+Each carries a bounded human-readable detail alongside the class, truncated so a
+runaway error message cannot bloat the status row. When a reaction has several
+actions, the **first** failure in action order is the one classified.
+
+The `spawn-failure` / `nonzero-exit` split is the one worth internalising:
+`spawn-failure` almost always means the devShell or the `command` name is wrong,
+while `nonzero-exit` means your command ran and disagreed with you.
+
+### What each failure class does to the executor
+
+Classification is not just labelling — it decides whether the event is retried,
+parked, or acknowledged:
+
+| Class | Executor response |
+|-------|-------------------|
+| `dependency-unavailable` | **Retry** with exponential backoff and jitter |
+| `decode-failure` | **Dead-letter** the event as an invalid payload |
+| `timeout`, `spawn-failure`, `nonzero-exit` | **Acknowledge** — record the reaction as failed and move on |
+
+The third row is the important one. A reaction whose command fails does **not**
+stall the executor, park an event, or halt a leg: it is recorded as `failed`,
+the subscription advances, and the next reaction runs. Fixing your command and
+re-triggering is the whole recovery path — there is nothing to un-park.
+
+Parked events come from `decode-failure` — mori could not read the event at all,
+so it preserves the evidence instead of guessing. That is what
+[`mori reaction recover --dead-letters`](/docs/guides/reaction-history#recover-parked-events)
+is for, and why it re-runs decoding rather than re-running your command.
+
+A `dependency-unavailable` retry is bounded; appending a terminal outcome has
+its own short retry schedule (1s, 2s, 4s) so a brief database blip does not lose
+the record of what already happened.
+
+Use [`mori doctor --reactions`](/docs/commands/doctor#--reactions) to see which
+of these you are actually looking at before reaching for a recovery command.
 
 ### Signal
 
