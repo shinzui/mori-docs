@@ -114,6 +114,23 @@ features, commands, and schema changes.
 
 ---
 
+## 2026-07-27
+
+### `mori://` URIs cover every extension entity
+- The artifact-kind grammar grew from 11 kinds to **21**, so every entity mori's schema extensions contribute is now addressable. New kinds: `checklists`, `upstream-issues`, `radar`, and the seven DDD kinds (`ddd/subdomains`, `ddd/contexts`, `ddd/aggregates`, `ddd/mappings`, `ddd/flows`, `ddd/glossary`, `ddd/collaborators`)
+- The seven DDD kinds take a **two-segment** URI path; the bare `…/ddd` segment is not a ref and reports an unknown kind. Their compact tokens stay flat (`shinzui/mori#ddd-context:registry`)
+- `MasterPlan`, `ExecPlan`, and `OkfBundle` gained Dhall arms, so **every** kind can now be named by a typed `Schema.MoriArtifactKind` value rather than only as canonical `Text`
+- Two more nested grammars joined OKF concepts: `checklists/<key>/steps/<step>` and `ddd/flows/<key>/steps/<order>`. A nested sub-key on any other kind remains the one surviving "unsupported kind" warning
+- `mori ddd`, `mori tech-radar`, `mori checklist`, and `mori upstream-issues` print canonical refs in their output and carry `canonicalRef` in JSON
+- Plan refs are now **registry-verified**: a `plans/` or `masterplans/` ref resolves only if the owning project publishes that plan in `mori/agent-plans.dhall`. A registered plan whose markdown moved is reported distinctly from an unknown ref
+- Three shapes can be ambiguous and report candidates instead of guessing: a duplicated OKF document handle, a short `radar/<package>` ref for a package recommended under two languages, and two glossary terms that slug alike
+- [`mori validate --check-refs`](/docs/commands/validate) now walks **five** sources, adding `mori/tech-radar.dhall` (each recommendation's `project`) and `mori/agent-plans.dhall` (each plan's cross-project dependency targets)
+- Shell completion walks the whole URI: kinds, keys, and the `ddd/` prefix as one entry. Nested sub-keys and partially-typed multi-segment keys deliberately offer nothing
+- `mori help mori-refs` gained a **Reference fragility** section stating what breaks a ref of each kind — including the one silent failure, renumbering a DDD flow step
+- Documented in [Mori URIs](/docs/guides/mori-refs) and [Canonical Refs](/docs/concepts/canonical-refs)
+
+---
+
 ## 2026-07-26 (documentation audit)
 
 ### Added: ingest health and recovery (previously undocumented)

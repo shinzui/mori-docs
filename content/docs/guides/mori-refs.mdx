@@ -1,16 +1,20 @@
 ---
-title: Mori References
-description: Use mori:// references in commands and configs
+title: Mori URIs
+description: Address any registered artifact with a mori:// reference
 icon: Link
 ---
 
-Canonical cross-project references use the `mori://` URI scheme. They identify
-artifacts owned by registered projects: docs, packages, repos, skills,
-subagents, APIs, cookbook entries, seihou templates, plans, and OKF knowledge
-bundles (and the concepts inside them).
+Canonical cross-project references use the `mori://` URI scheme. Every artifact
+owned by a registered project has one stable identifier you can copy out of the
+terminal, embed in a `mori.dhall`, or paste into a commit message.
+
+Twenty-one kinds are addressable, covering every entity mori's schema
+extensions contribute — docs, packages, repos, skills, subagents, APIs,
+cookbook entries, seihou templates, plans, OKF bundles, checklists, upstream
+issues, tech-radar recommendations, and the seven DDD model entities.
 
 ```text
-mori://<namespace>/<name>/<kind-plural>[/<key>][#<anchor>]
+mori://<namespace>/<name>/<kind-segment>[/<key>][#<anchor>]
 ```
 
 Compact input forms are accepted for command-line convenience:
@@ -19,6 +23,13 @@ Compact input forms are accepted for command-line convenience:
 <namespace>/<name>[#<kind-singular>:<key>][#<anchor>]
 <namespace>/<name>:<package>
 ```
+
+The compact form is input-only. Mori always stores and prints the canonical
+form.
+
+`mori help mori-refs` prints the authoritative table with each kind's URI
+segment, compact token, and Dhall arm, plus a **Reference fragility** section
+stating exactly what breaks a ref of each kind.
 
 ## Examples
 
@@ -33,31 +44,108 @@ mori://shinzui/streamly/okf/architecture
 mori://shinzui/streamly/okf/architecture/concepts/tables/users
 mori://shinzui/mori/okf/improvement-requests/concepts/IR-1
 mori://shinzui/mori/masterplans/9-agent-plans-extension
-mori://shinzui/mori/plans/70-agent-plans-dhall-schema-and-uri-kinds
+mori://shinzui/mori/plans/128-index-okf-concepts-and-graph-for-cross-bundle-queries
+mori://shinzui/mori/checklists/deploy
+mori://shinzui/mori/checklists/deploy/steps/ensure-clean
+mori://shinzui/mori/upstream-issues/dhall-haskell-9-12-2-untested
+mori://shinzui/mori/radar/hasql
+mori://shinzui/mori/radar/haskell/database/hasql
+mori://shinzui/mori/ddd/contexts/registry
+mori://shinzui/mori/ddd/mappings/registry/automation-engine
+mori://shinzui/mori/ddd/flows/register-then-react/steps/1
+mori://shinzui/mori/ddd/glossary/bounded-context
 shinzui/streamly#doc:effects-cookbook
 shinzui/streamly#okf:architecture
+shinzui/mori#ddd-context:registry
 shinzui/streamly:streamly-core
-shinzui/mori#masterplan:9-agent-plans-extension
-shinzui/mori#plan:70-agent-plans-dhall-schema-and-uri-kinds
 ```
 
-For `masterplans/<id>-<slug>` and `plans/<id>-<slug>` (the agent-plans
-extension's MasterPlan and ExecPlan kinds), the trailing key is the full
-`<id>-<slug>`, not the slug alone. Cross-project dep URIs must use the
-exact segment as it appears on disk. See [Agent Plans](/docs/guides/agent-plans).
+## Kinds at a glance
 
-The `okf` kind addresses an [OKF knowledge bundle](/docs/guides/okf), and the
-nested `…/concepts/<segment>` form addresses one concept inside it — by its
-stable document ID when the bundle's profile declares one, otherwise by its
-bundle-relative concept ID. Both forms resolve, and nested refs always print
-canonically.
+| Kind | URI segment | Compact token |
+|------|-------------|---------------|
+| Doc | `docs` | `doc` |
+| Package | `packages` | `package` |
+| Repo | `repos` | `repo` |
+| Skill | `skills` | `skill` |
+| Subagent | `subagents` | `subagent` |
+| Api | `apis` | `api` |
+| Cookbook | `cookbook` | `cookbook` |
+| Template | `templates` | `template` |
+| MasterPlan | `masterplans` | `masterplan` |
+| ExecPlan | `plans` | `plan` |
+| OkfBundle | `okf` | `okf` |
+| Checklist | `checklists` | `checklist` |
+| UpstreamIssue | `upstream-issues` | `upstream-issue` |
+| Recommendation | `radar` | `radar` |
+| DddSubdomain | `ddd/subdomains` | `ddd-subdomain` |
+| DddContext | `ddd/contexts` | `ddd-context` |
+| DddAggregate | `ddd/aggregates` | `ddd-aggregate` |
+| DddContextMapping | `ddd/mappings` | `ddd-mapping` |
+| DddFlow | `ddd/flows` | `ddd-flow` |
+| DddGlossaryTerm | `ddd/glossary` | `ddd-term` |
+| DddCollaborator | `ddd/collaborators` | `ddd-collaborator` |
 
-Improvement-request `originPlan` and `targetPlan` fields accept only canonical,
-unanchored `masterplans/<id>-<slug>` or `plans/<id>-<slug>` references, and the
-[improvement-request validator](/docs/guides/improvement-requests) additionally
-checks project ownership and exact registration.
+Four segments do not pluralise: `cookbook` (the artifact is "the cookbook
+entry"), `okf` (the format, not a plural noun), `radar` (it matches
+`mori tech-radar`), and `glossary` (a mass noun).
 
-## Where Refs Work
+The seven [DDD](/docs/guides/ddd) kinds take a **two-segment** path. The bare
+segment `mori://<ns>/<name>/ddd` is not a ref and reports an unknown kind —
+`ddd` is a namespace within the URI, not a kind of its own. The compact form
+needs no second segment, because each DDD token is flat
+(`shinzui/mori#ddd-context:registry`).
+
+See [Canonical Refs](/docs/concepts/canonical-refs) for the full table with
+Dhall arms, the nested grammars, and the resolution model.
+
+## Kinds that need a second look
+
+**Plans.** For `masterplans/<id>-<slug>` and `plans/<id>-<slug>` (the
+[agent-plans extension](/docs/guides/agent-plans)), the trailing key is the
+full `<id>-<slug>`, not the slug alone. Plan refs are registry-verified: a plan
+resolves only if the owning project publishes it in `mori/agent-plans.dhall`. A
+plan file sitting in `docs/plans/` but not listed there is **not** addressable
+— publishing is a deliberate act. Expect most of a repository's plan files to
+be unaddressable.
+
+**OKF concepts.** The nested `okf/<bundle>/concepts/<segment>` form addresses
+one concept inside an [OKF bundle](/docs/guides/okf) — by its stable document
+ID (`IR-1`, `ADR-7`) when the bundle's profile declares one, otherwise by its
+bundle-relative concept ID. Both forms resolve; the segment may contain `/`.
+
+**Tech-radar.** Mori renders a recommendation fully qualified
+(`radar/haskell/database/hasql`), but the one-segment short form
+`radar/hasql` is a valid ref and resolves whenever the package is recommended
+only once. Recommended under two languages, it reports an ambiguity error
+naming both fully-qualified candidates.
+
+**Context mappings.** `ddd/mappings/<upstream>/<downstream>` is an **ordered**
+pair. The reversed pair resolves only if the model declares it too.
+
+**Glossary terms.** Stored as prose (`Bounded Context`), addressed by slug
+(`bounded-context`).
+
+**Improvement requests.** `originPlan` and `targetPlan` fields accept only
+canonical, unanchored `masterplans/` or `plans/` references, and the
+[improvement-request validator](/docs/guides/improvement-requests)
+additionally checks project ownership and exact registration.
+
+## Nested refs
+
+Three kinds have a nested grammar:
+
+```text
+mori://<ns>/<name>/okf/<bundle>/concepts/<segment>
+mori://<ns>/<name>/checklists/<key>/steps/<step>
+mori://<ns>/<name>/ddd/flows/<key>/steps/<order>
+```
+
+A nested sub-key on any other kind is malformed and reports an unsupported-kind
+warning. Nested refs always render canonically, because the compact grammar has
+no lossless nested representation.
+
+## Where refs work
 
 ```bash
 mori path mori://shinzui/streamly/packages/streamly-core
@@ -66,8 +154,12 @@ mori registry open-doc mori://shinzui/streamly/docs/effects-cookbook
 mori validate --check-refs
 ```
 
-Refs resolve through the local registry. Register the target project locally
-before resolving it.
+Refs resolve through the **local** registry only — there is no network fetch.
+Register the target project locally before resolving it:
+
+```bash
+mori register --path ~/code/streamly
+```
 
 In Dhall configs, use `DocLocation.Canonical`:
 
@@ -76,7 +168,105 @@ location = Schema.DocLocation.Canonical
   "mori://shinzui/streamly/docs/effects-cookbook"
 ```
 
-Shell completion can complete registered namespaces, projects, artifact kinds,
-and artifact keys when the registry connection is available.
+Every kind now has a Dhall arm, so a typed `Schema.MoriRef` can name any of
+them:
 
-See [Canonical Refs](/docs/concepts/canonical-refs) for the full model.
+```dhall
+Schema.MoriRef::{
+, namespace = "shinzui"
+, name = "mori"
+, kind = Some Schema.MoriArtifactKind.DddContext
+, key = Some "registry"
+}
+```
+
+The three nested forms are the exception — `MoriRef` has no sub-key field, so
+they travel as canonical `Text` in a `DocLocation.Canonical` arm.
+
+## Validating refs
+
+```bash
+mori validate --check-refs
+```
+
+The check walks five sources and reports them as separate groups:
+
+| Source | What is checked |
+|--------|-----------------|
+| `mori.dhall` | project docs, per-package docs, dependency `extraDocs` |
+| `mori/cookbook.dhall` | each entry's `location` |
+| `mori/checklist.dhall` | each checklist's `sourceDoc` and item `docs` |
+| `mori/tech-radar.dhall` | each recommendation's `project` |
+| `mori/agent-plans.dhall` | each exposed plan's cross-project dependency `target`s |
+
+A missing extension file contributes nothing and is not an error. A file that
+fails to load prints one warning and contributes no refs, rather than failing
+the whole check.
+
+The last two are worth running deliberately after any registry change. Their
+loaders already reject a ref that does not *parse*, so what `--check-refs` adds
+is *resolution* — a plan dependency or radar pointer that still parses but
+names something no longer registered. That is the failure mode that rots
+quietly.
+
+## Shell completion
+
+Completion walks the URI segment by segment: namespaces, then project names,
+then artifact kinds, then keys.
+
+```bash
+mori path mori://shinzui/mori/<TAB>      # every kind, owned-first
+mori path mori://shinzui/mori/docs/<TAB> # every doc key
+mori path shinzui/mori#doc:<TAB>         # same, compact form
+```
+
+The `ddd/` prefix is offered once rather than as seven near-identical entries;
+committing it lists the seven members.
+
+Kind menus list every completable kind even when a kind has no rows, so you can
+complete a ref to a kind you have not populated yet. Key menus list only
+existing artifacts.
+
+Two shapes deliberately offer nothing and fall back to the shell's default: a
+**nested sub-key** (`…/checklists/<key>/steps/<TAB>`) and a **partially-typed
+multi-segment key** (`…/radar/haskell/<TAB>`). A whole multi-segment key is
+still offered as a single suggestion, so
+`…/ddd/mappings/registry/automation-engine` completes in one press.
+
+Completion requires `MORI_PG_CONNECTION_STRING` in the same shell where you ran
+`eval "$(mori completions bash)"`. See [Shell
+Completions](/docs/commands/completions).
+
+## Reference fragility
+
+No reference form is unconditionally durable. Mori's job is to make a broken
+reference **loud** rather than silent, so each kind fails in a specific,
+reported way rather than resolving to the wrong thing.
+
+- **Renaming the key** breaks a doc, package, repo, skill, subagent, api,
+  cookbook, template, checklist, upstream-issue, or DDD-entity ref. The key is
+  the identity; there is no alias table. Reported as a not-found error.
+- **Renaming a plan file** breaks every ref naming it, because the key is
+  `<id>-<slug>`. **Unpublishing** a plan from `mori/agent-plans.dhall` also
+  stops its ref resolving — publication is the contract.
+- **Renumbering a DDD flow step** silently redirects. A step is addressed by
+  its declared `order`, so inserting a step earlier and renumbering the rest
+  means an existing URI now names a *different* step. This is the one failure
+  that is not loud — prefer stable, sparse step numbers.
+- **Reordering a context mapping's pair** yields a different ref.
+- **Editing a glossary term's prose** changes its slug and breaks the ref.
+- **Adding a second radar recommendation for the same package** makes the short
+  `radar/<package>` form ambiguous.
+- **Removing a bundle's OKF profile** withdraws its document handles, so
+  `okf/<bundle>/concepts/<handle>` refs fall back to needing the concept path.
+- **Deregistering the owning project** breaks every ref into it, at every kind.
+
+`mori validate --check-refs` is how you find these before your users do.
+
+## See also
+
+- [Canonical Refs](/docs/concepts/canonical-refs) — the full model and kind table
+- [`mori path`](/docs/commands/path) — resolve a ref to a filesystem path
+- [`mori browse`](/docs/commands/browse) — open a ref in a browser
+- [`mori validate`](/docs/commands/validate) — `--check-refs`
+- [Schema Reference](/docs/guides/schema-reference) — `DocLocation` and `MoriRef`
