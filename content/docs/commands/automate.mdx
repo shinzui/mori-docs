@@ -50,11 +50,14 @@ ambiguous.
 |------|-------------|
 | `--to-head` | Reset the cursor to current `HEAD` (**default**) |
 | `--to-commit SHA` | Reset to a specific commit; validated with `git cat-file -e` |
-| `--to-root` | Re-ingest the entire repository from scratch |
+| `--to-root` | Re-read the entire repository history from scratch |
 
 Prefer `--to-head`: it clears the orphaned cursor and resumes from the current
-tip. `--to-root` is heavy and re-emits the full history, which can produce
-duplicate webhook deliveries to registered Mori Apps.
+tip. `--to-root` is heavy but safe — it does not duplicate downstream work.
+Content-stable changeset identity guards `IngestChangeset` on
+`contentHashKnown == False`, so a commit already recorded in
+`mori.changeset_content_index` emits no `ChangesetObserved` event at all and
+nothing re-fires. What `--to-root` costs is the re-read, not re-emission.
 
 `mori observe --reingest` is an alias for the `--to-root` form.
 

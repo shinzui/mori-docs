@@ -1,0 +1,188 @@
+---
+title: Splitting a DDD Model
+description: Compose one DddModel from several Dhall files without a directory merge
+icon: Split
+---
+
+The `ddd` extension loads one `DddModel` from one entry-point file. For project
+registration that entry point is always `mori/ddd.dhall` — `mori register`
+discovers that path and nothing else.
+
+A large model can still live in several files. You assemble them with ordinary
+Dhall imports and assign each value to a `DddModel` field. This is Dhall
+composition, not automation-style directory loading, and the difference matters:
+nothing is enumerated, sorted, or merged on your behalf.
+
+## Recommended layout
+
+```text
+mori/
+  ddd.dhall
+  ddd/
+    subdomains.dhall
+    contexts.dhall
+    order-aggregates.dhall
+    billing-aggregates.dhall
+    mappings.dhall
+    flows.dhall
+    glossary.dhall
+```
+
+The fragment names are an organizational convention only. Mori discovers
+`mori/ddd.dhall`; that file discovers every fragment through its imports.
+
+## The entry-point file
+
+Import each fragment, then assign it to the matching field. Use Dhall's
+list-append operator (`#`) when one concern spans several files:
+
+```dhall
+let Ddd =
+      https://raw.githubusercontent.com/shinzui/mori-schema/<commit>/extensions/ddd/package.dhall
+        sha256:<hash>
+
+let Subdomains = ./ddd/subdomains.dhall
+
+let Contexts = ./ddd/contexts.dhall
+
+let OrderAggregates = ./ddd/order-aggregates.dhall
+
+let BillingAggregates = ./ddd/billing-aggregates.dhall
+
+let Mappings = ./ddd/mappings.dhall
+
+let Flows = ./ddd/flows.dhall
+
+let Glossary = ./ddd/glossary.dhall
+
+in  Ddd.DddModel::{
+    , domain = Some "Commerce"
+    , subdomains = Subdomains
+    , contexts = Contexts
+    , aggregates = OrderAggregates # BillingAggregates
+    , mappings = Mappings
+    , flows = Flows
+    , glossary = Glossary
+    }
+```
+
+Mori resolves the complete import graph before decoding and validating. Duplicate
+keys and the model's semantic invariants are therefore checked across the
+composed result, not one fragment at a time.
+
+## Writing a fragment
+
+Each fragment returns the exact value its `DddModel` field expects. A
+`subdomains.dhall` returns a `List Ddd.Subdomain.Type`:
+
+```dhall
+let Ddd =
+      https://raw.githubusercontent.com/shinzui/mori-schema/<commit>/extensions/ddd/package.dhall
+        sha256:<hash>
+
+in  [ Ddd.Subdomain::{
+      , key = "ordering"
+      , name = "Ordering"
+      , kind = Ddd.SubdomainKind.Core
+      , description = Some "Placing and tracking customer orders."
+      }
+    , Ddd.Subdomain::{
+      , key = "billing"
+      , name = "Billing"
+      , kind = Ddd.SubdomainKind.Supporting
+      }
+    ]
+```
+
+An aggregate fragment follows the same shape:
+
+```dhall
+in  [ Ddd.Aggregate::{
+      , key = "order"
+      , name = "Order"
+      , context = Some "checkout"
+      , commands = [ "PlaceOrder" ]
+      , events = [ "OrderPlaced" ]
+      }
+    ]
+```
+
+Use the `Ddd.<Record>::{ ... }` completion form in every fragment. It keeps the
+fragment compatible when a later schema adds another defaulted field.
+
+<Callout type="info">
+  Dhall cannot infer the element type of an empty list. Annotate one explicitly:
+  `[] : List Ddd.ContextMapping.Type`.
+</Callout>
+
+## Schema pins in fragments
+
+Each file is an independently typechecked Dhall expression, so a `Ddd` binding in
+`mori/ddd.dhall` is **not** visible inside an imported file. Every schema-bearing
+fragment carries its own import, and every one must use the same commit and
+integrity hash as the entry point.
+
+Repositories with a local schema checkout may use relative imports instead,
+adjusted per directory. From `mori/ddd.dhall` and `mori/ddd/subdomains.dhall`
+respectively:
+
+```text
+../schema/extensions/ddd/package.dhall
+../../schema/extensions/ddd/package.dhall
+```
+
+Schema rewrites do not traverse imports.
+[`mori schema migrate`](/docs/commands/schema) with `--apply --file
+mori/ddd.dhall` rewrites the entry-point file only, and
+[`mori registry upgrade-schema`](/docs/guides/registry-upgrade) discovers
+`mori/ddd.dhall`, not arbitrary fragments. After a schema bump, get your binary's
+commit and ddd hash:
+
+```bash
+mori schema pin
+```
+
+Then update every fragment that carries a pinned schema URL and load the composed
+model again. Keep the entry point pinned too, so schema-staleness checks can see
+the version the model uses.
+
+## What is not supported
+
+<Callout type="warn">
+  A ddd directory is never merged automatically. `mori ddd contexts --config
+  mori/ddd/` does not work.
+</Callout>
+
+Unlike [`mori automate --config DIRECTORY`](/docs/guides/automation), the ddd
+loader does not enumerate, sort, or merge directory entries. `--config` accepts
+an alternative entry-point *file*, and only for local `mori ddd` commands;
+`mori register` still discovers `mori/ddd.dhall`.
+
+Fragments are also not merged by record name. The entry-point file must assign
+every imported value to a `DddModel` field, and must explicitly append lists that
+span more than one fragment.
+
+## Verifying the composed model
+
+Load several surfaces before registering — any import, type, duplicate-key, or
+reference error is reported while loading the single composed model:
+
+```bash
+mori ddd subdomains
+mori ddd contexts
+mori ddd aggregates
+mori ddd flows
+```
+
+Once it loads cleanly, register and inspect what was stored:
+
+```bash
+mori register
+mori extension query ddd --json
+```
+
+## Related
+
+- [DDD Extension](/docs/guides/ddd) — the complete schema, validation, and query guide
+- [Automation](/docs/guides/automation) — the directory-merge behavior ddd deliberately does not share
+- [Registry Upgrade](/docs/guides/registry-upgrade) — bulk schema-pin upgrades and their boundaries

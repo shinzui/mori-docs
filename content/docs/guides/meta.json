@@ -14,6 +14,7 @@
 		"bootstrap-extensions",
 		"extensions-declarative",
 		"ddd",
+		"ddd-decomposition",
 		"okf",
 		"improvement-requests",
 		"cookbook",

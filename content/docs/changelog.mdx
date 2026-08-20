@@ -11,6 +11,16 @@ features, commands, and schema changes.
 
 ## 2026-08-20
 
+### Splitting a DDD model across files (new page)
+- [Splitting a DDD Model](/docs/guides/ddd-decomposition) covers the supported way to compose one `DddModel` from several Dhall files: a small `mori/ddd.dhall` entry point, one fragment per concern, and `#` to append lists that span files
+- Every fragment carries its own schema import — a `let` binding in the entry point is not visible inside an imported file — and every schema-bearing fragment must use the same commit and hash as the entry point
+- **A `ddd` directory is never merged automatically.** Unlike `mori automate --config DIRECTORY`, the ddd loader does not enumerate, sort, or merge directory entries, and does not merge fragments by record name. `--config` names an alternative entry-point *file* for local `mori ddd` commands only; `mori register` still discovers `mori/ddd.dhall`
+- Schema rewrites do not traverse imports: `mori schema migrate --apply` and `mori registry upgrade-schema` rewrite the entry point only, so update pinned fragments yourself after `mori schema pin`
+
+### Corrected: `--to-root` does not duplicate deliveries
+- [`mori automate reset-checkpoint --to-root`](/docs/commands/automate#mori-automate-reset-checkpoint) was documented as producing duplicate webhook deliveries to registered Mori Apps. That has not been true since content-stable changeset identity shipped
+- `IngestChangeset` is guarded on `contentHashKnown == False`, so a commit already recorded in `mori.changeset_content_index` emits no `ChangesetObserved` event and nothing re-fires. `--to-root` is heavy because of the re-read, not because of re-emission
+
 ### `mori ops` — the operations console (new page)
 - [`mori ops`](/docs/commands/ops) is the keiro-ops console mounted inside the mori binary, and the only operator surface for framework-owned state: durable workflows, timers, the transactional outbox and inbox, PGMQ dead letters, advisory snapshots, Kiroku streams, shard ownership, subscription checkpoints, projection dedup state, and read-model rebuilds
 - Every mutating command previews first, changes nothing, and **exits 1** until you re-run with `--force`. Every invocation also verifies the live Keiro schema against the binary; a mutating command refuses on drift unless `--allow-schema-drift` is passed

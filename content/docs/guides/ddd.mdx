@@ -50,6 +50,11 @@ Create `mori/ddd.dhall` in the project directory. The extension follows the
 same `{ Input, Type, default, mk }` bundle convention as the core schema, so the
 `::` record-completion form supplies omitted defaults.
 
+A large model may keep this file as a small entry point and import lists from
+files grouped by concern. Mori does not merge a `ddd` directory automatically —
+see [Splitting a DDD Model](/docs/guides/ddd-decomposition) for the supported
+composition pattern.
+
 ```dhall
 let Ddd = ../schema/extensions/ddd/package.dhall
 
@@ -448,6 +453,7 @@ mori registry upgrade-schema
 ## Related
 
 - [mori ddd](/docs/commands/ddd) - exact command syntax
+- [Splitting a DDD Model](/docs/guides/ddd-decomposition) - composing one model from several files
 - [Extensions](/docs/guides/extensions) - the general extension system
 - [Local Registry](/docs/concepts/local-registry) - database setup and projections
 - [Schema Guide](/docs/schema-guide) - record completion and schema pins
