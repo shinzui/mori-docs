@@ -149,6 +149,46 @@ policies, and no external-read contracts, so `rebuild versioned`,
 > on the strength of replay finishing, with no declared post-condition
 > asserted. Check the affected tables yourself afterwards.
 
+## Projection catalog drift
+
+A binary whose declared projection catalog disagrees with what the target
+database has registered would write read-model rows under a different shape
+than the rows already there. Two gates stop that before it happens.
+
+**Deployment gate.** `just migrate-verify` compares the candidate build's
+rebuild-group slices against the registered catalog, after the ledger check
+passes:
+
+```text
+projection catalog verification failed: the candidate binary does not
+match the catalog registered in this database.
+  rebuild group project_models changed
+    stored:    <fingerprint>
+    candidate: <fingerprint>
+    preview:   mori ops rebuild adopt project_models
+```
+
+No catalog metadata is changed by the check.
+
+**Startup gate.** `mori automate daemon` registers the catalog before reading
+projection-backed configuration and before starting any queue, API, ingest,
+outbox, schedule, reactor, or timer leg. On drift it refuses to start, naming
+the group and both fingerprints. The worker host repeats the same idempotent
+registration immediately before its own legs, so a direct caller and a
+concurrent catalog change stay guarded too.
+
+Restarting will not clear either — that is the point. Preview the group against
+the same database with the candidate binary, inspect the affected projections
+and targets, then adopt deliberately:
+
+```bash
+mori ops rebuild preview <GROUP>
+mori ops rebuild adopt <GROUP>
+```
+
+`adopt` reconciles slice drift on a **healthy** group; a group left fenced by a
+failed rebuild needs abandon-then-start instead.
+
 ## One executor per database
 
 `mori automate daemon` and `mori automate run` take a PostgreSQL session

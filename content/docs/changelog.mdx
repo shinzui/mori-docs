@@ -28,6 +28,11 @@ features, commands, and schema changes.
 - Renaming means changing `namespace` or `name` while keeping the same `stableId`. Mori records the previous canonical identity as an alias automatically; `Schema.ProjectAlias::{ namespace, name }` declares older identities explicitly
 - References through an alias keep resolving. `mori validate --check-refs` reports them as warnings naming the current canonical identity
 
+### Projection catalog drift is now a hard gate
+- `mori automate daemon` registers its projection catalog **before** reading projection-backed configuration or starting any queue, API, ingest, outbox, schedule, reactor, or timer leg, and refuses to start when the catalog disagrees with what the database has registered
+- `just migrate-verify` performs the same comparison at deploy time, after the ledger check, naming the rebuild group and both fingerprints. It changes no catalog metadata
+- Restarting clears neither. Preview the group with the candidate binary, then [`mori ops rebuild adopt`](/docs/commands/ops#projection-catalog-drift) deliberately
+
 ### Six new guides
 - [Signal Deliveries](/docs/guides/signal-deliveries) — delivery states, manual redrive, and the terminal refusals (consent, fan-out, cycle, depth) that are recorded rather than retried
 - [Debugging Automation](/docs/guides/debug-automation) — the five-layer path from "nothing happened" to a root cause: registered config, ingested event, matching selector, executed reaction, delivered signal
