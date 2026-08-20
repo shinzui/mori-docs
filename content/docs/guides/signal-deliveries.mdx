@@ -1,0 +1,158 @@
+---
+title: Signal Deliveries
+description: Inspect, diagnose, and redrive durable cross-repository signal deliveries
+icon: RadioTower
+---
+
+Every `Signal` reaction action — and every routed `Decision` outcome — produces
+one **durable delivery record per resolved target**. Those records are the
+audit trail for cross-repository work: they say what was sent, to whom, whether
+it arrived, and if not, exactly why.
+
+For how signals are *declared*, matched, and bounded, see
+[Cross-Repo Workflows](/docs/guides/cross-repo-workflows). This guide is about
+what happens after one is emitted.
+
+## Delivery states
+
+| State | Meaning |
+|-------|---------|
+| `pending` | Accepted and awaiting a delivery attempt |
+| `delivered` | Handed to the target repository's reaction path |
+| `failed` | Domain dead-letter state; `last_error` names the cause. Manual redrive is available after correcting it |
+| `expired` | Exceeded its delivery window without succeeding |
+
+## Listing deliveries
+
+```bash
+mori signal list
+mori signal list --failed
+mori signal list --pending --target shinzui/payment-service
+mori signal list --expired --type SchemaChanged --limit 50 --json
+```
+
+| Flag | Description |
+|------|-------------|
+| `--failed`, `--dead-lettered` | Show failed deliveries |
+| `--pending` | Show pending deliveries |
+| `--expired` | Show expired deliveries |
+| `--target PROJECT` | Match one exact qualified target project |
+| `--type SIGNAL_TYPE` | Match one exact signal type |
+| `--limit N` | Bound output (default: 20) |
+| `--json` | Emit snake_case JSON |
+
+Choose **at most one** state filter. Without one, deliveries in every state are
+listed newest first.
+
+Each row prints on one line:
+
+```text
+DELIVERY_ID  SIGNAL_TYPE  source/project → target/project  STATE  retries=N/MAX
+```
+
+A failed delivery appends its diagnostic:
+
+```text
+…  failed  retries=3/3  last_error=consent: shinzui/source not allowed by shinzui/target
+```
+
+## Inspecting one delivery
+
+```bash
+mori signal show
+mori signal show sigd_01h455vb4pex5vsknk084sn02q
+mori signal show sigd_01h455vb4pex5vsknk084sn02q --json
+```
+
+`show` joins the current delivery state to its `SignalEmission` checkpoint, the
+target reaction when there is one, and the **full immutable aggregate
+history** — every failed attempt and every manual redrive stays visible even
+after the current state moves on.
+
+Omit the delivery ID and `show` opens an fzf picker over the 200 most recent
+deliveries in every state, previewing the full detail view for the row under
+the cursor. Type to filter by ID, state, signal type, or either project;
+Esc/Ctrl-C exits quietly. `--json` still applies to whatever you pick. Without
+fzf installed the ID stays required, and the error says so.
+
+`mori signal retry` deliberately has **no** picker: a redrive writes an event,
+so it wants an ID you chose on purpose.
+
+## Manual redrive
+
+```bash
+mori signal retry sigd_01h455vb4pex5vsknk084sn02q
+mori signal retry sigd_01h455vb4pex5vsknk084sn02q --reason "target repaired"
+```
+
+Only a `failed` delivery accepts redrive. The aggregate records the reason,
+returns the delivery to `pending`, resets the live retry counter, and arms a
+fresh timer. Prior attempt events are never erased.
+
+Delivered, pending, and expired deliveries are rejected with state-specific
+guidance, and concurrent duplicate redrives collapse to one event.
+
+## Terminal refusals
+
+Some refusals are **recorded rather than retried**, because retrying could not
+change the outcome.
+
+### Consent
+
+A target that declines the source through its `Automation.consent` allowlist
+fails with a `consent:` reason. Fix it on the *target* side — add the source
+project or its namespace to `allowSignalsFrom`, or remove the declaration
+entirely to allow all sources.
+
+An absent `consent` preserves default-allow. An explicitly empty
+`allowSignalsFrom` denies **every** source.
+
+### Bounds
+
+A delivery that breaches the emitter's `signalBounds` fails with a fan-out,
+depth, or cycle reason.
+
+Fan-out is **all-or-nothing**: exceeding `maxFanOut` creates a visible failed
+delivery for every resolved target and delivers to none, so a workflow never
+looks partially successful.
+
+A **cycle** reason means the same signal content came back around. Chains carry
+ancestor content digests, so a loop is caught immediately rather than after
+`maxChainDepth` hops — raising the bound will not help, the loop needs
+breaking. Content that changes on every hop cannot be recognised as a cycle and
+is stopped by `maxChainDepth` instead.
+
+## Diagnosing a signal that did not arrive
+
+Start with the delivery record:
+
+```bash
+mori signal list --failed
+```
+
+A failed row names the cause directly. If the delivery shows `delivered` but no
+reaction ran, the **target's selector did not match**. Re-check three things:
+
+| Field | Common mistake |
+|-------|----------------|
+| `signalTypes` | These are globs, so `Schema*` and `SchemaChanged` behave differently from a typo |
+| `sourceProjects` | Exact qualified names — a bare project name matches nothing |
+| `payloadPredicates` | A predicate on a path the payload does not carry silently narrows the selector to nothing |
+
+## Delivery health
+
+```bash
+mori doctor --signals
+mori doctor --signals --json
+```
+
+The focused audit exits **2** when any delivery is failed or any pending
+delivery is older than one hour, **1** when the audit itself errors, and **0**
+when healthy. The default `mori doctor` run includes the same delivery section.
+
+## See also
+
+- [`mori signal`](/docs/commands/signal) — exact command syntax
+- [Cross-Repo Workflows](/docs/guides/cross-repo-workflows) — declaring signals, selectors, consent, bounds
+- [Reaction History](/docs/guides/reaction-history) — the reaction that emitted or received it
+- [`mori workflow`](/docs/commands/workflow) — `trace <ID>` for the causal chain, `explain <PROJECT>` for static topology

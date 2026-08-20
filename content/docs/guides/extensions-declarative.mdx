@@ -1,0 +1,130 @@
+---
+title: Declarative Extensions
+description: Install local, data-only extensions and understand their trust model
+icon: Blocks
+---
+
+Declarative extensions add typed project metadata **without loading Haskell
+plugins or any executable code**. Where a built-in extension is compiled into
+mori, a declarative one is a directory of Dhall you install locally.
+
+For built-in extension behavior and cross-project queries, see
+[Extensions](/docs/guides/extensions).
+
+## Bundle layout
+
+```text
+extension.dhall        ExtensionManifest metadata
+schema/package.dhall   Import-closed Dhall schema
+schema/…               Relative imports used by package.dhall
+```
+
+## Installation
+
+```bash
+mori extension install path/to/my-extension
+mori extension install path/to/my-extension --force   # replace an existing one
+mori extension list                                   # catalog provenance and versions
+mori extension remove my-extension
+```
+
+Installations live under the XDG data directory, normally
+`~/.local/share/mori/extensions/<name>/`.
+
+A second install reports that the extension already exists — `--force` replaces
+it, so use it only when you mean to. Built-in extensions cannot be removed, and
+`retire` is a separate metadata soft-delete, not a way to remove installed
+files.
+
+## The manifest
+
+`extension.dhall` imports the first-party `ExtensionManifest` record from the
+pinned mori-schema package and completes it with `::{ … }`.
+
+| Field | Meaning |
+|-------|---------|
+| `name`, `version`, `description` | Catalog identity |
+| `filePath` | Project-relative file under `mori/`. `""` defaults to `mori/<name>.dhall` |
+| `schema` | URL label, semantic hash, root and entry records |
+| `kinds` | Typed URI grammars and entity key extraction |
+| `edges` | Reserved; currently accepted but ignored |
+| `collectCanonicalRefs` | Whether canonical-reference collection includes it |
+
+Names and URI grammar must not collide with built-in or installed kinds.
+
+## Authoring and registration
+
+1. Install the bundle.
+2. Author the project file at the manifest's `filePath`.
+3. Validate canonical references and register:
+
+   ```bash
+   mori validate --check-refs
+   mori register
+   ```
+
+4. Verify projected entities and URI resolution:
+
+   ```bash
+   mori extension query my-extension
+   mori path mori://namespace/project/<declared-path>/<key>
+   ```
+
+Declared kinds are typed by their manifest grammar and key extraction. Mori
+projects one row per entity into `extension_entities` and resolves only an
+**exact** row — it never treats an arbitrary JSON key as an artifact.
+
+To assemble an authoring prompt from the installed schema:
+
+```bash
+mori agent bootstrap-extension --name my-extension --debug
+```
+
+Omit `--debug` to launch the session. The prompt keeps the manifest's extension
+pin and never substitutes a first-party mori-schema URL.
+
+## Trust model
+
+An installed extension is **local data**: Dhall types and values only.
+Installing or loading one does not load plugins, native libraries, shell
+commands, or any other executable code. Dhall normalization is total and has no
+IO capabilities.
+
+Mori permits **no network fetch** while installing an extension:
+
+- The manifest may import the exact first-party mori-schema namespace
+  `https://raw.githubusercontent.com/shinzui/mori-schema/<40-hex-commit>/…`.
+  Mori serves that import from the binary's embedded schema; its sha256 is a
+  version label, matching normal project-schema behavior.
+- The extension's own schema must be **import-closed**. Every import is
+  relative, stays inside the installed `schema/` directory, and contains no
+  symlink, remote URL, environment import, absolute path, or home-relative
+  path.
+- A third-party schema URL in a project file is a **logical label**. Mori
+  serves it from the matching local installation. It is never mapped to the
+  embedded first-party schema and never falls through to the network.
+
+The manifest's `schema.hash` is verified against the normalized installed
+`schema/package.dhall`. A mismatch aborts with the extension name and both the
+expected and actual semantic hashes. Formatting and comments do not affect a
+Dhall semantic hash; type or value changes do.
+
+## Migration safety
+
+Mori does not own third-party schema evolution, and does not pretend to.
+
+A declared extension file is recognized by `mori schema migrate` but receives
+**no core migrations**, and its schema pin stays byte-identical. The bulk
+registry upgrade reports installed extension files and skips them with a
+per-file note — you will see `declared extension '<name>': pin unchanged` in
+the report.
+
+An unrecognized `mori/*.dhall` file is refused with builtin and installed name
+lists plus installation guidance, rather than being misclassified as a Project
+file.
+
+## See also
+
+- [Extensions](/docs/guides/extensions) — built-in extensions and cross-project queries
+- [`mori extension`](/docs/commands/extension) — exact command syntax
+- [`mori registry upgrade-schema`](/docs/commands/registry) — how the sweep treats these files

@@ -172,8 +172,8 @@ If a new top-level command is added, create `content/docs/commands/<command>.mdx
 
 ### 5. Map Help Topics To Guides
 
-Twenty-six topics have a same-slug guide today. Treat same-slug as the default
-and verify it rather than trusting this table:
+Thirty-two of the thirty-eight topics have a same-slug guide today, and the
+other six are deliberate consolidations. Verify rather than trusting the list:
 
 ```bash
 for t in /Users/shinzui/Keikaku/bokuno/mori-project/mori/mori-cli/help/*.md; do
@@ -182,35 +182,20 @@ for t in /Users/shinzui/Keikaku/bokuno/mori-project/mori/mori-cli/help/*.md; do
 done
 ```
 
-Same-slug guides currently exist for: `agent-ask`, `agent-plans`, `aliases`,
-`apps`, `automation-daemon`, `bootstrap-extensions`, `checklist`, `cookbook`,
-`corpus-learning`, `ddd`, `extensions`, `improvement-requests`, `kit`,
-`mori-refs`, `okf`, `project-config`, `reaction-history`, `registry-domains`,
-`registry-exec`, `registry-groups`, `registry-templates`, `seihou-templates`,
-`status`, `tech-radar`, `trailer-matching`, `upstream-issues`.
-
-Topics deliberately consolidated elsewhere:
+Every topic *not* printed by that loop has a same-slug guide. The six that are
+printed are consolidated on purpose:
 
 | Help Topic | Covered by |
 |---|---|
 | `automation-config` | `guides/automation.mdx` |
 | `cross-repo-automation` | `guides/cross-repo-workflows.mdx` |
+| `operations` | `commands/ops.mdx` — carries the daemon lock, the metrics endpoints, and the missing-checkpoint policies as well as the command surface |
 | `schema-modification` | `guides/schema-migrations.mdx` |
 | `schema-records` | `schema-guide.mdx` |
 | `schema-types` | `guides/schema-reference.mdx` |
 
-Topics with **no** guide coverage at all — each is an open gap, not a
-consolidation:
-
-| Help Topic | Gap |
-|---|---|
-| `api` | The HTTP read surface. `commands/serve.mdx` covers the command, not the endpoints or their contracts |
-| `operations` | Now partly covered by `commands/ops.mdx`; the daemon lock, metrics endpoints, and checkpoint policies still have no guide |
-| `signal-deliveries` | `commands/signal.mdx` covers the command; delivery states, redrive, and consent have no guide |
-| `debug-automation` | No page |
-| `extensions-declarative` | No page; `guides/extensions.mdx` covers the typed extension system only |
-| `project-identity` | Now covered by `commands/identity.mdx`; no conceptual guide |
-| `registry-upgrade` | No page |
+There are currently **no** uncovered help topics. If the loop above prints a
+topic that is not in that table, it is a real gap: create the guide.
 
 For new help topics, create a guide by default. Consolidate only when a standalone page would duplicate an existing guide; in that case, add a clearly named section and keep this table current.
 

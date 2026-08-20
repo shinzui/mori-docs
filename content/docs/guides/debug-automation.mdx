@@ -1,0 +1,252 @@
+---
+title: Debugging Automation
+description: From "nothing happened" to a root cause, one layer at a time
+icon: Bug
+---
+
+A working automation has five things lined up: a **registered config**, an
+**ingested event**, a **matching selector**, an **executed reaction**, and — for
+cross-repo work — a **delivered signal** that the target repo matches in turn.
+
+Debug in that order. Each step narrows the failure to one layer, so you never
+have to guess which one broke.
+
+## Quick triage
+
+```bash
+mori doctor                      # baseline: DB connectivity
+mori doctor --ingest             # stuck repositories
+mori doctor --reactions          # stuck, halted, or parked legs
+mori doctor --signals --json     # failed or long-pending deliveries
+```
+
+Exit code **2** means "unhealthy fleet"; exit **1** means "doctor itself
+failed". Both are cron- and CI-friendly.
+
+## 1. Is the config registered and valid?
+
+```bash
+mori automate list                    # configs the daemon actually manages
+mori automate inspect --path <dir>    # config summary, reaction stats, joins
+mori validate                         # config parses and typechecks
+```
+
+A config sitting on disk does nothing until it is registered. If your
+automation is absent from `mori automate list`:
+
+```bash
+mori automate register --path <dir>
+```
+
+After editing a registered config, apply the change with
+`mori automate update --path <dir>`.
+
+Every `--path`-taking subcommand resolves paths through the same helper — never
+rely on an implicit working directory when `--path` is in scope.
+
+## 2. Was the event ingested?
+
+```bash
+mori doctor --ingest
+mori automate ingest git --path <dir>
+```
+
+A repository is **stuck** when it has three or more consecutive ingest failures,
+or no successful ingest in the last six hours.
+
+If history was rewritten under mori — a force-push, a rebase of already-ingested
+commits — ingest detects it and stops. Recover the cursor with:
+
+```bash
+mori automate reset-checkpoint <PROJECT> --to-head
+```
+
+The argument is a project name, or `namespace/name` when the bare name is
+ambiguous. Prefer `--to-head`. `--to-commit <SHA>` targets one commit, and
+`--to-root` re-reads the whole history and **can produce duplicate webhook
+deliveries**.
+
+## 3. Should the event have matched?
+
+```bash
+mori automate explain <GLOBAL_POSITION> --path <dir> [--config PATH] [--json]
+```
+
+This is the highest-value command in the whole loop. It evaluates one stored
+event against **exactly the same matcher the live router uses**, and reports
+which selectors matched and which did not — no guessing about glob semantics,
+branch filters, or trailer syntax.
+
+For a `SignalDeliverySucceeded` receipt it additionally reports matched join
+legs, the correlation value, the projected join state, the arrived receipt map,
+and any visible projection error.
+
+Common non-matches:
+
+| Cause | Detail |
+|-------|--------|
+| `paths` globs | Matched against repo-relative paths — `openapi/**` does **not** match a top-level `openapi.yaml` |
+| `branches` filters | Exact branch names, not globs |
+| `sourceProjects` | Must be qualified (`namespace/name`); a bare project name never matches |
+| Payload predicates | Combined with AND — one failing predicate silently suppresses the whole selector |
+
+See [Trailer Matching](/docs/guides/trailer-matching) for trailer-based matching
+and event-data interpolation.
+
+## 4. What did the reaction actually do?
+
+```bash
+mori reaction list                       # last 20 reactions
+mori reaction list --status failed       # only failures
+mori reaction list --name <NAME> -n 50   # one reaction, deeper history
+mori reaction show <REACTION_ID>         # full detail for one run
+mori reaction show                       # pick one interactively (fzf)
+```
+
+`reaction list` prints the full `rxn_…` TypeID, so the ID column can be copied
+straight into `reaction show`. Or drop the ID entirely and pick from the fzf
+picker, which previews each detail view as you move the cursor.
+
+| Status | Meaning |
+|--------|---------|
+| `completed` | Ran to completion |
+| `failed` | An action returned an error — `show` prints its output |
+| `triggered` | Started and never finished (see below) |
+| `scheduled` | Waiting on its delay; see `mori reaction scheduled list` |
+| `skipped` | An idempotency guard suppressed it; `show` prints the guard's exit code and stderr |
+| `cancelled` | Cancelled by an operator; `show` prints the reason |
+
+For a failed `RunCommand`, `mori reaction show` prints the command's captured
+output in dedicated `Stdout:` and `Stderr:` blocks. **That is almost always
+where the real answer is — read it before theorizing.**
+
+### Stuck reactions
+
+A reaction left in `triggered` means the executor died mid-run and the
+checkpoint never advanced, so the leg is blocked behind it.
+
+```bash
+mori reaction recover <REACTION_ID>            # skip it (advance past)
+mori reaction recover <REACTION_ID> --retry    # skip, then re-emit a fresh
+                                               # ReactionTriggered under a new ID
+mori reaction recover --dead-letters [--limit N]
+mori reaction recover --clear-halt <LEG>
+```
+
+### Scheduled reactions
+
+```bash
+mori reaction scheduled list [--repo REPO_ID] [--automation NAME] [--json]
+mori reaction scheduled show <REACTION_ID> [--json]
+mori reaction cancel <REACTION_ID> --reason "<text>"
+```
+
+Scheduled rows carry `scheduled_at`, `run_at`, the coalesce key, and the queue
+message ID. A reaction that never fires usually has a coalesce key that keeps
+collapsing into a newer occurrence.
+
+## 5. Cross-repo: did the signal reach the target?
+
+Two commands answer two different questions. **Static topology first:**
+
+```bash
+mori workflow explain <PROJECT> [--json]
+```
+
+This reads active registrations, not runtime history. It reports Signal actions,
+Decision outcome routes, how each target list resolves right now (including
+`*dependents*`), SignalSelectors, and the reactions attached to them. Use it to
+answer "should A be able to signal B at all?"
+
+**Then the runtime chain:**
+
+```bash
+mori workflow list [-n N]           # recent workflows (full wf_… IDs)
+mori workflow status                # only in-flight workflows
+mori workflow trace <WORKFLOW_ID>   # the complete causal chain
+```
+
+`trace` walks to the root of the chain and renders every descendant workflow and
+target step as a tree, so **any** workflow ID in the chain is a valid starting
+point — you do not need the first one.
+
+| Flag | Description |
+|------|-------------|
+| `--flat` | Only the requested workflow, in the detail view |
+| `--json` | The nested chain document (snake_case) |
+| `--mermaid` | A Mermaid `flowchart LR` diagram |
+| `--max-depth N` | Bound ancestor and descendant traversal (default: 32) |
+
+The HTTP equivalent is `GET /v1/workflows/<WORKFLOW_ID>/chain`.
+
+Two honest limits: history recorded before workflow parent correlation was
+introduced has no reconstructible chain edge and shows as independent roots; and
+tracing covers the Kiroku functional path only.
+
+### When no workflow exists at all
+
+If the source reaction ran but no workflow appears, the emission never resolved
+a target. Deliveries are never silently dropped, so look at them directly:
+
+```bash
+mori signal list [--failed|--pending|--expired] [--target P] [--type T]
+mori signal show <DELIVERY_ID> [--json]
+mori signal retry <DELIVERY_ID> --reason "<text>"
+```
+
+Reading delivery failures:
+
+| Reason | What it means |
+|--------|---------------|
+| `unresolved target` | The target is not in the `mori.projects` read model. A repo that was only `mori register`-ed has no RepoId — run `mori observe list` in the target's workspace, and fix with `mori automate register --path <dir>` (or `mori observe --path <dir>` to also ingest history) |
+| `consent:…` | The target's `allowSignalsFrom` allowlist refused the source. **Terminal — never retried.** A declared empty allowlist denies everything |
+| fan-out cap | Exceeding `maxFanOut` (default 25) is all-or-nothing: every resolved target gets a visible failed delivery and none are delivered |
+| cycle / depth | Repeating equivalent signal content trips the cycle guard; content that changes every hop is stopped by `maxChainDepth` (default 8) |
+
+A signal that **arrives but triggers nothing** is a step-3 problem in the
+*target* repo: run `mori automate explain` there against the receipt.
+
+## 6. Fleet health and recurring problems
+
+```bash
+mori doctor --reactions    # stuck legs, halted legs, dead letters
+mori ops …                 # daemon lock, subscriptions, replay audits, rebuilds
+```
+
+If the daemon is not running, nothing in steps 2–5 happens at all. Check
+`mori automate daemon` and see
+[Automation Daemon](/docs/guides/automation-daemon).
+
+## Worked example
+
+*"My dependent repo never regenerated its client."*
+
+```bash
+# Source repo: did the emitting reaction run?
+mori reaction list --name notify-dependents
+mori reaction show rxn_…
+
+# Should it have matched this commit?
+mori automate explain 4821 --path .     # add --name NAME for a non-default automation
+
+# Did an emission resolve targets?
+mori workflow list -n 10
+mori workflow trace wf_…
+
+# If a leg is red, read the delivery
+mori signal list --failed
+mori signal show sigd_… --json
+
+# In the target repo: does it even declare a matching selector?
+mori workflow explain shinzui/payment-service
+mori automate explain <receipt position> --path ../payment-service
+```
+
+## See also
+
+- [Automation](/docs/guides/automation) — the `Automation` type and its fields
+- [Reaction History](/docs/guides/reaction-history) — reaction commands in depth
+- [Cross-Repo Workflows](/docs/guides/cross-repo-workflows) — signals, selectors, joins, bounds
+- [Signal Deliveries](/docs/guides/signal-deliveries) — delivery states and operator commands
+- [Automation Daemon](/docs/guides/automation-daemon) — running the multi-repo daemon
+- [`mori ops`](/docs/commands/ops) — event-store operations

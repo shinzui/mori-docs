@@ -1,0 +1,176 @@
+---
+title: HTTP API
+description: The loopback-first read surface, its security perimeter, and pagination
+icon: Server
+---
+
+`mori serve` runs mori's HTTP API: a Servant + Warp server exposing the
+registry, reactions, workflows, repositories, groups, apps, and signed ingest
+over HTTP.
+
+```bash
+mori serve
+mori serve --port 9000
+```
+
+On startup it prints the listen address, the auth mode, and the number of
+allowed CORS origins:
+
+```text
+mori-api listening on http://127.0.0.1:8080 (application endpoints
+under /v1; probes under /health); auth: disabled; cors origins: 0
+```
+
+## Flags
+
+| Flag | Description |
+|------|-------------|
+| `--port`, `-p PORT` | Port to listen on. Default: `$MORI_API_PORT`, else 8080 |
+| `--host HOST` | Interface to bind. Default: `$MORI_API_HOST`, else `127.0.0.1`. Non-loopback hosts require `MORI_API_TOKEN` or `--insecure-no-auth` |
+| `--cors-origin ORIGIN` | Allow this exact browser origin; repeatable |
+| `--insecure-no-auth` | Allow a non-loopback bind without a bearer token. **Dangerous** |
+| `--plan-graph-node-limit COUNT` | Max nodes in one `GET /v1/plans/graph` response. Default: 2000 |
+| `--plan-graph-edge-limit COUNT` | Max edges in one `GET /v1/plans/graph` response. Default: 5000 |
+
+## Environment
+
+| Variable | Purpose |
+|----------|---------|
+| `MORI_PG_CONNECTION_STRING` | **Required.** The server refuses to start without it; it opens the kiroku store as well as the registry pool |
+| `MORI_API_PORT` | Default port when `--port` is absent |
+| `MORI_API_HOST` | Default bind interface when `--host` is absent |
+| `MORI_API_TOKEN` | Enables bearer-token auth. A non-empty value is required for any non-loopback bind |
+| `MORI_API_CORS_ORIGINS` | Comma-separated exact browser origins, used when no `--cors-origin` flag is given |
+
+Flags win over environment variables in every case.
+
+## Security perimeter
+
+The server is **loopback-first**. It binds `127.0.0.1` by default and refuses a
+non-loopback bind unless you have made an explicit choice about auth:
+
+```text
+mori serve: refusing to bind non-loopback host "0.0.0.0" without
+authentication. Set MORI_API_TOKEN to enable bearer-token auth, or pass
+--insecure-no-auth to accept unauthenticated remote access
+(POST /v1/apps returns live webhook signing secrets).
+```
+
+Loopback hosts are `127.0.0.1`, `localhost`, and `::1`. The check lives in the
+server rather than the CLI parser, so no caller bypasses it by accident.
+
+### Bearer authentication
+
+A non-empty `MORI_API_TOKEN` turns on bearer auth for every route except the
+two public probes (`GET /health/live` and `GET /health/ready`, which stay open
+so an orchestrator can reach them). Requests must carry:
+
+```text
+Authorization: Bearer <token>
+```
+
+Tokens are compared in constant time. A missing or wrong token gets `401`.
+
+> `--insecure-no-auth` is a real risk, not a formality. Binding a remote
+> interface without a token hands live webhook signing secrets to anyone who
+> can reach the port.
+
+### CORS
+
+Cross-origin browser access is denied by default. `--cors-origin` and
+`MORI_API_CORS_ORIGINS` allowlist **exact** origins; there is no wildcard.
+CORS is outermost in the middleware stack, so an allowlisted browser preflight
+never has to satisfy the auth check.
+
+## Surface
+
+| Path | Contents |
+|------|----------|
+| `/health/*` | Standard, unversioned probes. `/health/live` and `/health/ready` stay reachable without a token |
+| `/v1/health` | Versioned health compatibility surface |
+| `/v1/health/db` | Database smoke check |
+| `/v1/openapi.json` | Generated OpenAPI 3.1 document, including the published security contract |
+| `/v1/projects`, `/v1/reactions`, `/v1/workflows`, `/v1/repositories`, `/v1/groups`, `/v1/apps`, `/v1/ingest` | Application resources |
+| `/v1/workflows/{id}/steps` | One workflow's steps |
+| `/v1/workflows/{id}/chain` | The complete causal chain — the HTTP equivalent of `mori workflow trace` |
+| `/v1/plans/graph` | The canonical plan dependency DAG — the HTTP equivalent of `mori plans graph` |
+
+Fallible routes return typed **RFC 9457 problem documents** rather than bare
+error strings. Requests carry OpenTelemetry instrumentation, and JSON field
+names use the API's snake_case convention.
+
+## Pagination
+
+Unbounded collection endpoints return **Relay connections** rather than bare
+arrays, and accept the standard Relay cursor arguments:
+
+| Argument | Meaning |
+|----------|---------|
+| `first` | Take N items forward |
+| `after` | Start after this cursor |
+| `last` | Take N items backward |
+| `before` | End before this cursor |
+
+The paginated endpoints are `GET /v1/projects`, `/v1/reactions`,
+`/v1/workflows`, `/v1/workflows/active`, `/v1/repositories/configs`,
+`/v1/repositories/ingest-status`, `/v1/groups`, and `/v1/apps`.
+
+A cursor that parses at the HTTP boundary but fails the endpoint's sort
+contract returns `400` with a **Relay page error**, distinct from the RFC 9457
+problem document used for application errors — so a client can tell "your
+cursor is stale" apart from "your request was wrong".
+
+> This was a breaking change: these endpoints previously returned bare JSON
+> arrays. Clients that indexed the response directly must read through the
+> connection's edges.
+
+## Plan dependency graph
+
+`GET /v1/plans/graph` is the deliberate exception to pagination. It returns the
+whole prerequisite-closed graph **or no graph**: dropping nodes or edges would
+change reachability.
+
+```text
+GET /v1/plans/graph
+GET /v1/plans/graph?project=shinzui/mori&project=shinzui/keiro
+GET /v1/plans/graph?group=delivery
+GET /v1/plans/graph?contract_version=1
+```
+
+`project` is repeatable and conflicts with `group`. An unknown project or
+group, and a scope with no published plans, return a stable error rather than
+an ambiguous empty graph.
+
+Because the response is unbounded by design, it is bounded by configuration:
+`--plan-graph-node-limit` (default 2000) and `--plan-graph-edge-limit` (default
+5000). An oversized result returns `422` with both actual counts and both
+configured limits. A cyclic graph returns `422` with code
+`cyclic_plan_dependencies` and **no partial document**.
+
+The body is the same versioned contract `mori plans graph --json` emits.
+
+## Serving from the daemon
+
+The automation daemon can serve the same API on one more concurrent leg,
+sharing its pool and kiroku store:
+
+```bash
+mori automate daemon --serve
+mori automate daemon --api-port 9000
+```
+
+Serving is opt-in: `--serve`, an explicit `--api-port`, or `MORI_API_PORT`.
+With none of those the daemon opens no socket. Ctrl-C cancels the server thread
+along with the rest of the daemon.
+
+> This is a **different perimeter** from `--metrics-port`, which starts
+> Kiroku's own operator server and listens on all interfaces. See
+> [`mori ops`](/docs/commands/ops#subscription-observability).
+
+## See also
+
+- [`mori serve`](/docs/commands/serve) — exact command syntax
+- [`mori ops`](/docs/commands/ops) — daemon lock, metrics port, event-store commands
+- [Cross-Repo Workflows](/docs/guides/cross-repo-workflows) — the CLI equivalent of the chain endpoint
+- [Apps](/docs/guides/apps) — webhook receivers created through `/v1/apps`
+- [Agent Plans](/docs/guides/agent-plans) — the CLI equivalent of the plan graph endpoint

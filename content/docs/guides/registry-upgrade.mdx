@@ -1,0 +1,118 @@
+---
+title: Registry Schema Upgrade
+description: Sweep a mori-schema bump across every registered project at once
+icon: ArrowUpFromLine
+---
+
+`mori schema upgrade` and `mori schema migrate` operate on one project — the one
+in the current directory. `mori registry upgrade-schema` runs that same pipeline
+across every project in the local registry, so a schema bump does not require
+visiting each checkout by hand.
+
+The sweep is the bulk form of a three-step per-project pipeline:
+
+```bash
+mori schema upgrade          # rewrite the mori.dhall import line
+mori schema migrate --apply  # apply pending field migrations
+mori validate                # prove the result still typechecks
+```
+
+and then, for each extension file the project actually has,
+`mori schema migrate --apply --file <path>`.
+
+## Selecting projects
+
+By default the sweep considers only **stale** projects — those whose
+`mori.dhall` import hash differs from the hash the running binary pins.
+
+| Flag | Description |
+|------|-------------|
+| `--filter GLOB` | Only projects whose `<namespace>/<name>` matches GLOB. Supports `*` and `?` |
+| `--all` | Include projects already on the pinned hash (default: stale only) |
+
+Matching is over the **full qualified name**, so the `/` must be matched
+explicitly:
+
+```bash
+mori registry upgrade-schema --filter 'shinzui/*'
+mori registry upgrade-schema --filter '*/mori-*'
+mori registry upgrade-schema --filter 'acme/billing-api' --all
+```
+
+The glob narrows the candidate set; `--all` decides whether current projects
+survive the narrowing. The first line of output always reports both numbers:
+
+```text
+Considering 4 of 27 registered projects.
+```
+
+There is no `--group` selector on this command. To sweep a registry group, use
+[`mori registry exec`](/docs/guides/registry-exec) with `mori schema upgrade` as
+the command.
+
+## Previewing
+
+`--dry-run` reports what would change without touching any file:
+
+```bash
+mori registry upgrade-schema --dry-run
+```
+
+```text
+project           │ old hash     │ new hash     │ status
+──────────────────┼──────────────┼──────────────┼──────────────
+acme/billing-api  │ 4f3a91c0d2e5 │ 8b17e2a4c609 │ would apply
+shinzui/keiro     │ 8b17e2a4c609 │ 8b17e2a4c609 │ already current
+  shinzui/keiro:
+    • mori/ddd.dhall  would migrate
+```
+
+A dry run still inspects extension files on projects whose `mori.dhall` is
+already current, because extension migrations — the bare-record → `mk`-form
+rewrite, and the hashed extension-import rewrites — are **independent of the
+schema URL**. A project can be "already current" and still owe extension work.
+
+## Safety rails
+
+A project with a **dirty working tree** is skipped, not upgraded: the sweep
+refuses to mix its rewrites with your uncommitted changes. `--allow-dirty`
+overrides that. A project whose registered path no longer exists, or has no
+`mori.dhall`, is skipped with a reason.
+
+The authoritative current hash is re-read from `mori.dhall` **on disk**, not
+taken from the read model, so a registry that has not caught up cannot cause a
+spurious upgrade.
+
+## Committing
+
+By default the sweep leaves every change unstaged so you can review it.
+`--commit` creates a commit in each upgraded project, staging `mori.dhall` plus
+exactly those extension files the sweep actually migrated.
+
+## Reading the report
+
+Per-project status is one of:
+
+| Status | Meaning |
+|--------|---------|
+| `already current` | `mori.dhall` is on the pinned hash |
+| `would apply` | `--dry-run`; an apply would upgrade this project |
+| `upgraded` | The pipeline ran and succeeded |
+| `skipped: <why>` | Dirty tree, missing path, or no `mori.dhall` |
+| `failed: <why>` | `schema upgrade`, `migrate`, or `validate` failed |
+
+Extension files are reported as indented bullets under their project.
+`declared extension '<name>': pin unchanged` means an installed
+[declarative extension](/docs/guides/extensions-declarative) was recognized and
+deliberately left alone — declarative extensions carry their own schema pin and
+are not rewritten by a mori-schema sweep.
+
+An extension failure is recorded but does **not** flip the project's own status:
+extension drift is an inconvenience, not a blocker.
+
+## See also
+
+- [Schema Migrations](/docs/guides/schema-migrations) — editing `mori.dhall` and single-project migrations
+- [`mori registry exec`](/docs/guides/registry-exec) — running any command across the registry
+- [Registry Groups](/docs/guides/registry-groups) — grouping projects for bulk operations
+- [`mori registry`](/docs/commands/registry) — exact command syntax

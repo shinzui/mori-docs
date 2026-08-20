@@ -1,0 +1,117 @@
+---
+title: Project Identity
+description: The three identifiers mori distinguishes, and what survives a rename
+icon: IdCard
+---
+
+Mori distinguishes three identifiers because they solve three different
+problems, and conflating them is the source of most identity confusion.
+
+| Identifier | What it is | Changes? |
+|-----------|------------|----------|
+| `namespace/name` | The canonical, human-readable identity used in `mori://` references | **Yes** |
+| `project.stableId` | The manifest-declared, opaque project identity | **No** — it survives renames |
+| `mori/repo-id` | Identifies one observed working tree | Per repository |
+
+The registry also has an internal `ProjectId` (`proj_*`). It owns event streams
+and foreign keys, and is intentionally **not** authored in `mori.dhall`.
+
+A project may span more than one repository, so a repository ID is **not** a
+project ID. Conversely, a `stableId` is what lets `mori register` recognise a
+renamed project as the same project.
+
+## New projects
+
+`mori init` includes a freshly minted stable ID. For an older manifest:
+
+```bash
+mori identity mint --write
+mori validate
+```
+
+The writer only edits the standard `Schema.ProjectIdentity::{ … }` completion
+form. If it cannot locate that form unambiguously, it prints the exact line for
+a manual edit and leaves the file unchanged. Re-running when `stableId` already
+exists is a no-op.
+
+Stable IDs contain letters, digits, and `_` only.
+
+## Comparing what you have
+
+```bash
+mori identity show
+```
+
+```text
+Manifest identity: shinzui/mori
+Stable ID (manifest): —
+Aliases (manifest): —
+Repository ID: repo_01kh9280qte2hvc4h8jp0tg5b3
+Registry project ID: proj_01kzmya686evevw32h20jbhdg6
+Stable ID (registry): —
+Aliases (registry): —
+```
+
+Manifest and registry values are shown separately, so a manifest that has
+drifted from what was last registered is visible at a glance. A dash means the
+value is not set.
+
+## Renames
+
+Rename a project by changing `project.namespace` or `project.name` while
+retaining the same `stableId`, then run `mori register`. Mori:
+
+1. updates the **existing** registry row rather than creating a second one,
+2. emits a replayable rename fact, and
+3. records the previous canonical identity as an alias.
+
+Without a `stableId`, a rename looks like a brand-new project to the registry —
+which is exactly the failure the stable ID exists to prevent.
+
+## Aliases
+
+Aliases can also be declared in the manifest, for identities that predate the
+stable ID:
+
+```dhall
+, aliases =
+  [ Schema.ProjectAlias::{ namespace = "old-org", name = "old-name" } ]
+```
+
+Both fields on `ProjectAlias` are identity-bearing and therefore required.
+
+References through an alias continue to resolve. `mori validate --check-refs`
+reports them as **warnings** naming the current canonical identity, so authors
+can update stale references at their own pace without anything breaking in the
+meantime.
+
+Names are not permanently retired: reuse is legal, and registration reports
+alias collisions as advisory warnings rather than errors.
+
+## Upstreams
+
+A `Fork` or `Vendored` project can name what it tracks:
+
+```dhall
+, project = Schema.ProjectIdentity::{
+  , name      = "hasql"
+  , namespace = "acme"
+  , type      = Schema.PackageType.Library
+  , language  = Schema.Language.Haskell
+  , lifecycle = Schema.Lifecycle.Active
+  , origin    = Schema.Origin.Vendored
+  , upstream  = Some Schema.MoriRef::{ namespace = "shinzui", name = "hasql" }
+  }
+```
+
+`Repo.upstream` does the same per repository, for a project that vendors
+several sources under one identity. An `upstream` on an `Own` or `ThirdParty`
+project is kept but warns — it is meaningful only for `Fork` and `Vendored`. An
+upstream that is not registered locally warns rather than failing
+`mori validate --check-refs`, since it may live outside this registry.
+
+## See also
+
+- [`mori identity`](/docs/commands/identity) — exact command syntax
+- [Canonical refs](/docs/concepts/canonical-refs) — how `mori://` references resolve
+- [Project Configuration](/docs/guides/project-config) — the full `ProjectIdentity` record

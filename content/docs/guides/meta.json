@@ -8,8 +8,11 @@
 		"ingest-health",
 		"cross-repo-workflows",
 		"reaction-history",
+		"debug-automation",
+		"signal-deliveries",
 		"extensions",
 		"bootstrap-extensions",
+		"extensions-declarative",
 		"ddd",
 		"okf",
 		"improvement-requests",
@@ -33,11 +36,14 @@
 		"agent-exec",
 		"agent-ask",
 		"status",
+		"api",
 		"end-to-end-example",
 		"aliases",
 		"project-config",
+		"project-identity",
 		"schema-reference",
 		"schema-migrations",
+		"registry-upgrade",
 		"shell-integration"
 	]
 }

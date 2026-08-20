@@ -28,6 +28,16 @@ features, commands, and schema changes.
 - Renaming means changing `namespace` or `name` while keeping the same `stableId`. Mori records the previous canonical identity as an alias automatically; `Schema.ProjectAlias::{ namespace, name }` declares older identities explicitly
 - References through an alias keep resolving. `mori validate --check-refs` reports them as warnings naming the current canonical identity
 
+### Six new guides
+- [Signal Deliveries](/docs/guides/signal-deliveries) — delivery states, manual redrive, and the terminal refusals (consent, fan-out, cycle, depth) that are recorded rather than retried
+- [Debugging Automation](/docs/guides/debug-automation) — the five-layer path from "nothing happened" to a root cause: registered config, ingested event, matching selector, executed reaction, delivered signal
+- [Declarative Extensions](/docs/guides/extensions-declarative) — installing local data-only extensions, and why loading one cannot execute code
+- [HTTP API](/docs/guides/api) — the loopback-first perimeter, bearer auth, CORS, Relay pagination, and the plan-graph exception to it
+- [Project Identity](/docs/guides/project-identity) — the three identifiers mori distinguishes and what survives a rename
+- [Registry Schema Upgrade](/docs/guides/registry-upgrade) — sweeping a schema bump across the registry, with selectors, dry-run, and safety rails
+
+Every `mori help` topic now has guide coverage, either at the same slug or through a named consolidation.
+
 ### Registry projections are inline, not daemon-driven
 - Every registry read model — projects, packages, dependencies, groups, relations, and the per-extension tables — is now written **inline**, in the same transaction as the event. The tables are current the moment `mori register` returns
 - `mori automate daemon` still runs the reactive engine (automation routers, the reaction executor, signal and join routers, integration producers, webhook fan-out), but it is no longer required to populate the registry
