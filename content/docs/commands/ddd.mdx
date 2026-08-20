@@ -24,8 +24,12 @@ mori ddd flows
 mori ddd glossary
 mori ddd collaborators
 mori ddd verification
+mori ddd coordination
 mori ddd print-schema
 ```
+
+Every local subcommand accepts `--config PATH` to read a file other than
+`mori/ddd.dhall`.
 
 ### Filters
 
@@ -38,16 +42,48 @@ mori ddd flows place-order
 mori ddd glossary order
 mori ddd glossary --context checkout
 mori ddd collaborators --context checkout
+mori ddd contexts --status deprecated
 ```
 
 Most filters are case-insensitive. Kind and pattern filters also ignore hyphens
 and underscores.
 
+## `mori ddd coordination`
+
+One typed view over reactors, process managers, and durable workflows. Reads
+`mori/ddd.dhall` by default; `--registry`, `--project`, or `--group` switch it
+to the registry.
+
+```bash
+mori ddd coordination
+mori ddd coordination --kind process-manager --has-durable-state
+mori ddd coordination --registry --kind durable-workflow --has-timers
+mori ddd coordination --message PaymentAuthorized --direction consumes
+mori ddd coordination --group commerce --status active --json
+```
+
+| Flag | Description |
+|------|-------------|
+| `--config PATH` | Path to the ddd config file in local mode |
+| `--registry` | Query every registered project instead of the local config |
+| `--project PROJECT` | Query one registry project; repeat for several |
+| `--group GROUP` | Query one registry group (cannot be combined with `--project`) |
+| `--kind KIND` | `reactor`, `process-manager`, or `durable-workflow` |
+| `--context CONTEXT` | Filter by owning context key or canonical ref |
+| `--message MESSAGE` | Filter by one consumed or emitted message name |
+| `--message-kind KIND` | Pair `--message` with `command`, `event`, or `query` |
+| `--direction DIRECTION` | `consumes`, `emits`, or `either` (default) |
+| `--participant CONTEXT` | Filter by participant key or canonical ref |
+| `--status STATUS` | `active`, `emerging`, `deprecated`, or `sunset` |
+| `--has-timers` | Require a mechanism that owns timers |
+| `--has-durable-state` | Require a mechanism that owns durable state |
+| `--json` | Emit deterministic snake_case JSON |
+
 ## `mori ddd search`
 
 Search DDD models across registered projects through the relational projection.
-This requires `MORI_PG_CONNECTION_STRING` and an up-to-date projection from the
-automation daemon.
+This requires `MORI_PG_CONNECTION_STRING`. The projection is inline — written in
+the same transaction as registration — so it is never behind.
 
 ```bash
 mori ddd search
@@ -55,7 +91,9 @@ mori ddd search --pattern published-language
 mori ddd search --emits OrderPlaced
 mori ddd search --context checkout
 mori ddd search --term invoice
+mori ddd search --status deprecated
 mori ddd search --project namespace/name
+mori ddd search --group commerce
 mori ddd search --json
 ```
 
@@ -63,13 +101,34 @@ mori ddd search --json
 |------|-------------|
 | `--pattern` | Show context mappings using a relationship pattern |
 | `--emits` | Show aggregates that emit an event |
-| `--context` | Show aggregates owned by a bounded context |
-| `--term` | Show glossary terms or aliases containing a substring |
-| `--project` | Scope to one project, by name or `namespace/name` |
+| `--context` | Show aggregates owned by a bounded-context key |
+| `--term` | Show glossary terms whose term, aliases, or replaced terms contain a substring |
+| `--status` | Show bounded contexts by lifecycle status |
+| `--project` | Scope to a project, by name or `namespace/name`; repeatable |
+| `--group` | Scope to one registry group (cannot be combined with `--project`) |
 | `--json` | Emit JSON output |
 
 Without a section-selecting filter, `search` shows all supported result
 sections.
+
+## `mori ddd map`
+
+Render a registry context map as a diagram.
+
+```bash
+mori ddd map --group commerce
+mori ddd map --project acme/orders --project acme/payments --format dot
+mori ddd map --group commerce --format json
+```
+
+| Flag | Description |
+|------|-------------|
+| `--project PROJECT` | Scope to a project; repeat for several |
+| `--group GROUP` | Scope to one registry group (cannot be combined with `--project`) |
+| `--format FORMAT` | `mermaid` (default), `dot`, or `json` |
+
+Superseded contexts are drawn as a dashed edge from the successor back to its
+predecessor.
 
 ## JSONB query alternative
 

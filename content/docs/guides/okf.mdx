@@ -105,6 +105,142 @@ description, resource, tags, and the nested canonical `ref`.
 A bundle that cannot be read prints a non-fatal "could not read bundle" line
 and the command continues with the others.
 
+## Provenance, trust, and staleness
+
+OKF v0.2 added the frontmatter a reader needs in order to judge
+machine-written knowledge: `generated` (who produced this, and when), `verified`
+(who independently confirmed it), `status`, and `stale_after`. Mori stores every
+concept's complete frontmatter, so three filters read it without any extra
+column or event payload:
+
+```bash
+mori registry concepts --generated-by human:nadeem
+mori registry concepts --generated-by okf/0.5.0.0 --json
+mori registry concepts --unverified
+mori registry concepts --stale
+```
+
+`--generated-by` matches the `generated.by` actor exactly, so `human:nadeem` and
+`okf/0.5.0.0` are different actors.
+
+`--unverified` lists concepts nobody has confirmed. An absent `verified` key and
+a present one whose entries carry no textual `by` are **both** unverified — the
+second is easy to miss. Mori asks the database only whether the key exists and
+lets okf-core adjudicate the rest, rather than re-implementing an OKF semantic
+in SQL.
+
+`--stale` lists concepts past their `stale_after` date. The clock is read once
+per run and the same day travels down every row, so two rows in one invocation
+can never disagree about what "today" is. The heading names the date used.
+
+Every indexed row carries a derived **trust tier** — `unverified`,
+`machine-confirmed`, or `human-reviewed`. It is recomputed on every call and
+never stored, because a stored tier goes stale the moment a reviewer is added.
+Staleness is derived the same way, from the raw `stale_after` text.
+
+`status` is reported **verbatim** and is never coerced into OKF's
+draft/stable/deprecated vocabulary. Several profiles keep a house lifecycle
+vocabulary on the same key — mori's own ADRs say `Accepted`, and that is what
+this reports. The key is shared; the meaning is not.
+
+## Typed concept links
+
+A profile can declare that a frontmatter field points at other concepts.
+Registration resolves those declarations into typed edges, and two query modes
+read them:
+
+```bash
+mori registry concepts --links-from \
+  mori://shinzui/mori/okf/improvement-requests/concepts/IR-18
+
+mori registry concepts --links-to \
+  mori://shinzui/okf-profiles/okf/improvement-requests/concepts/IR-1 \
+  --relation origin --json
+```
+
+`--links-from` requires a **concept** URI. `--links-to` accepts any canonical
+`mori://` target, so it can find references to an unregistered project or to a
+project-level artifact. `--relation` is valid only with these two modes, and
+nested profile fields use dotted paths — `features.owners` for
+`features[].owners`.
+
+Text output shows Source, Relation, Target, and Resolved Local Target. JSON uses
+`source_ref`, `relation`, `target_ref`, and `resolved_target_ref`. The target is
+the **exact authored string**; an unresolved target stays visible with a null
+resolved value rather than disappearing.
+
+## Publishing and consuming profiles
+
+A bundle *consumes* a profile. A project that *publishes* profiles declares them
+at the manifest root instead:
+
+```dhall
+, profiles =
+  [ Schema.OkfProfile::{
+    , name    = "architecture-decisions"
+    , export  = "documentation.architectureDecisions"
+    , version = Some "v1.0.0"
+    }
+  ]
+```
+
+`name` must match `[a-z][a-z0-9-]*` and becomes addressable as
+`mori://<ns>/<project>/profiles/<name>`. `export` is the dot path the
+publisher's `package.dhall` exports.
+
+A consumer binds one with the typed `profileBinding` field on its `OkfBundle`,
+which takes precedence over the legacy `profile` string when both are present:
+
+```dhall
+, profileBinding = Some
+    ( Schema.ProfileBinding.Published
+        Schema.PinnedImport::{
+        , publisher    = "shinzui/okf-profiles"
+        , publisherRef = Some Schema.MoriRef::{ namespace = "shinzui", name = "okf-profiles" }
+        , export       = Some "documentation.architectureDecisions"
+        , version      = Some "v1.0.0"
+        , pin          = Some "sha256:…"
+        }
+    )
+```
+
+`Schema.ProfileBinding.Local "<path>"` is the other arm, for a profile in this
+repository. `PinnedImport` requires only `publisher`; `export`, `version`,
+`pin`, `url`, and `derived` all default.
+
+## Shared pinned imports
+
+`mori registry pins` lists every pinned import across the registry with its
+staleness, so a publisher's release does not have to be chased by hand:
+
+```bash
+mori registry pins
+mori registry pins --publisher shinzui/okf-profiles
+mori registry pins --stale
+mori registry pins --json
+```
+
+| Flag | Description |
+|------|-------------|
+| `--publisher REF` | Only pins from this publisher — `namespace/name`, a `mori://` URI, or a bare name |
+| `--stale` | Only stale pins. **Exits 1 when any exist**, so it works as a CI gate |
+| `--json` | Machine-readable output |
+
+Each row gets one of three verdicts:
+
+| Verdict | Meaning |
+|---------|---------|
+| `current` | Both sides declare a version and they are equal |
+| `stale` | Both sides declare a version and they differ |
+| `unknown` | Either side declares no version, so there is nothing to compare |
+
+**`unknown` is not stale** — `--stale` never lists it and never exits 1 for it.
+
+Staleness is deliberately **inequality, not version ordering**: publisher
+versions are opaque release identifiers, so mori does not try to decide which of
+two strings is newer. The semantic hash in `pin` remains the integrity
+authority; `version` is the drift signal.
+
 ## Document IDs: stable handles
 
 A concept's identity is its **concept ID** — the file's path inside the bundle

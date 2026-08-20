@@ -101,6 +101,37 @@ next-implementable mode powers the seihou skill loop — when every child plan
 is already Complete or has unmet hard deps, the command reports "No
 implementable plan: every child plan is Complete or has incomplete hard deps."
 
+## `mori plans graph`
+
+Publish the canonical Hard-dependency DAG.
+
+```bash
+mori plans graph
+mori plans graph --project shinzui/mori
+mori plans graph --project shinzui/mori --project shinzui/keiro
+mori plans graph --group delivery
+mori plans graph --group delivery --json --contract-version 1
+```
+
+| Flag | Description |
+|------|-------------|
+| `--project PROJECT` | Select a project (`namespace/name`); repeatable |
+| `--group GROUP` | Select every plan published by group members |
+| `--json` | Emit the versioned DAG JSON document |
+| `--contract-version VERSION` | Request an explicit DAG contract version |
+
+`--group` conflicts with `--project`. Omitting both selects every project
+publishing at least one plan.
+
+Mori closes the roots over **Hard** prerequisites across projects, then emits
+plan, gate, and unresolved nodes plus `dependencyRef → dependentRef` edges.
+
+A **cycle fails** rather than producing a document — there is no partial graph.
+The JSON is the same versioned contract served by
+[`GET /v1/plans/graph`](/docs/guides/api#plan-dependency-graph), which rejects
+oversized scopes rather than paginating or truncating them, because dropping
+nodes or edges would change reachability.
+
 ## `mori plans open`
 
 Open a plan file in your editor. Delegates to `mina <kind>-plan open` when the

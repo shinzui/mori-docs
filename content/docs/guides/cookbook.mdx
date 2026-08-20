@@ -38,13 +38,25 @@ in  Cookbook.CookbookCatalog::{
         , audience = Schema.DocAudience.Module
         , location = Schema.DocLocation.LocalFile "docs/my-pattern.md"
         , description = Some "Brief summary of what this teaches"
+        , tags = [ "hasql-1.10", "gotcha" ]
         }
       ]
     }
 ```
 
 Entries require a unique `key`, a non-empty title, at least one topic, a content
-type, related packages, language, audience, and location.
+type, related packages, language, audience, and location. `description` and
+`tags` are optional and default to `None Text` and `[]`.
+
+`tags` are freeform labels complementing the closed `Topic` union, for one-off
+labels that do not warrant a new `Topic` constructor. Reach for a `Topic` when
+the label is a durable domain area you would want to filter on across projects;
+reach for `tags` when it is specific to this entry.
+
+`location` also accepts `Schema.DocLocation.Canonical "mori://…"` and the typed
+`Schema.DocLocation.CanonicalRef Schema.MoriRef::{…}` when the content lives in
+another registered project. Prefer the typed arm unless the target needs a
+nested sub-key, which `MoriRef` cannot express.
 
 ## Browse Locally
 

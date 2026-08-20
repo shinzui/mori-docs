@@ -28,6 +28,13 @@ features, commands, and schema changes.
 - Renaming means changing `namespace` or `name` while keeping the same `stableId`. Mori records the previous canonical identity as an alias automatically; `Schema.ProjectAlias::{ namespace, name }` declares older identities explicitly
 - References through an alias keep resolving. `mori validate --check-refs` reports them as warnings naming the current canonical identity
 
+### Extension documentation caught up with two schema bumps
+- **DDD**: [coordination mechanisms](/docs/guides/ddd#coordination-mechanisms) (`Reactor`, `ProcessManager`, `DurableWorkflow` and their supporting records, with the decision ladder), [lifecycle and succession](/docs/guides/ddd#lifecycle-and-succession) (`ContextStatus`, `supersedes`, `GlossaryTerm.replaces`), the `ContextMapping` endpoint refs, plus [`mori ddd coordination`](/docs/commands/ddd#mori-ddd-coordination), [`mori ddd map`](/docs/commands/ddd#mori-ddd-map), and `mori ddd search --status/--group`
+- **OKF**: [provenance, trust, and staleness](/docs/guides/okf#provenance-trust-and-staleness) filters (`--generated-by`, `--unverified`, `--stale`), [typed concept links](/docs/guides/okf#typed-concept-links) (`--links-from`, `--links-to`, `--relation`), [publishing and consuming profiles](/docs/guides/okf#publishing-and-consuming-profiles) (`Project.profiles`, `OkfBundle.profileBinding`), and [`mori registry pins`](/docs/guides/okf#shared-pinned-imports)
+- **Agent plans**: [`mori plans graph`](/docs/commands/plans#mori-plans-graph), the canonical Hard-dependency DAG
+- **Tech radar**: [`projectRef` vs `project`](/docs/guides/tech-radar#project-vs-projectref) — one is resolved and fails `--check-refs`, the other is parsed and never resolved
+- **Cookbook**: `CookbookEntry.tags`, and the `Canonical` / `CanonicalRef` location arms for cross-project entries
+
 ### Projection catalog drift is now a hard gate
 - `mori automate daemon` registers its projection catalog **before** reading projection-backed configuration or starting any queue, API, ingest, outbox, schedule, reactor, or timer leg, and refuses to start when the catalog disagrees with what the database has registered
 - `just migrate-verify` performs the same comparison at deploy time, after the ledger check, naming the rebuild group and both fingerprints. It changes no catalog metadata

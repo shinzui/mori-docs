@@ -132,22 +132,94 @@ Projects outside the mori repository should use the pinned URL import printed by
 | `glossary` | `List GlossaryTerm` | Ubiquitous-language terms |
 | `verification` | `Optional Verification` | Review and coverage metrics |
 | `collaborators` | `List Collaborator` | Teams or people and their contexts |
+| `reactors` | `List Reactor` | Stateless, idempotent event reactions |
+| `processManagers` | `List ProcessManager` | Correlated coordinators owning durable state |
+| `durableWorkflows` | `List DurableWorkflow` | Versioned, journal-resumed workflows |
 
 Important nested records:
 
 - `Subdomain`: `key`, `name`, `kind`, optional `description`, optional `evolution`.
-- `BoundedContext`: `key`, `name`, optional `purpose`, optional `subdomain`.
+- `BoundedContext`: `key`, `name`, optional `purpose`, optional `subdomain`, optional `subdomainRef`, optional `status`, `supersedes`, `supersedesRefs`.
 - `Aggregate`: `key`, `name`, optional `context`, optional `description`, `commands`, `events`, `invariants`, optional `size`, optional `throughputPerDay`.
-- `ContextMapping`: `upstream`, `downstream`, `pattern`, optional `teamRelationship`, optional `notes`.
+- `ContextMapping`: `upstream`, optional `upstreamRef`, `downstream`, optional `downstreamRef`, `pattern`, optional `teamRelationship`, optional `notes`.
 - `MessageFlow`: `key`, `name`, optional `description`, ordered `steps`.
-- `GlossaryTerm`: `term`, `definition`, optional `context`, `aliases`.
+- `GlossaryTerm`: `term`, `definition`, optional `context`, `aliases`, `replaces`.
 - `Collaborator`: `key`, `name`, optional `role`, `contexts`.
 - `Verification`: optional `lastReviewed`, optional `coveragePercent`, optional `notes`.
 
 The main unions are `SubdomainKind`, `RelationshipPattern`,
-`TeamRelationship`, `MessageKind`, `WardleyStage`, and `AggregateSize`.
+`TeamRelationship`, `MessageKind`, `WardleyStage`, `AggregateSize`, and
+`ContextStatus` (`Active` | `Emerging` | `Deprecated` | `Sunset`).
 `RelationshipPattern` includes an `Other : Text` arm for project-specific
 patterns.
+
+Every `*Ref` field is an optional typed `MoriRef` companion to a bare text key.
+The bare key stays authoritative; the companion lets the reference name another
+project canonically and be resolved by the registry. When both are present they
+must agree, or validation fails.
+
+### Lifecycle and succession
+
+A bounded context can record where it sits in a migration rather than just
+existing. `status` defaults to `Active` when absent, so models written before
+lifecycle support keep loading unchanged.
+
+```dhall
+, contexts =
+  [ Ddd.BoundedContext::{
+    , key        = "checkout"
+    , name       = "Checkout"
+    , status     = Some Ddd.ContextStatus.Emerging
+    , supersedes = [ "legacy-checkout" ]
+    }
+  ]
+```
+
+`GlossaryTerm.replaces` does the same for vocabulary — the older terms a term
+supersedes — and `mori ddd search --term` matches against replaced terms as
+well as the term and its aliases.
+
+### Coordination mechanisms
+
+Three record kinds describe *runtime-neutral* coordination. Choose from
+behaviour and correctness ownership, never from an implementation type name:
+
+1. **`Reactor`** — an event-triggered, stateless, idempotent reaction. Owns no
+   per-instance durable state and no deadline. Required beyond the common
+   fields: `trigger`, `actions`, `idempotencyStrategy`. Carries
+   `ownsDurableState` and `ownsTimers`, both of which **must be `False`**.
+2. **`ProcessManager`** — one correlated instance owns durable state, reacts to
+   events by issuing commands, and may own timers, retries, dead-letter policy,
+   and operator repair. Required: `durableState`, `correlationKeys`,
+   `correlationRule`, `transactionBoundary`, `idempotencyStrategy`,
+   `retryPolicy`, `deadLetterPolicy`, `repairProcedure`, `replayEvidence`.
+   "Saga" is a contextual synonym for this pattern, not a fourth kind.
+3. **`DurableWorkflow`** — a versioned definition resumes an imperative
+   continuation from a journal. Required: `definitionId`, `definitionVersion`,
+   `journal`, `steps`, `terminalPolicy`, `versioningPolicy`, `replayEvidence`,
+   `recoveryProcedure`; optional `externalWaits`, `timers`, `wakeSources`,
+   `progressMechanisms`.
+
+All three share a common head: `key`, `name`, `context`, optional `contextRef`,
+optional `description`, `consumes`/`emits`, `participants`/`participantRefs`,
+optional `implementation`/`implementationRef`, `flows`/`flowRefs`, and optional
+`status`.
+
+Supporting records: `CoordinationMessage` (`message`, `kind`),
+`CoordinationTimer` (`key`, `name`, optional `description`, `deadline`,
+`emits`), `WorkflowJournal` (`name`, `persistence`, optional `retention`),
+`DurableWorkflowStep` (`key`, `name`, optional `description`,
+`idempotencyStrategy`), and `WorkflowExternalWait` (`key`, `name`, optional
+`description`, `callbackIdentity`, `wakeSource`).
+
+A `MessageFlow` remains an ordered explanatory narrative — it does not become a
+coordinator merely because it has several participants. Equally, a runtime class
+named "Workflow" is not necessarily a `DurableWorkflow`.
+
+Validation enforces the ladder, not just the shape: a reactor's `trigger` must
+be an `Event` and must also appear in `consumes`, its `actions` must be
+non-empty, and it may not set `ownsDurableState` or `ownsTimers`. Timer keys,
+step keys, and external-wait keys must each be unique within their owner.
 
 ## Browse locally
 
@@ -171,30 +243,79 @@ mori ddd glossary --context checkout
 mori ddd collaborators
 mori ddd collaborators --context checkout
 mori ddd verification
+mori ddd coordination
 ```
+
+`mori ddd contexts --status deprecated` filters by lifecycle status.
 
 Filters are case-insensitive. Pattern and kind filters also ignore hyphens and
 underscores, so `anticorruption-layer` matches `AnticorruptionLayer`.
 
+### Inspecting coordination
+
+`mori ddd coordination` is one typed view over all three coordination kinds. In
+local mode it reads `mori/ddd.dhall` (or `--config PATH`); `--registry`,
+`--project`, or `--group` switch it to the registry. The filters compose:
+
+```bash
+mori ddd coordination --kind reactor          # reactor | process-manager | durable-workflow
+mori ddd coordination --context checkout      # owning context key or canonical ref
+mori ddd coordination --participant payments  # participant context
+mori ddd coordination --status active         # active | emerging | deprecated | sunset
+mori ddd coordination --has-timers            # owns at least one timer
+mori ddd coordination --has-durable-state     # owns durable coordination state
+mori ddd coordination --message PaymentAuthorized --message-kind event \
+                      --direction consumes    # consumes | emits | either (default)
+mori ddd coordination --json                  # deterministic snake_case JSON
+```
+
 ## Cross-project search
 
-Registration stores the model in the generic extension JSONB store. The
-automation daemon also projects it into normalized `mori.ddd_*` tables so
-`mori ddd search` can answer relational questions across every registered
-project.
+Registration stores the model in the generic extension JSONB store, and an
+**inline** projection fans it out into twelve normalized `mori.ddd_*` tables in
+the same transaction — so `mori ddd search` can answer relational questions
+across every registered project as soon as `mori register` returns. No daemon is
+involved.
 
 ```bash
 mori ddd search --pattern published-language
 mori ddd search --emits OrderPlaced
 mori ddd search --context checkout
 mori ddd search --term invoice
+mori ddd search --status deprecated                     # contexts by lifecycle status
 mori ddd search --project acme/billing
+mori ddd search --project acme/billing --project acme/orders
+mori ddd search --group commerce
 mori ddd search --json
 ```
 
+Repeat `--project` to widen the scope; `--group` selects one named registry
+group and cannot be combined with `--project`. `--term` matches a term, its
+aliases, **and** the older terms it replaces.
+
 Use `mori extension query ddd` when you want one project's stored model from
 the generic extension table. Use `mori ddd search` when you want relational
-queries by pattern, emitted event, context, or term across the registry.
+queries across the registry.
+
+### Rendering a context map
+
+`mori ddd map` renders the bounded contexts and context mappings from the same
+registry scopes as a diagram — Mermaid by default, with DOT and JSON for other
+tools:
+
+```bash
+mori ddd map --group commerce
+mori ddd map --project acme/orders --project acme/payments --format dot
+mori ddd map --group commerce --format json
+```
+
+Superseded contexts are drawn as a dashed edge from the successor back to its
+predecessor, so a migration in progress reads as a migration rather than as two
+unrelated contexts.
+
+The database-backed subcommands are `mori ddd search`, `mori ddd map`, and
+`mori ddd coordination` in registry mode. Everything else reads
+`mori/ddd.dhall` directly and needs no database.
 
 ## Maintenance
 

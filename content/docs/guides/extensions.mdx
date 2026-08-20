@@ -4,6 +4,13 @@ description: Attach structured metadata to projects with the extension system
 icon: Puzzle
 ---
 
+Mori ships several typed extensions compiled into the binary. You can also
+install **declarative** extensions — local, data-only bundles that add typed
+project metadata without loading any executable code. This page covers the
+built-in system; see
+[Declarative Extensions](/docs/guides/extensions-declarative) for installing
+your own.
+
 Mori's extension system lets you attach structured metadata to projects beyond
 what the core schema provides. Extensions are project-scoped Dhall configs
 stored in the `mori/` directory and registered alongside the project in the

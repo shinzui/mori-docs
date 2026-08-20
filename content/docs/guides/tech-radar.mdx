@@ -45,6 +45,27 @@ Adoption levels are `Adopt`, `Trial`, `Assess`, and `Hold`. Category has closed
 arms such as `Database`, `Testing`, `CLI`, and `Streaming`, plus
 `TechRadar.Category.Other "X"` for custom labels.
 
+### `project` vs `projectRef`
+
+A recommendation can name the registered project that hosts or embodies it, two
+ways — and the difference is not cosmetic:
+
+```dhall
+, projectRef = Some Schema.MoriRef::{ namespace = "shinzui", name = "hasql-kit" }
+```
+
+`project` is a `mori://` **string**. It is parsed but never resolved, so it may
+name a project that is not on this machine at all.
+
+`projectRef` is the typed companion, and it **is** resolved:
+`mori validate --check-refs` fails when the target is not registered locally.
+(Only `upstream` refs are downgraded to a warning in that situation.)
+
+Use `projectRef` when the target really is a registered project; keep the plain
+`project` string when it deliberately points somewhere this registry does not
+know about. It is a project-root reference, so `kind` and `key` stay at their
+`None` defaults.
+
 ## Browse A Project
 
 ```bash
