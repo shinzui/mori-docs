@@ -156,7 +156,7 @@ in  { project = ./mori.dhall
         , execution =
             { allowLocal = True
             , allowCI = False
-            , maxConcurrency = 1
+            , maxConcurrency = Some +1
             }
         }
     }

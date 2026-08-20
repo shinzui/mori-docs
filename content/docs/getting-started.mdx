@@ -527,11 +527,17 @@ Controls where and how actions run:
 
 ```haskell
 , execution =
-  { allowLocal = True      -- run on the local machine
-  , allowCI = False         -- block execution in CI
-  , maxConcurrency = Some +4  -- at most 4 concurrent actions
+  { allowLocal = True      -- declares local execution allowed
+  , allowCI = False         -- declares CI execution allowed
+  , maxConcurrency = Some +4  -- declared cap on concurrent actions
   }
 ```
+
+> These three fields are **declared intent, not enforcement**. They are parsed,
+> stored, and reported by `mori automate inspect`, but nothing reads them when
+> a reaction runs. To actually serialize an automation's reactions, set
+> `queued = True` on the automation — see
+> [Automation → Queued execution](/docs/guides/automation#queued-execution).
 
 ---
 

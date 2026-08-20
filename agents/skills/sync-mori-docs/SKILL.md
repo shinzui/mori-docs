@@ -246,8 +246,8 @@ cd /Users/shinzui/Keikaku/bokuno/mori-project/mori-docs
 git status --short
 
 # Validate docs site after edits
-pnpm types:check
-pnpm build
+bun run types:check
+bun run build
 ```
 
 ## Icon Mapping
@@ -316,4 +316,4 @@ node -e "console.log(Object.keys(require('lucide-react').icons).join('\n'))"
 - New or renamed pages are listed in the relevant `meta.json`.
 - Internal-only source docs were not copied into public pages.
 - `content/docs/changelog.mdx` has a user-facing entry when the sync changes visible docs.
-- `pnpm types:check` and, for broader edits, `pnpm build` pass or failures are reported.
+- `bun run types:check` and, for broader edits, `bun run build` pass or failures are reported.

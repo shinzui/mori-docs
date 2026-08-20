@@ -7,8 +7,8 @@ Built with [fumadocs](https://fumadocs.vercel.app/), [TanStack Start](https://ta
 ## Development
 
 ```bash
-pnpm install
-pnpm dev
+bun install
+bun run dev
 ```
 
 The dev server starts at `http://localhost:3000`.
@@ -16,8 +16,8 @@ The dev server starts at `http://localhost:3000`.
 ## Build
 
 ```bash
-pnpm build
-pnpm start
+bun run build
+bun run start
 ```
 
 Produces a fully static site in `dist/client/` with all pages prerendered.

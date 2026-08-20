@@ -775,19 +775,73 @@ for the full command reference and lifecycle.
 
 ## Execution Policy
 
-Controls runtime behavior of the automation engine.
+Declares where and how the automation's actions are *intended* to run.
 
 ```dhall
 Schema.ExecutionPolicy::{
-  allowLocal = True           -- run actions on this machine
-, allowCI = False             -- run actions in CI (Phase 2)
-, maxConcurrency = Some +4    -- max parallel action executions
+  allowLocal = True           -- declares local execution allowed
+, allowCI = False             -- declares CI execution allowed
+, maxConcurrency = Some +4    -- declared parallel-action cap
 }
 ```
 
 `ExecutionPolicy` has no required (`Input`) fields — `allowLocal` and
 `allowCI` default to `True` / `False` and `maxConcurrency` defaults to
 `None Integer`. Override only what differs from the published default.
+
+> **None of these three fields is enforced yet.** They are parsed, validated,
+> carried in the config observation event, and printed by
+> `mori automate inspect` — and nothing reads them at execution time. The
+> executor runs every triggered action regardless of `allowLocal` and
+> `allowCI`, and does not bound parallelism by `maxConcurrency`. Setting
+> `allowLocal = False` will **not** stop a reaction from running on your
+> machine, and `maxConcurrency = Some +1` will **not** serialize anything.
+>
+> Treat them as declared intent. The enforced control is
+> [Queued execution](#queued-execution). Enforcement of the policy itself is
+> tracked by `mori://shinzui/mori/okf/improvement-requests/concepts/IR-14`.
+
+## Queued execution
+
+`queued` is the execution control that *is* enforced. It is a field of the
+automation, not of a reaction:
+
+```dhall
+Schema.Automation::{
+  queued    = True
+, reactions = [ … ]
+}
+```
+
+With `queued = True`, every reaction the automation triggers — immediate and
+scheduled alike — goes onto the `queued_reactions` pgmq FIFO queue instead of
+executing as soon as it is routed. Messages are grouped by
+`"<repoId>:<automationName>"` and drained in strict trigger order, one in
+flight per group.
+
+| | Behaviour |
+|---|---|
+| Two reactions of the **same** automation | Serialized — the second starts only after the first reaches a terminal state |
+| Reactions of **different** automations (or repos) | Still concurrent — different groups |
+| A reaction with `schedule = Some …` | Keeps its delay; `after` becomes the queue visibility delay, then it joins the group |
+| A reaction with no `schedule` | Enqueued with delay 0 |
+| A reaction whose `after` is malformed | Logged and enqueued at delay 0 — it never degrades to immediate execution, because leaving the queue would break ordering |
+
+Queued reactions do not arm a durable timer, and `mori reaction list` reports
+them with source `queued-fifo` rather than `immediate-executor` or
+`schedule-timer`.
+
+On the daemon side, `--queued-concurrency N` (default 3) bounds how many
+distinct groups drain at once. It never weakens ordering *within* a group.
+
+```bash
+mori automate daemon --queued-concurrency 8
+```
+
+The discipline is strictly first-in-first-out. A newest-first (LIFO)
+discipline is requested by
+`mori://shinzui/mori/okf/improvement-requests/concepts/IR-8` and is not
+implemented.
 
 ## Workflow
 
