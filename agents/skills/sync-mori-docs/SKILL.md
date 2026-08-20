@@ -55,13 +55,23 @@ When adding or renaming pages, update the nearest `meta.json`.
 
 ### 1. Find The Last Reviewed Source Commit
 
-Start with the source repo user-doc changelog:
+The baseline lives in the source repo's docs-sync ledger, under the `mori-docs`
+surface:
 
 ```bash
-sed -n '1,80p' /Users/shinzui/Keikaku/bokuno/mori-project/mori/docs/user/CHANGELOG.md
+cat /Users/shinzui/Keikaku/bokuno/mori-project/mori/docs/docs-sync.json
 ```
 
-Use the latest baseline SHA recorded there. If no usable SHA exists, compare against recent commits and inspect current source docs directly.
+Use `surfaces["mori-docs"].sourceBaseline`. A `null` baseline, or a `coverage`
+of `partial`, means the range is wider than the last recorded sync — read
+`notes` for what that sync did and did not cover.
+
+`docs/user/CHANGELOG.md` predates the ledger and only ever tracked `docs/user`.
+Read it for narrative context, never for the baseline.
+
+After the sync, update **both** `surfaces["mori-docs"].sourceBaseline` (the mori
+SHA audited) and `targetBaseline` (this repo's HEAD), and set `coverage`
+honestly.
 
 ### 2. Review User-Facing Changes
 
@@ -124,57 +134,85 @@ Primary mappings from `docs/user/`:
 | `aliases.md` | `content/docs/guides/aliases.mdx` and `content/docs/commands/alias.mdx` |
 | `completions.md` | `content/docs/guides/shell-integration.mdx` or `content/docs/commands/completions.mdx` |
 | `dependencies.md` | `content/docs/commands/deps.mdx` |
+| `ddd.md` | `content/docs/commands/ddd.mdx` and `content/docs/guides/ddd.mdx` |
+| `okf.md` | `content/docs/guides/okf.mdx` |
+| `operations.md` | `content/docs/commands/ops.mdx` |
+| `plan-dependencies.md` | `content/docs/commands/plans.mdx` |
+| `api.md` | `content/docs/commands/serve.mdx` (endpoint reference is an open gap) |
 | `navigation.md` | `content/docs/guides/navigation.mdx` plus `commands/cd.mdx`, `commands/path.mdx`, `commands/browse.mdx` |
 | `registry-domains.md` | `content/docs/commands/registry.mdx` and registry-related guide sections |
 | `registry-exec.md` | `content/docs/commands/registry.mdx` |
 | `registry-groups.md` | `content/docs/commands/registry.mdx` |
 | `registry-templates.md` | `content/docs/commands/registry.mdx` |
-| `status.md` | `content/docs/commands/doctor.mdx` or a new command page if the command exists in the site nav |
-| `CHANGELOG.md` | sync ledger only; do not copy directly to public changelog |
+| `status.md` | `content/docs/commands/status.mdx` and `content/docs/guides/status.mdx` |
+| `CHANGELOG.md` | narrative context only; the machine baseline is `docs/docs-sync.json`. Do not copy either into the public changelog |
 
 Command reference pages are curated from command behavior and may combine several source files or help topics. Current command pages:
 
 ```text
-agent alias app automate browse cd completions cookbook deps doctor extension
-help init kit path reaction register registry schema show tech-radar validate workflow
+agent alias app automate backfill browse cd checklist completions cookbook ddd
+deps diagram doctor extension help identity improvement-requests init kit observe
+ops path plans project reaction register registry schema serve show signal status
+tech-radar upstream-issues validate workflow
 ```
 
-If a new top-level command is added, create `content/docs/commands/<command>.mdx`, add frontmatter, and add the page to `content/docs/commands/meta.json`.
+Do not hand-maintain this list against memory. Enumerate the real surface and
+diff it:
+
+```bash
+mori --help          # every top-level command
+ls content/docs/commands/*.mdx
+```
+
+`agents/skills/docs-sync/scripts/drift-check.sh` in the mori repo does exactly
+this comparison (section 7) and reports both a command with no page and a page
+whose command no longer exists.
+
+If a new top-level command is added, create `content/docs/commands/<command>.mdx`, add frontmatter, and add the page to `content/docs/commands/meta.json`. When a command is *removed*, delete its page, drop it from `meta.json`, and repoint every inbound link — including historical `changelog.mdx` entries, where the prose stays but the link must go.
 
 ### 5. Map Help Topics To Guides
 
-Use these current mappings as the baseline. If the target does not exist, create it and add it to `content/docs/guides/meta.json`.
+Twenty-six topics have a same-slug guide today. Treat same-slug as the default
+and verify it rather than trusting this table:
 
-| Help Topic | Likely Target |
+```bash
+for t in /Users/shinzui/Keikaku/bokuno/mori-project/mori/mori-cli/help/*.md; do
+  n=$(basename "$t" .md)
+  [ -f "content/docs/guides/$n.mdx" ] || echo "no same-slug guide: $n"
+done
+```
+
+Same-slug guides currently exist for: `agent-ask`, `agent-plans`, `aliases`,
+`apps`, `automation-daemon`, `bootstrap-extensions`, `checklist`, `cookbook`,
+`corpus-learning`, `ddd`, `extensions`, `improvement-requests`, `kit`,
+`mori-refs`, `okf`, `project-config`, `reaction-history`, `registry-domains`,
+`registry-exec`, `registry-groups`, `registry-templates`, `seihou-templates`,
+`status`, `tech-radar`, `trailer-matching`, `upstream-issues`.
+
+Topics deliberately consolidated elsewhere:
+
+| Help Topic | Covered by |
 |---|---|
-| `agent-ask.md` | `guides/agent-ask.mdx` or `guides/agent-sessions.mdx` with an explicit `agent ask` section |
-| `aliases.md` | `guides/aliases.mdx` |
-| `apps.md` | `guides/apps.mdx` |
-| `automation-config.md` | `guides/automation.mdx` |
-| `automation-daemon.md` | `guides/automation-daemon.mdx` |
-| `checklist.md` | `guides/checklist.mdx` |
-| `cookbook.md` | `guides/cookbook.mdx` |
-| `corpus-learning.md` | `guides/corpus-learning.mdx` |
-| `cross-repo-automation.md` | `guides/cross-repo-workflows.mdx` |
-| `extensions.md` | `guides/extensions.mdx` |
-| `kit.md` | `guides/kit.mdx` |
-| `mori-refs.md` | `guides/mori-refs.mdx` or `concepts/canonical-refs.mdx` plus a guide-facing entry |
-| `project-config.md` | `guides/project-config.mdx` or `schema-guide.mdx` plus `guides/schema-reference.mdx` |
-| `reaction-history.md` | `guides/reaction-history.mdx` |
-| `registry-domains.md` | `guides/registry-domains.mdx` |
-| `registry-exec.md` | `guides/registry-exec.mdx` |
-| `registry-groups.md` | `guides/registry-groups.mdx` |
-| `registry-templates.md` | `guides/registry-templates.mdx` |
-| `schema-modification.md` | `guides/schema-migrations.mdx` |
-| `schema-records.md` | `guides/schema-guide.mdx` or `schema-guide.mdx` |
-| `schema-types.md` | `guides/schema-reference.mdx` |
-| `seihou-templates.md` | `guides/seihou-templates.mdx` |
-| `status.md` | `guides/status.mdx` |
-| `tech-radar.md` | `guides/tech-radar.mdx` |
-| `trailer-matching.md` | `guides/trailer-matching.mdx` |
-| `upstream-issues.md` | `guides/upstream-issues.mdx` |
+| `automation-config` | `guides/automation.mdx` |
+| `cross-repo-automation` | `guides/cross-repo-workflows.mdx` |
+| `schema-modification` | `guides/schema-migrations.mdx` |
+| `schema-records` | `schema-guide.mdx` |
+| `schema-types` | `guides/schema-reference.mdx` |
 
-For new help topics, create a guide by default. Consolidate only when a standalone page would duplicate an existing guide; in that case, add a clearly named section and keep the mapping table current.
+Topics with **no** guide coverage at all — each is an open gap, not a
+consolidation:
+
+| Help Topic | Gap |
+|---|---|
+| `api` | The HTTP read surface. `commands/serve.mdx` covers the command, not the endpoints or their contracts |
+| `operations` | Now partly covered by `commands/ops.mdx`; the daemon lock, metrics endpoints, and checkpoint policies still have no guide |
+| `signal-deliveries` | `commands/signal.mdx` covers the command; delivery states, redrive, and consent have no guide |
+| `debug-automation` | No page |
+| `extensions-declarative` | No page; `guides/extensions.mdx` covers the typed extension system only |
+| `project-identity` | Now covered by `commands/identity.mdx`; no conceptual guide |
+| `registry-upgrade` | No page |
+
+For new help topics, create a guide by default. Consolidate only when a standalone page would duplicate an existing guide; in that case, add a clearly named section and keep this table current.
 
 ### 6. Convert Markdown To MDX
 
@@ -231,32 +269,54 @@ pnpm build
 
 Use Lucide icon names already available through `lucide-react`.
 
-Current command/page conventions:
+Current command-page assignments, read off the pages themselves:
 
 - `agent`: `Bot`
-- `alias`: `Terminal`
+- `alias`: `CornerDownRight`
 - `app`: `Webhook`
 - `automate`: `Zap`
-- `browse`: `ExternalLink`
+- `backfill`: `DatabaseZap`
+- `browse`: `Globe`
 - `cd`: `FolderOpen`
 - `changelog`: `ScrollText`
-- `completions`: `Shell`
-- `cookbook`: `BookOpen`
-- `deps`: `GitBranch`
+- `checklist`: `ListChecks`
+- `completions`: `SquareTerminal`
+- `cookbook`: `BookText`
+- `ddd`: `Network`
+- `deps`: `GitFork`
+- `diagram`: `GitGraph`
 - `doctor`: `Stethoscope`
 - `extension`: `Puzzle`
 - `help`: `CircleQuestionMark`
-- `init`: `Sparkles`
+- `identity`: `IdCard`
+- `improvement-requests`: `Lightbulb`
+- `init`: `FolderPlus`
 - `kit`: `Package`
+- `observe`: `Eye`
+- `ops`: `Wrench`
 - `path`: `MapPin`
+- `plans`: `ClipboardList`
+- `project`: `Boxes`
 - `reaction`: `Activity`
-- `register`: `ClipboardCheck`
+- `register`: `Upload`
 - `registry`: `Database`
 - `schema`: `FileCode`
+- `serve`: `Server`
 - `show`: `Eye`
+- `signal`: `Radio`
+- `status`: `Activity`
 - `tech-radar`: `Radar`
-- `validate`: `CheckCircle2`
-- `workflow`: `Network`
+- `upstream-issues`: `CircleAlert`
+- `validate`: `CircleCheck`
+- `workflow`: `GitPullRequest`
+
+Regenerate rather than trusting the list:
+
+```bash
+for f in content/docs/commands/*.mdx; do
+  printf '%s: %s\n' "$(basename "$f" .mdx)" "$(grep -m1 '^icon:' "$f")"
+done
+```
 
 To inspect valid icons:
 

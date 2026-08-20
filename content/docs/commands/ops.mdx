@@ -1,0 +1,216 @@
+---
+title: mori ops
+description: Operate the Keiro runtime — workflows, timers, outbox, streams, and projection rebuilds
+icon: Wrench
+---
+
+`mori ops` is the [keiro-ops](https://github.com/shinzui/keiro) console mounted
+inside the mori binary. It is the **only** operator surface for
+framework-owned state: durable workflows, timers, the transactional outbox and
+integration inbox, PGMQ dead letters, advisory snapshots, Kiroku streams, shard
+ownership, subscription checkpoints, projection dedup state, and read-model
+rebuilds. Mori does not write a second command against any of those tables.
+
+These are recovery and audit operations, not day-to-day project commands.
+Events are the durable source of truth and read models are derived, so
+rebuilding a read model is a repair action rather than a data-loss event — but
+it is still an offline action. Stop the daemon first.
+
+```bash
+mori ops --help
+mori ops stream subscriptions
+mori ops rebuild list
+```
+
+## Global options
+
+Four options may appear before or after the subcommand.
+
+| Flag | Description |
+|------|-------------|
+| `--database-url URL` | PostgreSQL URI or keyword/value string |
+| `--json` | Emit the versioned JSON envelope |
+| `--force` | Apply a mutating command after reading its preview |
+| `--allow-schema-drift` | Allow a mutation despite a failed schema check |
+
+Without `--database-url`, the console reads `KEIRO_OPS_DATABASE_URL`, then
+`DATABASE_URL`, then `MORI_PG_CONNECTION_STRING`, then libpq's `PG*` variables.
+
+The `--json` envelope is the automation contract. Never scrape a table or
+stderr.
+
+## Two-step mutations
+
+Every mutating command runs in two steps. The first prints exactly what would
+happen along with a quoted reinvocation, changes nothing, and **exits 1**.
+Nothing happens until you re-run with `--force`.
+
+The quoted line begins `keiro-ops` because the console names its own binary.
+Read it as `mori ops`.
+
+Every invocation also verifies the live Keiro schema against the binary. A
+read-only command continues with `warning: schema drift: …` on stderr; a
+mutating command refuses:
+
+```text
+keiro-ops: refusing mutation because the live schema differs from this
+binary; inspect the warnings or pass --allow-schema-drift
+```
+
+## Command groups
+
+| Group | Purpose |
+|-------|---------|
+| `mori ops wf` | Inspect and operate durable workflows |
+| `mori ops timer` | Inspect and operate durable timers |
+| `mori ops outbox` | Inspect and operate the transactional outbox |
+| `mori ops inbox` | Inspect and operate the integration-event inbox |
+| `mori ops pgmq` | Inspect and operate Keiro PGMQ dead-letter queues |
+| `mori ops projection` | Inspect and operate projection dedup state |
+| `mori ops shard` | Inspect and operate sharded-subscription ownership |
+| `mori ops snapshot` | Inspect and operate advisory snapshots |
+| `mori ops stream` | Inspect and operate Kiroku streams |
+| `mori ops rebuild` | Inspect and operate the mounted projection catalog |
+| `mori ops replay-audit` | Audit candidate-code replay against configured targets |
+
+Commands whose hook mori does not supply are **absent** from `--help` rather
+than present and failing. Mori supplies the projection catalog and the replay
+audit. It deliberately supplies neither the timer-fire hook (a console drain
+would be a second executor) nor the workflow-resume hook (mori registers no
+Keiro durable workflows), so `mori ops timer drain-once` and
+`mori ops wf resume-once` do not exist — while timer triage and workflow
+inspection do.
+
+## `mori ops replay-audit`
+
+Rehydrate aggregate streams from the event log and check that they still fold
+cleanly, without writing anything. Run it after changing a codec, an upcaster,
+or a fold. `just replay-audit` is the stable spelling.
+
+```bash
+mori ops replay-audit --full
+mori ops replay-audit --full --category projectRoot
+mori ops replay-audit --target ProjectPackageAdded
+mori ops replay-audit --target WorkflowStarted --include-snapshots
+```
+
+| Flag | Description |
+|------|-------------|
+| `--full` | Audit every stream in each configured category |
+| `--target EVENT_TYPE` | Audit only streams touched by this event type; repeatable |
+| `--include-snapshots` | Also select streams reached through snapshot event types |
+| `--category CATEGORY` | Limit to one runtime category |
+| `--budget STREAMS` | Stop after at most this many streams |
+| `--parallelism N` | Maximum concurrent stream audits (default 4) |
+| `--resume-from POSITION` | Resume after a prior audit checkpoint |
+
+`--full` and `--target` are mutually exclusive and one of the two is
+**required** — there is no default mode. Categories are the stored ones, so
+`projectRoot` and `projectArtifactV2`, not `project` and `project-artifact`.
+
+Exit code is 0 when every selected stream replayed cleanly, non-zero on any
+replay failure or seed divergence. A non-zero exit means do not deploy.
+
+> The old top-level `mori replay-audit` was retired in favour of this command.
+> Its `--mode full|targeted` became `--full` / `--target`, `--max-streams`
+> became `--budget`, `--event-type` became `--target`, `--category` no longer
+> repeats, and `--json` moved to the global position.
+
+## `mori ops rebuild`
+
+Rebuild a read model from recorded history. The unit is a catalog **rebuild
+group**, never a table: the group is fenced as a whole, one immutable store
+head is captured, declared clear-targets are cleared, category history is
+merged in global order, and the result is promoted atomically.
+
+```bash
+mori ops rebuild list
+mori ops rebuild preview GROUP
+mori ops rebuild start GROUP --run-id ID --requested-by WHO --reason WHY
+mori ops rebuild status RUN_ID
+mori ops rebuild abandon RUN_ID --code CODE --detail TEXT
+```
+
+`start` and `abandon` require operator evidence on the command line — there is
+no anonymous destructive read-side action.
+
+A failed or abandoned rebuild leaves its group fenced, by design. The recovery
+sequence is **abandon, then start again**. `rebuild adopt` is not part of it
+and refuses a group that is not live (`AdoptGroupNotLive`) — adoption
+reconciles catalog slice drift on a healthy group.
+
+Mori declares no schema-versioned generations, no stream-scoped replay
+policies, and no external-read contracts, so `rebuild versioned`,
+`rebuild retired`, `rebuild reproject-stream`, `rebuild external-read`, and
+`rebuild retire-external-read` all operate on an empty set.
+
+> No group declares a verification — `mori ops rebuild list` reports
+> `verifications: 0` for all of them — so a completed rebuild reports success
+> on the strength of replay finishing, with no declared post-condition
+> asserted. Check the affected tables yourself afterwards.
+
+## One executor per database
+
+`mori automate daemon` and `mori automate run` take a PostgreSQL session
+advisory lock on a dedicated, supervised connection before doing anything else.
+A second executor on the same database refuses to start:
+
+```text
+another mori daemon already holds the automation lock for this database;
+refusing to start (advisory lock key 0x6d6f72696461656d)
+```
+
+Two executors on one database would run every reaction twice. Advisory locks
+are scoped per database and the key is a constant, so the guard holds even when
+two processes reach the same database through differently-spelled connection
+strings.
+
+The lock connection is never returned to the pool. Closing it releases the lock
+on normal exit, exception, cancellation, or process death, so a crashed daemon
+does not strand the lock.
+
+## Subscription observability
+
+Kiroku owns subscription state, lag semantics, metrics, and the operator wire
+contract. Mori does not mirror that surface — it lets you turn Kiroku's own
+server on:
+
+```bash
+mori automate daemon --metrics-port 9464
+```
+
+`MORI_METRICS_PORT=9464` does the same thing; the command-line option wins when
+both are set. With neither set the daemon opens no observability socket at all.
+
+| Endpoint | Contents |
+|----------|----------|
+| `/metrics` | JSON snapshot: subscription lag, database errors, stop reasons, dead-letter counts |
+| `/metrics/prometheus` | Prometheus text exposition |
+| `/health/live` | Kiroku server liveness |
+| `/health/ready` | Kiroku dependency readiness detail |
+| `/subscriptions` | Live subscription phase and cursor rows |
+
+> A nonzero metrics port uses Kiroku's native server, which listens on **all
+> interfaces** — unlike the loopback-first HTTP API. Expose it only on a
+> trusted network or behind an authenticated proxy.
+
+`mori doctor`, `mori status`, and the HTTP API's health probes keep their
+existing scopes and do not report Kiroku subscription status.
+
+## Subscription start positions
+
+There is no `seed-checkpoints` command and no operator step to remember. A
+subscription whose checkpoint row does not yet exist — the normal state the
+first time a reactor runs — resolves that row from a policy declared in code,
+on the reactor itself, at the point it is registered.
+
+The three policies are `FromBeginning`, `FromCurrentHead`, and
+`FailIfMissing`. Every mori reactor declares `FromCurrentHead`, because every
+one of them appends events, dispatches signals, runs commands, delivers
+webhooks, or publishes to an external bus in response to what it reads.
+
+## See also
+
+- [`mori automate`](/docs/commands/automate) — the daemon these operations support
+- [Event Sourcing](/docs/concepts/event-sourcing) — where read models come from
+- [Local Registry](/docs/concepts/local-registry) — the projections mori owns

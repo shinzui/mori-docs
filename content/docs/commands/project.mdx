@@ -73,15 +73,16 @@ The audit takes no flags. It rehydrates each active stream, prints a report, and
 exits non-zero when the audit does not pass — which makes it usable as a gate in
 CI or a release checklist.
 
-Where [`mori replay-audit`](/docs/commands/replay-audit) is the general,
-tunable sweep across catalogued categories, `audit-functional-streams` is the
-fixed audit over the functional aggregates specifically.
+Where [`mori ops replay-audit`](/docs/commands/ops#mori-ops-replay-audit) is
+the general, tunable sweep across catalogued categories,
+`audit-functional-streams` is the fixed audit over the functional aggregates
+specifically.
 
 ## Related
 
-- [`mori projections`](/docs/commands/projections) — rebuild read models and
-  seed subscription checkpoints
-- [`mori replay-audit`](/docs/commands/replay-audit) — read-only replay sweep
-  with category, event-type, and budget controls
+- [`mori ops rebuild`](/docs/commands/ops#mori-ops-rebuild) — rebuild a read
+  model from recorded history
+- [`mori ops replay-audit`](/docs/commands/ops#mori-ops-replay-audit) —
+  read-only replay sweep with category, event-type, and budget controls
 - [Event Sourcing](/docs/concepts/event-sourcing) — how streams and read models
   relate

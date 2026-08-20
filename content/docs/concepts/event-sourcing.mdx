@@ -156,21 +156,25 @@ Because read models are derived, they are also reproducible — which makes both
 verification and repair ordinary operations rather than emergencies.
 
 ```bash
-mori replay-audit                       # read-only: do streams still fold cleanly?
-mori projections rebuild --dry-run      # what would a rebuild touch?
-mori projections rebuild --model project --yes
+mori ops replay-audit --full            # read-only: do streams still fold cleanly?
+mori ops rebuild list                   # which rebuild groups exist?
+mori ops rebuild preview GROUP          # what would a rebuild touch?
 mori project audit-functional-streams   # fixed audit over the functional aggregates
 ```
 
-[`mori replay-audit`](/docs/commands/replay-audit) writes nothing; it hydrates
-streams and reports failures and seed divergences, which is what you run after
-touching a codec, an upcaster, or a fold.
-[`mori projections rebuild`](/docs/commands/projections) is the destructive
-counterpart and refuses to run without `--yes`.
+[`mori ops replay-audit`](/docs/commands/ops#mori-ops-replay-audit) writes
+nothing; it hydrates streams and reports failures and seed divergences, which
+is what you run after touching a codec, an upcaster, or a fold. One of
+`--full` or `--target` is required — there is no default mode.
+
+[`mori ops rebuild`](/docs/commands/ops#mori-ops-rebuild) is the destructive
+counterpart. Its unit is a catalog rebuild *group*, never a single table, and
+every mutating step previews first and exits 1 until you re-run with `--force`.
 
 Side-effecting subscriptions — the executor, routers, webhook fan-out — must
-never replay from position zero, so a newly introduced one is seeded at the
-current head with `mori projections seed-checkpoints`.
+never replay from position zero. There is no operator step for this any more:
+each reactor declares a missing-checkpoint policy in code, and every mori
+reactor declares `FromCurrentHead`.
 
 ## Operational Checks
 

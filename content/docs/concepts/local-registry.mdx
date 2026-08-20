@@ -166,7 +166,7 @@ the new events can update the projections.
 
 ### You need to verify a projection against its events
 
-Use [`mori replay-audit`](/docs/commands/replay-audit) to prove that streams
-still fold cleanly without writing anything, and
-[`mori projections rebuild`](/docs/commands/projections) to rebuild a read model
-from the event log when it has genuinely drifted.
+Use [`mori ops replay-audit`](/docs/commands/ops#mori-ops-replay-audit) to
+prove that streams still fold cleanly without writing anything, and
+[`mori ops rebuild`](/docs/commands/ops#mori-ops-rebuild) to rebuild a read
+model from the event log when it has genuinely drifted.

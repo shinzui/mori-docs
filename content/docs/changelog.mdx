@@ -9,6 +9,32 @@ features, commands, and schema changes.
 
 ---
 
+## 2026-08-20
+
+### `mori ops` — the operations console (new page)
+- [`mori ops`](/docs/commands/ops) is the keiro-ops console mounted inside the mori binary, and the only operator surface for framework-owned state: durable workflows, timers, the transactional outbox and inbox, PGMQ dead letters, advisory snapshots, Kiroku streams, shard ownership, subscription checkpoints, projection dedup state, and read-model rebuilds
+- Every mutating command previews first, changes nothing, and **exits 1** until you re-run with `--force`. Every invocation also verifies the live Keiro schema against the binary; a mutating command refuses on drift unless `--allow-schema-drift` is passed
+- `--json` emits a versioned envelope that is the automation contract — never scrape a table or stderr
+
+### `mori projections` and `mori replay-audit` removed
+- Both commands are gone, replaced by [`mori ops rebuild`](/docs/commands/ops#mori-ops-rebuild) and [`mori ops replay-audit`](/docs/commands/ops#mori-ops-replay-audit)
+- `replay-audit`'s `--mode full|targeted` became `--full` / `--target`, `--max-streams` became `--budget`, `--event-type` became `--target`, `--category` no longer repeats, and `--json` moved to the global position. One of `--full` or `--target` is now **required** — there is no default mode
+- `rebuild`'s unit is a catalog rebuild *group*, never a table. `start` and `abandon` require operator evidence (`--run-id`, `--requested-by`, `--reason` / `--code`, `--detail`) on the command line
+- There is no `seed-checkpoints` command any more. A subscription with no checkpoint row resolves it from a missing-checkpoint policy declared in code on the reactor; every mori reactor declares `FromCurrentHead`
+
+### `mori identity` — stable IDs and renames (new page)
+- [`mori identity mint --write`](/docs/commands/identity) inserts an opaque `project.stableId` into `mori.dhall`. It survives renames, so `mori register` updates the existing registry row instead of creating a second one
+- [`mori identity show`](/docs/commands/identity#mori-identity-show) compares the manifest identity, repository ID, registry project ID, stable ID, and aliases side by side
+- Renaming means changing `namespace` or `name` while keeping the same `stableId`. Mori records the previous canonical identity as an alias automatically; `Schema.ProjectAlias::{ namespace, name }` declares older identities explicitly
+- References through an alias keep resolving. `mori validate --check-refs` reports them as warnings naming the current canonical identity
+
+### Registry projections are inline, not daemon-driven
+- Every registry read model — projects, packages, dependencies, groups, relations, and the per-extension tables — is now written **inline**, in the same transaction as the event. The tables are current the moment `mori register` returns
+- `mori automate daemon` still runs the reactive engine (automation routers, the reaction executor, signal and join routers, integration producers, webhook fan-out), but it is no longer required to populate the registry
+- Guidance that told you to start the daemon and wait for a projection to catch up has been corrected across the docs
+
+---
+
 ## 2026-08-07
 
 ### `Maintenance` lifecycle stage
@@ -60,9 +86,9 @@ features, commands, and schema changes.
 - Configuration loading, validation, and matching are available now; live Project-stream subscription and durable delivery remain disabled until the shared signal-delivery infrastructure lands
 
 ### Event-store operations commands (new)
-- [`mori projections`](/docs/commands/projections) — `rebuild` (offline and destructive; requires `--yes`, supports `--model GROUP` and `--dry-run`) and `seed-checkpoints` (seeds side-effecting subscriptions at the store head so they never replay history)
+- `mori projections` — `rebuild` (offline and destructive; requires `--yes`, supports `--model GROUP` and `--dry-run`) and `seed-checkpoints` (seeds side-effecting subscriptions at the store head so they never replay history)
 - [`mori project`](/docs/commands/project) — `bootstrap-functional-streams` (with `--dry-run`) and `audit-functional-streams`
-- [`mori replay-audit`](/docs/commands/replay-audit) — read-only replay sweep with `--mode full|targeted`, `--event-type`, `--category`, `--max-streams`, `--parallelism`, `--resume-from`, and `--json`. Exits non-zero on any replay failure or seed divergence
+- `mori replay-audit` — read-only replay sweep with `--mode full|targeted`, `--event-type`, `--category`, `--max-streams`, `--parallelism`, `--resume-from`, and `--json`. Exits non-zero on any replay failure or seed divergence
 
 ### Daemon subscription observability
 - [`mori automate daemon --metrics-port PORT`](/docs/commands/automate#mori-automate-daemon) (or `MORI_METRICS_PORT`) starts Kiroku's own metrics, health, and subscription-status server: `/metrics`, `/metrics/prometheus`, `/health/live`, `/health/ready`, `/subscriptions`
@@ -106,7 +132,7 @@ features, commands, and schema changes.
 - Other config load failures are prefixed with a skew note only when the pins genuinely differ, and semantic validation failures render as actionable sentences
 
 ### Removed
-- **`mori history`** and the legacy MessageDB path are gone. Kiroku is the only event store; `mori doctor` no longer checks the `message_store` schema, and pages that described the migration boundary now describe verification and rebuild via [`mori replay-audit`](/docs/commands/replay-audit) and [`mori projections`](/docs/commands/projections) instead
+- **`mori history`** and the legacy MessageDB path are gone. Kiroku is the only event store; `mori doctor` no longer checks the `message_store` schema, and pages that described the migration boundary now describe verification and rebuild via `mori replay-audit` and `mori projections` instead
 
 ### Also
 - New `mori automate migrate-named` imports legacy registrations into the named `Automation` aggregate. Defaults to `--dry-run`; `--apply` additionally requires `--i-stopped-the-daemon`

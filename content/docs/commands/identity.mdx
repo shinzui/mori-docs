@@ -1,0 +1,99 @@
+---
+title: mori identity
+description: Mint and inspect the stable project identity that survives renames
+icon: IdCard
+---
+
+Mori distinguishes three identifiers that solve different problems:
+
+| Identifier | What it is | Can it change? |
+|-----------|------------|----------------|
+| `namespace/name` | The canonical, human-readable identity used in `mori://` references | Yes |
+| `project.stableId` | The manifest-declared, opaque project identity | No — it survives renames |
+| `mori/repo-id` | Identifies one observed working tree | Per repository, not per project |
+
+The registry also has an internal `ProjectId` (`proj_*`). It owns event streams
+and foreign keys, and is deliberately not authored in `mori.dhall`.
+
+A `stableId` is what lets `mori register` update an existing project after a
+rename instead of creating a second registry row. A project may span more than
+one repository, so a repository ID is **not** a project ID.
+
+## `mori identity mint`
+
+```bash
+mori identity mint
+mori identity mint --write
+```
+
+| Flag | Description |
+|------|-------------|
+| `--write` | Insert the minted `stableId` into `mori.dhall` |
+
+`mori init` already includes a freshly minted stable ID, so this is for older
+manifests:
+
+```bash
+mori identity mint --write
+mori validate
+```
+
+The writer only edits the standard `Schema.ProjectIdentity::{ … }` completion
+form. If it cannot locate that form unambiguously it prints the exact line for
+a manual edit and leaves the file unchanged. Re-running when `stableId` already
+exists is a no-op.
+
+Stable IDs contain letters, digits, and `_` only.
+
+## `mori identity show`
+
+Compare the manifest identity, repository ID, registry project ID, stable ID,
+and aliases side by side:
+
+```bash
+mori identity show
+```
+
+```text
+Manifest identity: shinzui/mori
+Stable ID (manifest): —
+Aliases (manifest): —
+Repository ID: repo_01kh9280qte2hvc4h8jp0tg5b3
+Registry project ID: proj_01kzmya686evevw32h20jbhdg6
+Stable ID (registry): —
+Aliases (registry): —
+```
+
+A dash means the value is not set. Manifest and registry rows are shown
+separately so you can see a manifest that has drifted from what was last
+registered.
+
+## Renames and aliases
+
+Rename a project by changing `project.namespace` or `project.name` while
+keeping the same `stableId`, then run `mori register`. Mori updates the
+existing registry row, emits a replayable rename fact, and records the previous
+canonical identity as an alias.
+
+Aliases can also be declared in the manifest, for identities that predate the
+stable ID:
+
+```dhall
+, aliases =
+  [ Schema.ProjectAlias::{ namespace = "old-org", name = "old-name" } ]
+```
+
+Both fields on `ProjectAlias` are identity-bearing and therefore required.
+
+References through an alias continue to resolve. `mori validate --check-refs`
+reports them as warnings naming the current canonical identity, so authors can
+update stale references without anything breaking in the meantime.
+
+Names are not permanently retired: reuse is legal, and registration reports
+alias collisions as advisory warnings rather than errors.
+
+## See also
+
+- [`mori register`](/docs/commands/register) — what applies a rename
+- [`mori validate`](/docs/commands/validate) — `--check-refs` and alias warnings
+- [Canonical refs](/docs/concepts/canonical-refs) — how `mori://` references resolve
