@@ -153,10 +153,31 @@ The main unions are `SubdomainKind`, `RelationshipPattern`,
 `RelationshipPattern` includes an `Other : Text` arm for project-specific
 patterns.
 
-Every `*Ref` field is an optional typed `MoriRef` companion to a bare text key.
-The bare key stays authoritative; the companion lets the reference name another
-project canonically and be resolved by the registry. When both are present they
-must agree, or validation fails.
+Every `*Ref` field above is an optional typed `MoriRef` companion to a bare text
+key. The bare key stays authoritative and the companion carries the exact
+identity; when both are present they must agree, or validation fails.
+
+Which companion may cross a project boundary is **not** uniform, and the split
+is deliberate:
+
+| Companion | May target another project? |
+|-----------|------------------------------|
+| `subdomainRef`, aggregate `contextRef` | **No** — ownership and membership describe one model's internal structure |
+| `supersedesRefs`, `upstreamRef`, `downstreamRef` | **Yes** — succession and strategic mapping describe fleet-wide evolution and collaboration |
+| coordination `participantRefs`, `flowRefs` | Yes |
+| coordination owner `contextRef` | No — the owning context is local |
+| `implementationRef` | Any built-in artifact kind — runtime evidence can be a package, doc, or other registered fact |
+
+Two rules catch most authoring mistakes:
+
+- A `supersedesRefs` entry must be of kind `DddContext`, **and** its key must
+  also appear in the plain `supersedes` list. A typed companion whose key is
+  missing from the list is rejected by name.
+- A plain `supersedes` key with no local target stays valid — the superseded
+  context may legitimately live outside this document.
+
+See `mori help ddd` for the complete key →
+companion table and the kind each companion accepts.
 
 ### Lifecycle and succession
 
@@ -269,11 +290,67 @@ mori ddd coordination --message PaymentAuthorized --message-kind event \
 mori ddd coordination --json                  # deterministic snake_case JSON
 ```
 
+### Canonical identities
+
+Every coordination mechanism is a first-class project artifact with its own
+`mori://` identity, its own event history, and its own relational row — not a
+nested field inside the model's JSON:
+
+```text
+mori://acme/orders/ddd/reactors/reserve-inventory
+mori://acme/orders/ddd/process-managers/order-fulfillment
+mori://acme/orders/ddd/durable-workflows/refund-compensation
+```
+
+The typed reference kinds are `DddReactor`, `DddProcessManager`, and
+`DddDurableWorkflow`, so these targets participate in
+`mori validate --check-refs` alongside every other kind.
+
+These declarations have **no file of their own**. `mori path` reports the
+owning project plus name, context, lifecycle, timers, and durable-state
+summary, then returns the project root rather than inventing an artifact path:
+
+```bash
+mori path mori://acme/orders/ddd/process-managers/order-fulfillment
+```
+
+### JSON contract
+
+`mori ddd coordination --json` emits a stable version-1 document:
+
+| Key | Contents |
+|-----|----------|
+| `version` | Contract version, currently `1` |
+| `filters` | Every predicate echoed back, `null` when unset |
+| `scope` | `mode` (`local` or `registry`), `projects`, `group` |
+| `results` | One object per matching mechanism |
+
+Each result carries the common fields — `kind`, `key`, `name`, `context`,
+`context_ref`, `description`, `consumes`, `emits`, `participants`,
+`participant_refs`, `implementation`, `implementation_ref`, `flows`,
+`flow_refs`, `status`, `has_timers`, `has_durable_state`, `canonical_ref` —
+plus a kind-specific `details` object.
+
+`consumes` and `emits` are arrays of `{ message, kind }` objects. That is what
+makes `--message` and `--message-kind` an **exact pair** match rather than two
+independent predicates: a declaration that consumes `PaymentAuthorized` as an
+`Event` does not satisfy `--message PaymentAuthorized --message-kind command`
+just because some other message elsewhere is a command.
+
+All predicates are ANDed. `--has-timers` and `--has-durable-state` constrain to
+true; omitting them applies no boolean constraint. An empty match is
+**successful** and renders an empty `results` list. Local `--config` cannot be
+combined with a registry scope, and `--group` cannot be combined with
+`--project`.
+
 ## Cross-project search
 
 Registration stores the model in the generic extension JSONB store, and an
-**inline** projection fans it out into twelve normalized `mori.ddd_*` tables in
-the same transaction — so `mori ddd search` can answer relational questions
+**inline** projection fans it out into twelve normalized `mori.ddd_*` tables —
+`ddd_models`, `ddd_subdomains`, `ddd_contexts`, `ddd_aggregates`,
+`ddd_context_mappings`, `ddd_flows`, `ddd_flow_steps`, `ddd_glossary`,
+`ddd_collaborators`, `ddd_reactors`, `ddd_process_managers`, and
+`ddd_durable_workflows` — in the same transaction — so `mori ddd search` can answer relational questions
 across every registered project as soon as `mori register` returns. No daemon is
 involved.
 
@@ -311,7 +388,42 @@ mori ddd map --group commerce --format json
 
 Superseded contexts are drawn as a dashed edge from the successor back to its
 predecessor, so a migration in progress reads as a migration rather than as two
-unrelated contexts.
+unrelated contexts. Lifecycle status also controls node styling.
+
+Contexts are grouped first by project and then by subdomain. Their canonical
+`mori://…/ddd/contexts/…` refs are the graph identities, so equal context keys
+in different projects stay distinct.
+
+A typed mapping endpoint resolves exactly. An endpoint outside the selected
+scope, a missing key, or an **ambiguous** untyped key stays visible as an
+external node — mori never guesses which context was meant and never drops the
+mapping assertion.
+
+All three formats encode the same node and edge set, and repeated runs are
+byte-identical, so the output is safe to commit and diff.
+
+#### JSON contract
+
+Snake_case throughout:
+
+| Key | Fields |
+|-----|--------|
+| `scope` | `kind` — `all`, `projects`, or `group` |
+| `projects` | `canonical_ref`, `namespace`, `name`, `subdomains` |
+| `nodes` | `id`, `canonical_ref`, `key`, `name`, `project`, `subdomain`, `status`, `external` |
+| `edges` | `kind`, `source`, `target`, `label`, `declaring_project` |
+
+`edges.kind` is `mapping` or `supersession`. For a resolved context, `nodes.id`
+is its canonical context URI. External nodes come in two shapes:
+
+- **typed** — the endpoint named a canonical ref outside the selected scope;
+  `id` and `canonical_ref` are both that URI.
+- **plain** — the endpoint named a key that matched no in-scope context, or
+  matched more than one; `id` is `external:ddd-context-key:<key>` and
+  `canonical_ref` is `null`.
+
+Either way `external` is `true` and `project`, `subdomain`, and `status` are
+`null`. Key on `external` rather than on the shape of `id`.
 
 The database-backed subcommands are `mori ddd search`, `mori ddd map`, and
 `mori ddd coordination` in registry mode. Everything else reads

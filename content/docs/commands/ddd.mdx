@@ -48,6 +48,13 @@ mori ddd contexts --status deprecated
 Most filters are case-insensitive. Kind and pattern filters also ignore hyphens
 and underscores.
 
+Lifecycle and succession appear in the output, not only in the filters:
+`mori ddd contexts` prints `KEY │ NAME │ PURPOSE │ SUBDOMAIN │ STATUS │
+SUPERSEDES`, and `mori ddd glossary` prints `TERM │ DEFINITION │ CONTEXT │
+ALIASES │ REPLACES`. `mori ddd coordination` prints `KIND │ KEY │ NAME │
+CONTEXT │ STATUS │ CONSUMES │ EMITS │ TIMERS │ STATE`, where each consumed or
+emitted message renders as `Name (kind)`.
+
 ## `mori ddd coordination`
 
 One typed view over reactors, process managers, and durable workflows. Reads
@@ -78,6 +85,39 @@ mori ddd coordination --group commerce --status active --json
 | `--has-timers` | Require a mechanism that owns timers |
 | `--has-durable-state` | Require a mechanism that owns durable state |
 | `--json` | Emit deterministic snake_case JSON |
+
+All predicates are ANDed. `--has-timers` and `--has-durable-state` constrain to
+true; omitting them applies no constraint. An empty match is **successful** and
+renders an empty `results` list.
+
+`--message` and `--message-kind` select one structured `{ message, kind }`
+object, so they are an **exact pair**: a declaration consuming
+`PaymentAuthorized` as an `Event` does not match
+`--message PaymentAuthorized --message-kind command` just because some other
+message is a command.
+
+`--config` cannot be combined with a registry scope, and `--group` cannot be
+combined with `--project`.
+
+`--json` emits a version-1 envelope of `version`, `filters` (every predicate
+echoed, `null` when unset), `scope` (`mode`, `projects`, `group`), and
+`results`. Each result carries the common fields plus a kind-specific `details`
+object. See the [DDD guide](/docs/guides/ddd#json-contract).
+
+### Canonical identities
+
+Each mechanism is a first-class artifact with its own `mori://` identity:
+
+```text
+mori://acme/orders/ddd/reactors/reserve-inventory
+mori://acme/orders/ddd/process-managers/order-fulfillment
+mori://acme/orders/ddd/durable-workflows/refund-compensation
+```
+
+The typed kinds are `DddReactor`, `DddProcessManager`, and
+`DddDurableWorkflow`. These declarations have no file of their own, so
+`mori path` reports the owning project and a summary, then returns the project
+root rather than inventing an artifact path.
 
 ## `mori ddd search`
 
@@ -128,7 +168,14 @@ mori ddd map --group commerce --format json
 | `--format FORMAT` | `mermaid` (default), `dot`, or `json` |
 
 Superseded contexts are drawn as a dashed edge from the successor back to its
-predecessor.
+predecessor, and lifecycle status controls node styling. All three formats
+encode the same node and edge set, and repeated runs are byte-identical.
+
+An endpoint outside the selected scope, a missing key, or an ambiguous untyped
+key stays visible as an **external node** rather than being guessed at or
+dropped. The JSON contract — `scope`, `projects`, `nodes`, `edges` and their
+fields — is documented in the
+[DDD guide](/docs/guides/ddd#json-contract-1).
 
 ## JSONB query alternative
 
