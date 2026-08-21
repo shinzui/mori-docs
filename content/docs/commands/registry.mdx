@@ -120,6 +120,48 @@ mori registry dependents effectful --json
 | `--packages` | Show per-package dependency edges instead of a project rollup |
 | `--scope SCOPE` | Only show edges with this dependency scope, such as `regular`, `dev`, `test`, or `build` |
 
+The same authoritative package, project, and pinned-import query expands a
+Signal action whose target list contains `"*dependents*"`.
+
+## `mori registry release record`
+
+Record one immutable project release fact:
+
+```bash
+mori registry release record shinzui/example 5.0.0
+mori registry release record shinzui/example v2026.08 \
+  --released-at 2026-08-21T18:00:00Z \
+  --source ci \
+  --json
+```
+
+`PROJECT` may be a qualified `namespace/name` or a unique bare name.
+`--released-at` defaults to the current UTC time and `--source` defaults to
+`manual`. Repeating `(projectId, version)` returns the first committed fact;
+it never overwrites its release time or source.
+
+## `mori registry releases`
+
+Query release history or latest releases:
+
+```bash
+mori registry releases shinzui/example
+mori registry releases shinzui/example --latest
+mori registry releases --latest --json
+mori registry releases --latest --with-dependents --json
+```
+
+| Flag | Description |
+|------|-------------|
+| `--latest` | Select at most one latest release per project |
+| `--with-dependents` | With `--latest`, include every dependent package for each selected provider |
+| `--limit N` | Limit provider release rows before any dependent join (default: 100) |
+| `--json` | Emit command-owned snake_case JSON |
+
+Release time and committed event-store position determine ordering; Mori never
+orders or compares version text. See [Registry Releases](/docs/guides/registry-releases)
+for the tag-to-release automation recipe and opaque-version boundary.
+
 ## `mori registry domains`
 
 List distinct domain tags and project counts.

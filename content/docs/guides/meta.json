@@ -31,6 +31,7 @@
 		"registry-groups",
 		"registry-templates",
 		"registry-exec",
+		"registry-releases",
 		"seihou-templates",
 		"corpus-learning",
 		"agent-sessions",

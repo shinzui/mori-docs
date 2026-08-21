@@ -121,12 +121,11 @@ buried, because writing them and expecting them to take effect is a real trap.
 
 ## Being built
 
-Six pieces of work are open. None of them changes an existing contract.
+Five pieces of work are open. None of them changes an existing contract.
 
 | Work | What it delivers |
 |------|------------------|
-| **Authoritative reverse-dependency resolution** | `"*dependents*"` signal expansion and `mori registry dependents` currently answer through different code. Unifying them on the authoritative dependency read model is a prerequisite for the rest of the upstream-issues cross-repo automation. |
-| **Upstream-issues cross-repo automation** | Propagate a corpus project's known upstream defects to the dependents that are affected by them. Waits on the item above and a rebase onto the signal-delivery domain. |
+| **Upstream-issues cross-repo automation** | Propagate a corpus project's known upstream defects to the dependents that are affected by them. Its authoritative target-resolution prerequisite is complete; the remaining work is the signal-delivery-domain rebase and implementation. |
 | **`Agent` automation action** | A declarative action that hands a reaction to a registered agent. The Dhall and Haskell halves are implementable now; the transport waits on the agent runner exposing an HTTP surface. Requested as IR-1. |
 | **Typed capability queries** | Cross-registry capability queries and a semantic validation gate over the `coordination.capabilities` OKF profile. The originally planned Dhall `capability` extension is withdrawn — the profile is the authoring format. |
 | **Event provenance** | Stamp event metadata and thread causation and trace context through every command-dispatch site. |
@@ -137,14 +136,13 @@ Six pieces of work are open. None of them changes an existing contract.
 ## Requested, not committed
 
 Improvement requests are how other projects — and Mori itself — record a capability gap as a
-durable, addressable fact rather than a wish. These nine are registered and open with no plan
+durable, addressable fact rather than a wish. These eight are registered and open with no plan
 behind them. Listing one here is not a commitment to build it.
 
 | Request | Gap |
 |---------|-----|
 | **IR-3** | Model practice adoption, and re-evaluate affected decisions when registered guidance changes |
 | **IR-8** | A LIFO automation queue discipline — run the newest eligible pending reaction next, without losing one-at-a-time execution or cancellation semantics |
-| **IR-11** | Model project releases as registry facts, so an upgrade cascade starts from a fact instead of a tag-name convention |
 | **IR-12** | Orchestrate upgrade cascades in dependency order — a DAG driven in topological waves, not an unordered one-hop fan-out |
 | **IR-13** | Expose project grounding over a protocol-neutral agent interface, so an agent that is not Claude Code can retrieve context and resolve `mori://` references |
 | **IR-14** | Enforce the declared automation execution policy, and record a refusal as a fact |
@@ -152,7 +150,7 @@ behind them. Listing one here is not a commitment to build it.
 | **IR-16** | Trigger automations on a recurring schedule, owned by a durable schedule with an explicit catch-up policy |
 | **IR-19** | Resolve improvement-request fulfillment graphs and explain readiness — which requests are actionable leaves right now |
 
-Four of these nine are automation-engine gaps, which makes the automation engine the largest
+Four of these eight are automation-engine gaps, which makes the automation engine the largest
 single pool of uncommitted demand.
 
 See [Improvement Requests](/docs/guides/improvement-requests) for how they are raised, linked to

@@ -276,8 +276,14 @@ values appear in reaction history.
 | `{{meta.<Key>}}` | Event metadata value |
 | `{{ref.name}}` | Ref name (for RefObserved) |
 | `{{ref.target}}` | Target object ID (for RefObserved) |
+| `{{signal.type}}` | Delivered signal type |
+| `{{signal.source}}` | Qualified source project name |
+| `{{signal.deliveredAt}}` | Actual delivery time (ISO 8601) |
 
-Unknown variables are left as-is. Empty optional values expand to empty string.
+For a receiving signal reaction, `{{meta.<Key>}}` reads the corresponding flat
+payload value. Unknown variables are left as-is, and the daemon logs one warning
+naming the reaction, triggering event, and unresolved placeholders. Optional
+values represented in the context expand to an empty string.
 
 Example using interpolation with trailer matching:
 

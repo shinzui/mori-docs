@@ -1,0 +1,92 @@
+---
+title: Registry Releases
+description: Record immutable project releases and query history, latest facts, and dependents
+icon: Tags
+---
+
+Mori records a project release as an immutable registry fact. This gives people,
+CI, and automation one producer-owned statement to query instead of asking every
+consumer to infer a release from tag text. Version and constraint strings remain
+opaque: Mori stores them but does not parse, compare, or solve them.
+
+## Record a release
+
+```bash
+mori registry release record shinzui/example 5.0.0
+mori registry release record shinzui/example v2026.08 \
+  --released-at 2026-08-21T18:00:00Z \
+  --source ci \
+  --json
+```
+
+`PROJECT` may be a qualified `namespace/name` or a unique bare name.
+`--released-at` defaults to the current UTC time and `--source` defaults to
+`manual`. Version and source must be non-empty, single-line text after trimming.
+
+The logical identity is `(projectId, version)`. Retrying that pair returns the
+first committed fact instead of overwriting or duplicating it. JSON reports
+`already_recorded` on a retry.
+
+## Query history and latest releases
+
+```bash
+# Full history for one project
+mori registry releases shinzui/example
+
+# Latest release for one or every project
+mori registry releases shinzui/example --latest
+mori registry releases --latest --json
+
+# Join each latest provider release to every dependent package
+mori registry releases --latest --with-dependents --json
+```
+
+History and latest selection order by declared release time and then committed
+event-store position. Version text is never an ordering key.
+`--with-dependents` is valid only with `--latest`; it reports consumer package,
+scope, resolution kind, target package, and opaque constraint without claiming
+whether the constraint is older than the release. `--limit N` defaults to 100
+and limits provider releases before the join.
+
+## Record observed tags
+
+A Git tag is repository-local input, not itself a registry release. Translate a
+version tag into the same fact with a `RefSelector` reaction:
+
+```dhall
+let Schema =
+      https://raw.githubusercontent.com/shinzui/mori-schema/<commit>/package.dhall
+
+in  Schema.Automation::{
+    events =
+      [ Schema.EventSelector.RefSelector Schema.RefSelector::{
+          name = "release-tags"
+        , refPatterns = [ "v*" ]
+        , kinds = [ "tag" ]
+        }
+      ]
+  , reactions =
+      [ Schema.Reaction::{
+          name = "record-release-tag"
+        , on = [ "release-tags" ]
+        , actions =
+          [ Schema.ReactionAction.RunCommand Schema.RunCommandAction::{
+              command = "mori"
+            , args =
+              [ "registry", "release", "record", "shinzui/example"
+              , "{{ref.name}}", "--source", "git-tag:{{ref.name}}"
+              ]
+            }
+          ]
+        }
+      ]
+  }
+```
+
+Mori expands `{{ref.name}}` before it records the Reaction. The resulting
+`ProjectReleaseRecorded` fact can trigger an ordinary fleet-wide
+`ProjectSelector` reaction and supplies `release.version`,
+`release.releasedAt`, `release.source`, and `release.payloadJson`.
+
+Recording a release does not automatically notify dependents or orchestrate an
+upgrade cascade; those are explicit automation choices.

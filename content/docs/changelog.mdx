@@ -9,6 +9,22 @@ features, commands, and schema changes.
 
 ---
 
+## 2026-08-21
+
+### Immutable project release facts
+
+- [`mori registry release record`](/docs/guides/registry-releases) records one immutable release keyed by project and opaque version; a retry returns the first committed release time and source
+- `mori registry releases` queries history or the latest release per project, and `--latest --with-dependents` joins the selected providers to every dependent package without interpreting versions or constraints
+- A `RefSelector` reaction can turn observed version tags into the same fact. Recording a release does not implicitly notify dependents or orchestrate an upgrade cascade
+
+### Signal targeting and interpolation now share their authoritative paths
+
+- `"*dependents*"` uses the same reverse-dependency query as `mori registry dependents`, including package dependencies, project dependencies, and pinned imports. `mori signal list` warns about durable emissions that validly resolved to zero targets
+- Receiving reactions now expand `{{signal.type}}`, `{{signal.source}}`, `{{signal.deliveredAt}}`, and flat payload `{{meta.<Key>}}` values before the Reaction is recorded
+- Unknown trigger-time placeholders remain literal for compatibility, but the daemon logs the reaction, triggering event, and unresolved names instead of failing silently
+
+---
+
 ## 2026-08-20
 
 ### Splitting a DDD model across files (new page)

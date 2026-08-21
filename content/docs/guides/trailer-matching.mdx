@@ -53,8 +53,12 @@ Common variables:
 | `{{trailer.<Key>}}` | Trailer value, such as `{{trailer.Intention}}` |
 | `{{meta.<Key>}}` | Event metadata value |
 | `{{ref.name}}` | Ref name from `RefObserved` |
-| `{{signal.type}}` | Signal type from `WorkflowSignalReceived` |
+| `{{signal.type}}` | Type from a successful first-class signal delivery |
+| `{{signal.source}}` | Qualified source project name |
+| `{{signal.deliveredAt}}` | Actual delivery time |
 
-Unknown variables pass through unchanged. Missing optional values expand to an
-empty string.
-
+For a receiving signal reaction, `{{meta.<Key>}}` reads the corresponding flat
+payload value. Unknown variables pass through unchanged, and the daemon logs a
+warning naming the reaction, triggering event, and unresolved placeholders.
+Optional values represented in the context, such as an absent changeset body,
+expand to an empty string.

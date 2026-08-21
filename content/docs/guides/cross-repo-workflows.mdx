@@ -20,8 +20,8 @@ repository boundaries through the event store. The flow:
 
 1. A VCS event (commit, tag) matches a selector in the source repo
 2. The source repo's reaction emits a **Signal** action
-3. Mori resolves target projects via the registry, writes signal events to their streams
-4. Each target repo's automation matches the signal and runs its own reactions
+3. Mori checkpoints the emission, resolves targets, and creates one durable delivery per target
+4. A successful delivery receipt triggers each matching target reaction
 5. A **workflow projection** tracks the entire chain for observability
 
 No repos call each other directly. They emit facts; other repos react.
@@ -32,7 +32,8 @@ No repos call each other directly. They emit facts; other repos react.
 
 - [Automation](/docs/guides/automation) set up in both source and target repos
 - All repos registered in the local registry (`mori register`)
-- All repos have a `mori/repo-id` file (created by `mori init` or `mori automate ingest`)
+- Every target Project record is linked to a RepoId by `mori observe` or
+  `mori automate register`; delivery never reads a checkout-local `mori/repo-id`
 - Database migrations run (the `mori.workflows` and `mori.workflow_steps` tables)
 
 ---
@@ -247,8 +248,9 @@ dependent from silently widening every emission.
 
 ## Dynamic Targets: `*dependents*`
 
-Instead of naming every target explicitly, use `"*dependents*"` to automatically
-resolve all projects that depend on any package published by the source project:
+Instead of naming every target explicitly, use `"*dependents*"` to resolve the
+same distinct qualified projects returned by
+`mori registry dependents <source-project>`:
 
 ```haskell
 ReactionAction.Signal
@@ -258,11 +260,15 @@ ReactionAction.Signal
   }
 ```
 
-Mori queries the registry's dependency graph at dispatch time:
+Mori queries the authoritative reverse-dependency read model at dispatch time.
+Package dependencies, project dependencies, and pinned imports all participate.
+Stored resolved targets take precedence, literal names still let unresolved or
+external libraries answer the query, the source project is excluded, and target
+names are deduplicated.
 
-1. Finds all packages declared by the source project
-2. Finds all other projects that list those packages as dependencies
-3. Dispatches signals to each
+A valid expansion may find nobody. Mori checkpoints an honest zero-delivery
+emission, and `mori signal list` warns on stderr about recent `*dependents*`
+emissions that resolved to zero targets.
 
 You can mix dynamic and explicit targets — they are deduplicated:
 
@@ -499,10 +505,14 @@ path the payload does not carry silently narrows the selector to nothing.
 
 ### `*dependents*` resolves to no targets
 
-The source project has no packages declared, or no other projects list those
-packages as dependencies. Verify with:
+The authoritative query found no package, project, or pinned-import edge back
+to the source. Verify the exact query with:
 
 ```bash
-mori deps resolve  # in the source project
-mori registry list # check other projects have dependencies
+mori registry dependents <namespace/source-project>
+mori signal list
 ```
+
+The first command shows the edges used for dynamic targeting. The second warns
+about recent zero-target dependent emissions even though there is no failed
+delivery row.
