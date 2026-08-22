@@ -95,6 +95,28 @@ Kiroku stores events in named streams and also records an ordered global log.
 Subscriptions can consume categories and consumer groups through the
 keiro/shibuya worker host.
 
+## Event Provenance
+
+New events carry additive append-time provenance beside their immutable
+payload and codec metadata:
+
+- `actor` identifies the CLI, daemon, specific worker, API, or generic process;
+- `causer` distinguishes a recorded Kiroku event from a timer or message;
+- `correlation` reuses the cross-project workflow correlation envelope; and
+- Kiroku's OpenTelemetry bridge records W3C `traceparent` and optional
+  `tracestate`.
+
+Only a recorded event cause is promoted into Kiroku's indexed
+`causation_id`. Timer and message identities remain metadata-only. Workflow
+correlation promotes the workflow TypeID UUID into `correlation_id` while
+retaining its full target, delivery, depth, and digest-chain evidence.
+
+Provenance is not backfilled. Historical or malformed optional values remain
+`not recorded`. Inspect a reaction's envelope with
+[`mori reaction show`](/docs/commands/reaction#mori-reaction-show), then follow
+an event edge with
+[`mori ops stream causation`](/docs/commands/ops#mori-ops-stream-causation).
+
 ## Read Models
 
 Read models are PostgreSQL tables derived from event streams. They make the CLI
@@ -107,9 +129,10 @@ fast and predictable:
 - Extension commands such as `mori plans`, `mori tech-radar search`, `mori ddd
   search`, and `mori registry concepts` query extension-specific projections.
 
-Read models are rebuildable from events. If a projection is stale, restart
-`mori automate daemon` or replay the relevant subscription after confirming the
-operator impact.
+Read models are rebuildable from events. If an owned projection is stale, stop
+its writers, inspect its catalog group with `mori ops rebuild`, and use the
+preview-first rebuild workflow. Restarting the daemon does not repair a catalog
+or replay an inline projection.
 
 ## Worker Host
 

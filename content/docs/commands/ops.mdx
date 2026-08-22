@@ -81,6 +81,24 @@ Keiro durable workflows), so `mori ops timer drain-once` and
 `mori ops wf resume-once` do not exist — while timer triage and workflow
 inspection do.
 
+## `mori ops stream causation`
+
+Traverse Kiroku's indexed event-to-event cause graph in both directions:
+
+```bash
+mori ops stream causation <EVENT_ID>
+mori ops --json stream causation <EVENT_ID>
+```
+
+The result labels the seed, ancestors, and descendants and retains each event
+ID, source stream, type, global position, and immediate causation ID. An older
+event with no recorded edge is still a valid seed-only result.
+
+Only Kiroku event IDs inhabit this graph. Mori stores timer and queue/message
+identities as structured metadata because they are useful evidence but are not
+events. Inspect those causes, workflow correlation, and W3C trace context with
+[`mori reaction show`](/docs/commands/reaction#mori-reaction-show).
+
 ## `mori ops replay-audit`
 
 Rehydrate aggregate streams from the event log and check that they still fold

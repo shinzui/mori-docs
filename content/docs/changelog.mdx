@@ -11,6 +11,18 @@ features, commands, and schema changes.
 
 ## 2026-08-21
 
+### Truthful event provenance and trace continuation
+
+- New Mori events record an additive process actor and active W3C trace context; event-driven,
+  timer, and queued workers add their specific actor and truthful immediate cause without losing
+  deterministic IDs, metrics, hooks, or existing metadata
+- [`mori reaction show`](/docs/commands/reaction#mori-reaction-show) now renders actor, cause,
+  workflow correlation, `traceparent`, and `tracestate`. Historical or malformed absence prints
+  `not recorded` and is never inferred or backfilled
+- [`mori ops stream causation`](/docs/commands/ops#mori-ops-stream-causation) traverses recorded
+  event edges. Timer and message identities stay metadata-only instead of fabricating Kiroku event
+  UUIDs
+
 ### Immutable project release facts
 
 - [`mori registry release record`](/docs/guides/registry-releases) records one immutable release keyed by project and opaque version; a retry returns the first committed release time and source

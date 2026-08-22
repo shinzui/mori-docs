@@ -74,6 +74,29 @@ recorded outcome, the envelope digest, the message, the canonicalized envelope,
 and the emissions its matching routes dispatched — which is how you confirm that
 only the declared route for the actual outcome fired.
 
+### Provenance
+
+The `Provenance` section reads the first immutable event in the reaction
+stream. It prints:
+
+- the process actor that performed the write;
+- the immediate recorded-event, timer, or queue/message cause;
+- workflow ID, target, delivery ID, signal depth, and digest chain when the
+  reaction is correlated; and
+- W3C `traceparent` and `tracestate`.
+
+Only a recorded event produces an indexed causation edge. Timer and message
+identities are labelled metadata evidence but do not pretend to be Kiroku
+events. Historical, unavailable, or malformed values print `not recorded`;
+mori never reconstructs immutable provenance from a projection.
+
+If `Cause` names an event, traverse its causal graph with:
+
+```bash
+mori ops stream causation <EVENT_ID>
+mori ops --json stream causation <EVENT_ID>
+```
+
 The reaction ID is a TypeID starting with `rxn_` — copy it from the ID
 column of `mori reaction list`.
 

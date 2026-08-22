@@ -44,9 +44,17 @@ mori reaction show <REACTION_ID>
 - For scheduled reactions, the `scheduled_at`, `run_at`, coalesce key, and queue message id
 - For skipped reactions, the idempotency check's exit code and stderr
 - For cancelled reactions, the cancellation reason
+- Append-time provenance: process actor, immediate event/timer/message cause,
+  workflow correlation, and W3C `traceparent` / `tracestate`
 - For [`Decision`](/docs/guides/automation#decision) actions, the recorded
   outcome, envelope digest, message, canonicalized envelope, and the signal
   emissions its matching routes produced
+
+Unavailable historical or malformed provenance fields render as
+`not recorded`; mori never infers append-time evidence from the current read
+model. A recorded event cause can be traversed in both directions with
+`mori ops stream causation <EVENT_ID>`. Timer and message causes remain
+metadata-only because they do not name Kiroku events.
 
 ## `mori reaction cancel`
 
