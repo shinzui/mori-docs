@@ -9,6 +9,21 @@ features, commands, and schema changes.
 
 ---
 
+## 2026-08-22
+
+### Non-destructive event-store lifecycle governance
+
+- New [`mori store lifecycle`](/docs/commands/store) commands show the total category policy,
+  check whether a binary may write to the current lifecycle ledger, and capture a snapshot-bounded
+  inventory of visible events, checkpoints, history-retention leases, policy gaps, and proven
+  adjacent Repository repeats
+- The [Event-Store Lifecycle guide](/docs/guides/event-store-lifecycle) explains deterministic
+  replay-grade archives and standalone verification. Archives preserve envelope evidence but do
+  not authorize deletion or promise that an import can recreate global positions and links
+- One-shot writers, the automation daemon, and its worker host now refuse before projection
+  registration when lifecycle evidence is incompatible. Read-only status remains available for
+  diagnosis, and the lifecycle command tree exposes no destructive verb
+
 ## 2026-08-21
 
 ### Truthful event provenance and trace continuation

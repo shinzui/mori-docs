@@ -6,6 +6,7 @@
 		"automation-daemon",
 		"automation-test-repos",
 		"ingest-health",
+		"event-store-lifecycle",
 		"cross-repo-workflows",
 		"reaction-history",
 		"debug-automation",

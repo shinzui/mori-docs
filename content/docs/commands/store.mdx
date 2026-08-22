@@ -1,0 +1,98 @@
+---
+title: mori store
+description: Inspect event-store lifecycle policy, compatibility, inventory, and archives
+icon: Archive
+---
+
+`mori store` exposes Mori's non-destructive event-store lifecycle surface. It never deletes,
+truncates, soft-deletes, rewrites, or compacts an event.
+
+```bash
+mori store lifecycle <COMMAND>
+```
+
+## Commands
+
+| Command | Purpose |
+|---|---|
+| `policy` | Show the total compiled category policy |
+| `status` | Check whether this binary is compatible with the lifecycle ledger |
+| `inventory` | Inventory visible events, checkpoints, leases, and policy gaps |
+| `archive` | Write and verify a replay-grade category archive without deleting events |
+| `verify-archive` | Verify a completed archive manifest and every segment |
+
+Every subcommand accepts `--json` for deterministic machine-readable output.
+
+## Policy
+
+```bash
+mori store lifecycle policy [--json]
+```
+
+Every current Mori category is retained live because replay, projections, immutable history, or
+causal explanation consumes it. Repository also names the bounded
+`repository-adjacent-ref-repeats-v1` candidate, but that annotation authorizes no deletion. An
+unknown category is `review-required`.
+
+## Status
+
+```bash
+mori store lifecycle status [--json]
+```
+
+Status exits nonzero when the current binary must not write. A missing ledger migration, unknown
+applied operation, definition fingerprint drift, invalid or interrupted transition, required
+applicable pending operation, or corrupt evidence is incompatible.
+
+The same check runs before projection registration in one-shot writers, daemon startup, and the
+worker host. Read-only status stays available for diagnosis. Restarting does not repair lifecycle
+disagreement; inspect every issue and deploy a compatible binary or follow the reviewed recovery
+for the named evidence.
+
+## Inventory
+
+```bash
+mori store lifecycle inventory [--page-size EVENTS] [--json]
+```
+
+Inventory captures the visible global head first and scans only through that inclusive position.
+It reports category counts, live payload and metadata bytes, checkpoints, active
+history-retention leases, unknown categories, proven adjacent Repository repeats, and a canonical
+digest. The default public-read page size is `512`.
+
+## Archive
+
+```bash
+mori store lifecycle archive \
+  --category CATEGORY \
+  [--through POSITION|HEAD] \
+  --output DIR \
+  [--page-size EVENTS] \
+  [--segment-events EVENTS] \
+  [--json]
+```
+
+`DIR` must be a new archive directory. `HEAD` is the default ceiling, the default page size is
+`512`, and each deterministic NDJSON segment contains at most `5000` events by default. Mori
+verifies temporary output and publishes the manifest last.
+
+After completion, Mori attempts to record archive evidence in its application schema. If that
+write fails, the verified archive stays complete and the warning applies only to the evidence
+row.
+
+## Verify archive
+
+```bash
+mori store lifecycle verify-archive MANIFEST [--json]
+```
+
+Verification does not open an event-store connection. It checks schema versions, segment and root
+digests, counts, strict global-position order, unique event and source identities, and current Mori
+codecs. Source-stream versions may legitimately have gaps or appear out of source order when
+linked events or historical imports share a stream.
+
+An archive is evidence, not deletion permission and not a promise that reimport can recreate
+global positions, stream links, checkpoints, or causal indexes.
+
+See [Event-Store Lifecycle](/docs/guides/event-store-lifecycle) for the complete workflow and
+[`mori ops`](/docs/commands/ops) for framework-owned stream inspection and replay audits.

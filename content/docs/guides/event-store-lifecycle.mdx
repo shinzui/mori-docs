@@ -1,0 +1,87 @@
+---
+title: Event-Store Lifecycle
+description: Inventory Mori's event store and create replay-grade archives without deleting history
+icon: ArchiveRestore
+---
+
+Mori governs event-store growth without weakening its immutable audit log. The lifecycle workflow
+has four safe steps: inspect policy, check write compatibility, capture an inventory, and create a
+verified archive. It contains no destructive step.
+
+## Inspect policy and compatibility
+
+```bash
+mori store lifecycle policy
+mori store lifecycle status --json
+```
+
+The policy retains every current category live. Repository additionally carries a named candidate
+for a bounded historical adjacent-ref repetition defect; a candidate is not deletion permission.
+A category unknown to the binary is `review-required`.
+
+Status reads Mori's versioned lifecycle-definition ledger. If it is incompatible, guarded writers
+stop before projection-catalog registration or another write. Keep the JSON report as evidence,
+deploy a binary whose definitions match the store, and follow the reviewed recovery for any named
+interrupted or corrupt operation. Do not edit the ledger or keep restarting the daemon.
+
+## Capture a stable inventory
+
+```bash
+mori store lifecycle inventory --json
+```
+
+Mori captures the visible global head, then ignores later appends. The report includes events by
+category, live envelope bytes, checkpoints, active retention leases, unknown categories, the
+proven adjacent Repository repeat count, and a canonical digest.
+
+Treat event count, opaque global position, allocated database bytes, reusable PostgreSQL space,
+and filesystem bytes as different quantities. Ordinary vacuum can make pages reusable without
+shrinking relation files, and an unavailable diagnostic must not become a guessed retention rule.
+
+## Write the archive
+
+Choose a new output directory on secured, backed-up storage:
+
+```bash
+mori store lifecycle archive \
+  --category repository \
+  --through HEAD \
+  --output /secure/archive/repository-2026-08-22
+```
+
+Mori writes deterministic NDJSON segments, verifies their immutable event envelopes, and publishes
+`manifest.json` last. A directory without a manifest is incomplete. Never overwrite a completed
+directory with different content.
+
+`--through` is an inclusive global-position ceiling and defaults to the visible head at capture.
+Use `--page-size` to tune public reads and `--segment-events` to tune deterministic segment size.
+
+## Verify without the database
+
+```bash
+env -u MORI_PG_CONNECTION_STRING \
+  mori store lifecycle verify-archive \
+  /secure/archive/repository-2026-08-22/manifest.json
+```
+
+The standalone verifier checks schemas, digests, counts, global ordering, identities, and current
+Mori codecs. Source versions in a category archive need not be contiguous or globally monotonic:
+events linked from another category may occupy an omitted stream version, and historical imports
+may place later source versions at earlier global positions.
+
+Archive creation also attempts a best-effort lifecycle evidence write. A warning there does not
+invalidate the completed files.
+
+## Know what the archive does not prove
+
+An archive preserves envelope evidence. It does not claim an import can recreate original global
+positions, link membership, checkpoints, or causal indexes, and it does not authorize deletion.
+
+The current released whole-stream delete would remove meaningful Repository facts and links along
+with repeats. Mori therefore has no destructive lifecycle command. Selective compaction remains
+gated on a released upstream primitive that preserves retained identities and stream semantics,
+then a separate restored-clone proof and explicit production authorization.
+
+See the exact [`mori store` command reference](/docs/commands/store) and use
+[`mori ops replay-audit`](/docs/commands/ops#mori-ops-replay-audit) for candidate-code replay
+verification.
