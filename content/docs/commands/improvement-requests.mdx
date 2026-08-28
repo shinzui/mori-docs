@@ -37,8 +37,8 @@ mori improvement-requests list --json
 | `--planning-state STATE` | Filter by `planned`, `unplanned`, or `invalid` |
 | `--json` | Emit JSON instead of a table |
 
-Status values are `proposed`, `accepted`, `in_progress`, `completed`,
-`declined`, and `superseded`.
+Status values are `proposed`, `accepted`, `in-progress`, `completed`, `rejected`,
+`withdrawn`, and `superseded`.
 
 The table has TARGET PROJECT, BUNDLE, ID, CONCEPT, STATUS, PLANNING, ORIGIN,
 ORIGIN PLAN, TARGET PLAN, and PLAN STATUS columns; unset fields print `—`.
@@ -67,6 +67,55 @@ mori improvement-requests show --project shinzui/mori --id IR-1 --json
 An ID that matches more than one bundle in the project is an error asking for
 `--bundle`.
 
+## `mori improvement-requests graph`
+
+Resolve one request's typed source-fulfillment graph.
+
+```bash
+mori improvement-requests graph \
+  mori://shinzui/mori/okf/improvement-requests/concepts/IR-19
+
+mori improvement-requests graph \
+  mori://shinzui/mori/okf/improvement-requests/concepts/IR-19 \
+  --transitive --json --contract-version 1
+```
+
+| Flag | Description |
+|------|-------------|
+| `MORI_URI` | Full canonical improvement-request concept URI (required) |
+| `--transitive` | Resolve the complete dependency closure instead of only immediate endpoints |
+| `--contract-version VERSION` | Select the fulfillment contract version; defaults to `1` |
+| `--json` | Emit the versioned fulfillment document instead of the graph-oriented text view |
+
+The graph retains Hard, Soft, and Integration edges and reasons, acceptance criteria, canonical
+ownership, source provenance, broken descendants, projection disagreements, and complete Hard-cycle
+witnesses. It is returned whole or fails at a configured node, edge, or depth bound; Mori never
+silently truncates topology.
+
+## `mori improvement-requests ready`
+
+Explain source readiness over the complete transitive Hard closure.
+
+```bash
+mori improvement-requests ready \
+  mori://shinzui/mori/okf/improvement-requests/concepts/IR-19
+
+mori improvement-requests ready \
+  mori://shinzui/mori/okf/improvement-requests/concepts/IR-19 --leaves
+```
+
+| Flag | Description |
+|------|-------------|
+| `MORI_URI` | Full canonical improvement-request concept URI (required) |
+| `--leaves` | Render the actionable frontier and exclusions |
+| `--contract-version VERSION` | Select the fulfillment contract version; defaults to `1` |
+| `--json` | Emit the complete transitive fulfillment document |
+
+Integration dependencies preserve implementation actionability while requiring external evidence;
+Soft dependencies never gate. Both text views state that only source facts were considered, not
+live operational blockers or evidence. For the same root and registry snapshot,
+`graph --transitive --json` and `ready --json` emit the same version-1 JSON value.
+
 ## `mori improvement-requests validate`
 
 Validate the improvement requests declared in a local project's OKF bundles.
@@ -81,8 +130,9 @@ mori improvement-requests validate --path .
 |------|-------------|
 | `--path PATH` | Project root containing `mori.dhall` (required) |
 
-Checks the closed status set, the UTC timestamp, canonical `mori://`
-references, artifact kinds, project ownership, and exact plan registration.
+Checks the closed status set, UTC provenance and terminal timestamps, canonical `mori://`
+references, typed dependencies, unique acceptance-criterion IDs, artifact kinds, project
+ownership, and exact plan registration.
 Every invalid request is reported and the command exits non-zero; a clean run
 prints `OK: <n> improvement request(s)`.
 

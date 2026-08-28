@@ -11,6 +11,18 @@ features, commands, and schema changes.
 
 ## 2026-08-28
 
+### Improvement-request fulfillment graphs and source readiness
+
+- [`mori improvement-requests graph`](/docs/commands/improvement-requests#mori-improvement-requests-graph)
+  resolves a bounded diagnostic graph with canonical owners, every dependency kind and reason,
+  criteria, broken descendants, Hard-cycle witnesses, and observation provenance
+- [`mori improvement-requests ready`](/docs/commands/improvement-requests#mori-improvement-requests-ready)
+  derives source readiness and the actionable Hard frontier while explicitly excluding live
+  blockers and delivery evidence from its authority
+- CLI JSON and `GET /v1/improvement-requests/fulfillment` publish one deterministic version-1
+  document. Clean observation, targeted re-observation, dependency removal/restoration, stored-byte
+  replay, CLI encoding, and the real HTTP endpoint share a portable Mori conformance corpus
+
 ### Signal-triggered reactions honor scheduling and FIFO policy
 
 - A successful incoming SignalDelivery now enters the same immediate, delayed, coalesced,

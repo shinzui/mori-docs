@@ -130,13 +130,14 @@ Five pieces of work are open. None of them changes an existing contract.
 | **Typed capability queries** | Cross-registry capability queries and a semantic validation gate over the `coordination.capabilities` OKF profile. The originally planned Dhall `capability` extension is withdrawn — the profile is the authoring format. |
 | **Event provenance** | Stamp event metadata and thread causation and trace context through every command-dispatch site. |
 | **Store lifecycle** | Retention, compaction, and a fail-closed archive ledger for event streams, built on the `mori ops` verbs rather than a second operator surface. Nothing is deleted before it is archived to disk and verified byte-for-byte. |
+| **Improvement-request fulfillment** | Canonical typed source graphs, readiness, actionable Hard leaves, and one versioned CLI/HTTP contract. Mori-local clean, incremental, and replay conformance is complete; provider-neutral Kikan fixture publication remains an integration gate. |
 
 ---
 
 ## Requested, not committed
 
 Improvement requests are how other projects — and Mori itself — record a capability gap as a
-durable, addressable fact rather than a wish. These eight are registered and open with no plan
+durable, addressable fact rather than a wish. These seven are registered and open with no plan
 behind them. Listing one here is not a commitment to build it.
 
 | Request | Gap |
@@ -148,9 +149,8 @@ behind them. Listing one here is not a commitment to build it.
 | **IR-14** | Enforce the declared automation execution policy, and record a refusal as a fact |
 | **IR-15** | Schedule a reaction to a wall-clock deadline, with a coalesce key that absorbs repeats into the pending deadline |
 | **IR-16** | Trigger automations on a recurring schedule, owned by a durable schedule with an explicit catch-up policy |
-| **IR-19** | Resolve improvement-request fulfillment graphs and explain readiness — which requests are actionable leaves right now |
 
-Four of these eight are automation-engine gaps, which makes the automation engine the largest
+Four of these seven are automation-engine gaps, which makes the automation engine the largest
 single pool of uncommitted demand.
 
 See [Improvement Requests](/docs/guides/improvement-requests) for how they are raised, linked to

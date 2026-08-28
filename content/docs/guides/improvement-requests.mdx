@@ -1,6 +1,6 @@
 ---
 title: Improvement Requests
-description: Track cross-repository improvement requests as OKF concepts with stable handles and plan links
+description: Track cross-repository requests, explain fulfillment graphs, and find source-actionable leaves
 icon: Lightbulb
 ---
 
@@ -46,10 +46,12 @@ Each request is one Markdown concept whose frontmatter carries:
 | `title` | yes | Short summary |
 | `description` | yes | The request itself |
 | `timestamp` | yes | UTC timestamp |
-| `status` | yes | `proposed`, `accepted`, `in_progress`, `completed`, `declined`, or `superseded` |
-| `origin` | yes | Canonical `mori://` ref to the requesting project or one of its packages |
+| `status` | yes | `proposed`, `accepted`, `in-progress`, `completed`, `rejected`, `withdrawn`, or `superseded` |
+| `origin` | yes | Canonical `mori://` ref to the requesting project or one of its artifacts |
 | `originPlan` | no | An exactly registered MasterPlan or ExecPlan owned by the origin project |
 | `targetPlan` | no | An exactly registered plan owned by the project that declares the bundle |
+| `dependencies` | no | Typed Hard, Soft, and Integration refs with optional reasons |
+| `acceptanceCriteria` | no | Stable criterion IDs, statements, and verification instructions |
 
 The bundle itself is declared in `okfBundles` like any other OKF bundle, and
 registration indexes it:
@@ -79,16 +81,16 @@ Validation has two explicit layers, and both are worth running in CI:
 mori improvement-requests validate --path .
 ```
 
-The Mori layer checks the closed status set, the UTC timestamp, canonical
-`mori://` references, artifact kinds, project ownership, and exact plan
-registration. It reports *every* invalid request rather than stopping at the
-first, and exits non-zero. A clean run ends with:
+The Mori layer checks the closed status set, UTC provenance and terminal timestamps, canonical
+`mori://` references, typed dependencies, unique acceptance-criterion IDs, artifact kinds, project
+ownership, and exact plan registration. It reports *every* invalid request rather than stopping at
+the first, and exits non-zero. A clean run ends with:
 
 ```text
 OK: 12 improvement request(s)
 ```
 
-Origins may name a project or one of its packages. `originPlan`, when present,
+Origins may name a project or one of its artifacts. `originPlan`, when present,
 must be an exactly registered plan owned by that origin project; `targetPlan`
 must be an exactly registered plan owned by the project that declares the
 bundle.
@@ -101,6 +103,7 @@ mori improvement-requests list --project shinzui/mori
 mori improvement-requests list --origin mori://shinzui/keiro
 mori improvement-requests list --status proposed
 mori improvement-requests list --planning-state unplanned --json
+mori improvement-requests list --gating --gate-state blocking
 
 mori improvement-requests show --project shinzui/mori --id IR-1
 ```
@@ -113,6 +116,49 @@ is present; `planned` means the exact linked plan is registered under the target
 project; `invalid` means metadata or reference resolution failed. Invalid
 requests are never reported as unplanned, so `--planning-state unplanned` is a
 trustworthy queue of real work rather than a mix of gaps and broken files.
+
+Gate state is separate from planning state. Active lifecycle values are `blocking`, `completed` is
+`cleared`, and rejected, withdrawn, or superseded requests are `abandoned`. Abandonment means a
+waiting plan needs redesign; it is not successful fulfillment.
+
+## Explain fulfillment and source readiness
+
+Start from one full canonical improvement-request URI:
+
+```bash
+mori improvement-requests graph \
+  mori://shinzui/mori/okf/improvement-requests/concepts/IR-19 \
+  --transitive
+
+mori improvement-requests ready \
+  mori://shinzui/mori/okf/improvement-requests/concepts/IR-19 \
+  --leaves
+```
+
+`graph` keeps every typed edge and reason, source criterion, canonical owner, observation
+provenance, and diagnostic endpoint. Unresolved, ambiguous, wrong-type, invalid-source, and missing
+projection facts remain visible without erasing valid neighboring topology. Hard cycles return
+closed witness paths rather than making the graph disappear.
+
+`ready` always resolves transitive scope. Structural Hard defects take precedence over unresolved
+Hard targets and unfinished Hard prerequisites; completed and abandoned lifecycles remain explicit.
+An active request is actionable unless Integration evidence is required. Integration does not stop
+implementation, and Soft dependencies never gate.
+
+`--leaves` shows the unfinished actionable Hard frontier plus stable exclusion reasons for every
+other resolved node. Mori considers source facts only: it does not consult live Rei blockers,
+current work, or delivery evidence.
+
+For the same root and snapshot, both JSON commands publish the same deterministic version-1 value:
+
+```bash
+mori improvement-requests graph MORI_URI --transitive --json --contract-version 1
+mori improvement-requests ready MORI_URI --json --contract-version 1
+```
+
+The HTTP equivalent is
+`GET /v1/improvement-requests/fulfillment?ref=MORI_URI&transitive=true&contract_version=1`.
+The document is whole and bounded rather than truncated or paginated.
 
 ## Linking a target plan
 
@@ -145,8 +191,9 @@ untouched.
 3. The receiving project re-registers, so the request lands in the index.
 4. `mori improvement-requests list --planning-state unplanned` becomes the
    backlog review.
-5. When a plan is written, `link-plan` attaches it and the request moves to
-   `planned`.
+5. When a plan is written, `link-plan` attaches it and the request moves to `planned`.
+6. `graph --transitive` explains the complete source dependency topology; `ready --leaves` identifies
+   source-actionable Hard leaves without claiming operational readiness.
 
 ## Related
 

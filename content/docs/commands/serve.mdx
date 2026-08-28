@@ -92,6 +92,8 @@ never has to satisfy the auth check.
 | `/v1/openapi.json` | Generated OpenAPI 3.1 document, including the published security contract |
 | `/v1/projects`, `/v1/reactions`, `/v1/workflows`, `/v1/repositories`, `/v1/groups`, `/v1/apps`, `/v1/ingest` | Application resources |
 | `/v1/workflows/{id}/steps`, `/v1/workflows/{id}/chain` | A workflow's steps, and its complete causal chain — the HTTP equivalent of [`mori workflow trace`](/docs/commands/workflow#mori-workflow-trace) |
+| `/v1/plans/graph` | The bounded, versioned plan dependency DAG |
+| `/v1/improvement-requests/fulfillment` | One request's source graph, readiness, and actionable frontier |
 
 Fallible routes return typed [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457)
 problem documents rather than bare error strings. Requests are instrumented with
@@ -130,6 +132,22 @@ cursor is stale" apart from "your request was wrong".
 > **Breaking API change.** These eight endpoints previously returned bare JSON
 > arrays; they now return a connection envelope. Clients that indexed the
 > response directly need to read through the connection's edges.
+
+## Whole-graph resources
+
+The plan DAG and improvement-request fulfillment endpoints return complete, deterministic resources
+instead of Relay pages. They reject an oversized result rather than truncate topology.
+
+```text
+GET /v1/plans/graph?contract_version=1
+GET /v1/improvement-requests/fulfillment?ref=MORI_URI&transitive=true&contract_version=1
+```
+
+The fulfillment response is byte-equivalent to the shared version-1 value emitted by
+`mori improvement-requests graph --transitive --json` and `ready --json`. It includes typed edges,
+criteria, diagnostic descendants and Hard cycles, source readiness, frontier exclusions,
+provenance, applied bounds, and an explicit source-only authority declaration. See the
+[Improvement Requests guide](/docs/guides/improvement-requests#explain-fulfillment-and-source-readiness).
 
 ## Serving from the automation daemon
 
