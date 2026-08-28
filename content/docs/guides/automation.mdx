@@ -652,6 +652,10 @@ hour after the merge commit", "send a follow-up notification 1 day later",
 "build only once after the most recent of a burst of commits". The optional
 `schedule` field on a reaction turns it into a **scheduled reaction**.
 
+Whole-reaction scheduling and the queued policy below apply uniformly to
+reactions selected by Repository facts, Project facts, successful incoming
+SignalDelivery receipts, and Join triggers.
+
 ### Minimal example
 
 ```dhall

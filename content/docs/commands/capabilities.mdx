@@ -1,0 +1,105 @@
+---
+title: mori capabilities
+description: Query and validate cross-project OKF capability provision claims
+icon: BadgeCheck
+---
+
+`mori capabilities` queries capability provision claims: concrete facilities a
+registered project ships today and that a consumer can verify independently.
+Planned or missing facilities belong in
+[`mori improvement-requests`](/docs/commands/improvement-requests), not in a
+capability catalog.
+
+Capability catalogs use the `coordination.capabilities` OKF profile published by
+`mori://shinzui/okf-profiles`. Mori queries and semantically validates those
+catalogs, but does not own their authoring format or provide a bootstrap command.
+See [OKF Bundles](/docs/guides/okf) for the catalog workflow.
+
+## `mori capabilities list`
+
+List provision claims across the registry, or narrow the result by owner,
+declared provider, status, stability, package, tag, or requirement.
+
+```bash
+mori capabilities list
+mori capabilities list --project shinzui/mori --status shipped
+mori capabilities list --requires mori://shinzui/keiro/okf/capabilities/concepts/CAP-4
+mori capabilities list --provider shinzui/mori --json
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--project NAMESPACE/NAME` | Restrict to one owning project |
+| `--bundle NAME` | Restrict to one capability bundle |
+| `--status STATUS` | Filter by `shipped`, `deprecated`, or `withdrawn` |
+| `--stability STABILITY` | Filter by `experimental` or `stable` |
+| `--package NAME` | Require one declared package |
+| `--tag TAG` | Require one capability tag |
+| `--requires MORI_URI` | Find capabilities that require this canonical capability URI |
+| `--provider NAMESPACE/NAME` | Filter by the declared provider, including ownership drift |
+| `--json` | Emit snake-case JSON instead of a table |
+
+Without `--project`, `list` reads every registered capability catalog. Invalid
+records remain visible in an aggregate result instead of disappearing. The
+`--requires` reverse lookup matches both cross-project capability URIs and the
+target bundle's local `CAP-N` spelling. The registry is a snapshot: run
+`mori observe` or `mori register` after editing a catalog.
+
+## `mori capabilities show`
+
+Show one registered capability and its current dependency context.
+
+```bash
+mori capabilities show --project shinzui/mori --id CAP-3
+mori capabilities show --project shinzui/mori --bundle capabilities --id CAP-3 --json
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--project NAMESPACE/NAME` | Owning project identity (required) |
+| `--bundle NAME` | Disambiguate a project with several capability bundles |
+| `--id CAP-N` | Stable bundle-scoped capability handle (required) |
+| `--json` | Emit JSON instead of text |
+
+A `CAP-N` handle is scoped to one OKF bundle, not globally unique, which is why
+`--project` is required. The detail view resolves declared requirements and
+derives a fleet-wide **Required by** section from current registry data. JSON
+adds `resolved_requires` and `required_by` arrays.
+
+## `mori capabilities validate`
+
+Validate the capability catalogs declared by a local project.
+
+```bash
+okf validate docs/capabilities \
+  --profile docs/capabilities/profile.dhall \
+  --profile-enforce
+
+mori capabilities validate --path .
+mori capabilities validate --path . --bundle capabilities --json
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--path PATH` | Project root containing `mori.dhall` (default: `.`) |
+| `--bundle NAME` | Validate one declared capability bundle |
+| `--json` | Emit validation problems as JSON |
+
+The two validation layers own different checks. `okf validate` enforces
+document shape, required fields, handle syntax, and the closed vocabulary.
+Mori then checks facts that need repository or cross-project context: provider
+ownership, evidence paths, external capability resolution, and the required
+frontmatter/body-link mirror. The command reports problems but never rewrites
+records.
+
+## Related
+
+- [OKF Bundles](/docs/guides/okf) — profiles, concepts, and registration snapshots
+- [`mori improvement-requests`](/docs/commands/improvement-requests) — needs that are not shipped capabilities
+- [`mori register`](/docs/commands/register) — refresh a project's registry snapshot

@@ -9,6 +9,24 @@ features, commands, and schema changes.
 
 ---
 
+## 2026-08-28
+
+### Signal-triggered reactions honor scheduling and FIFO policy
+
+- A successful incoming SignalDelivery now enters the same immediate, delayed, coalesced,
+  pre-execution-check, and FIFO-queued Reaction path as Repository, Project, and Join triggers
+- Compatibility note: a deployed signal-triggered reaction that previously ran immediately may
+  now wait for its declared delay or earlier work in its automation's queue
+- The [Automation guide](/docs/guides/automation#scheduled-reactions) and
+  [Cross-Repository Workflows guide](/docs/guides/cross-repo-workflows#event-flow) now describe the
+  shared policy and first-class SignalDelivery receipt path
+
+### Capability command reference
+
+- Added the missing [`mori capabilities`](/docs/commands/capabilities) command page, covering
+  fleet-wide provision queries, bundle-scoped `CAP-N` lookup, reverse requirements, registry
+  snapshot freshness, and the two-layer OKF/Mori validation workflow
+
 ## 2026-08-22
 
 ### Non-destructive event-store lifecycle governance

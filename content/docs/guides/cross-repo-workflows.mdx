@@ -286,29 +286,29 @@ You can mix dynamic and explicit targets — they are deduplicated:
 2. mori automate ingest git (schema-repo)
    → ChangesetObserved written to repository-{schema-repo-id}-{date}
 
-3. mori-automation subscription matches "openapi-changed" selector
+3. mori-automation-router subscription matches "openapi-changed" selector
    → Triggers "notify-clients" reaction
    → Writes ReactionTriggered to reaction-{rxn-id}
 
-4. mori-reaction-executor picks up the reaction
+4. mori-reaction-executor-store picks up the reaction
    → Sees Signal action with targets ["payment-service", "billing-service"]
-   → Resolves targets via registry → gets repo IDs and paths
-   → Generates WorkflowId (wf_xxxx)
-   → Writes events:
-     - WorkflowStarted to workflow-{wf-id}
-     - WorkflowSignalEmitted to source repo's stream (audit trail)
-     - WorkflowSignalReceived to each target repo's stream
-     - WorkflowSignalDelivered to workflow-{wf-id} (per target)
+   → Records a digest-keyed SignalEmission checkpoint before dispatch
+   → Resolves targets via the registry and starts Workflow wf_xxxx
+   → Creates one pending SignalDelivery stream per resolved target
 
-5. mori-automation subscription picks up WorkflowSignalReceived
-   on payment-service's stream
+5. mori-signal-delivery-worker resolves payment-service's repository identity
+   → Records SignalDeliverySucceeded (or retry/failed/expired state)
+
+6. mori-signal-trigger-router picks up SignalDeliverySucceeded
+   → Marks the exact Workflow target step delivered
    → Matches "schema-updated" SignalSelector
-   → Triggers "regenerate-client" reaction
+   → Applies the target automation's common immediate/scheduled/queued policy
+     to the "regenerate-client" reaction
 
-6. mori-reaction-executor runs `make generate-client`
+7. When eligible, mori-reaction-executor-store runs `make generate-client`
    → Writes ReactionCompleted or ReactionFailed
 
-7. mori-workflow subscription detects all steps done
+8. Workflow completion detects all steps done
    → Writes WorkflowCompleted to workflow-{wf-id}
 ```
 
