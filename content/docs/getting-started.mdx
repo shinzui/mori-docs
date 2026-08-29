@@ -934,7 +934,7 @@ mori automate explain 15
 | `mori reaction list [--status S] [--name N]` | List recent reactions | Yes |
 | `mori reaction show ID` | Show reaction details | Yes |
 | `mori reaction recover ID [--retry]` | Unstick a reaction stuck in `triggered` state | Yes |
-| `mori schema migrate [--apply] [--dry-run]` | Check or apply schema migrations | No |
+| `mori schema migrate [--apply] [--dry-run] [--file F] [--kind automation]` | Check or apply schema migrations (`--kind automation` for a named automation config not called `mori.automation.dhall`) | No |
 | `mori extension list` | List active extension types | Yes |
 | `mori extension query NAME [--project P]` | Query extension data across projects | Yes |
 | `mori tech-radar list [--language L]` | List tech radar recommendations | No |

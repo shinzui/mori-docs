@@ -644,6 +644,19 @@ the same file still migrate. Re-running after a successful migration is a no-op,
 and the legacy wrapper remains supported for projects that choose not to
 migrate.
 
+`--file` names the file, but the file *kind* is inferred from the filename, and
+only `mori.automation.dhall` is inferred as an automation config. A named
+registration living under another name is read as an ordinary project config: the
+automation migrations are never considered and the command reports nothing
+pending. State the kind explicitly for those:
+
+```bash
+mori schema migrate --apply --kind automation --file automation/release.dhall
+```
+
+`automation` is the only supported `--kind` override; path inference is unchanged
+for every other file.
+
 ## Scheduled Reactions
 
 By default, a reaction runs immediately when its trigger fires. Sometimes

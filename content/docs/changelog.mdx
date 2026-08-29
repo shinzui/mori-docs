@@ -11,6 +11,15 @@ features, commands, and schema changes.
 
 ## 2026-08-28
 
+### Explicit file kind for named automation configs
+
+- `mori schema migrate` accepts `--kind automation`, which overrides the kind inferred from the
+  filename. Only `mori.automation.dhall` is inferred as an automation config, so a named
+  registration under another path was read as an ordinary project config and its automation
+  migrations silently never ran — the command reported nothing pending
+- Documented in the [Automation guide](/docs/guides/automation#migrating-a-legacy-schedule-wrapper) and the
+  [Getting Started](/docs/getting-started) command table
+
 ### Improvement-request fulfillment graphs and source readiness
 
 - [`mori improvement-requests graph`](/docs/commands/improvement-requests#mori-improvement-requests-graph)
