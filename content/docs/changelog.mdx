@@ -9,6 +9,19 @@ features, commands, and schema changes.
 
 ---
 
+## 2026-08-30
+
+### Dependency-ordered upgrade cascades
+
+- [`mori registry dependents --transitive --waves`](/docs/commands/registry#mori-registry-dependents)
+  publishes a bounded live reverse-dependency graph and topological preflight
+- A Signal action may explicitly opt into a cascade with exactly `targets = [ "*dependents*" ]`.
+  Mori freezes the selected scopes and graph limits before work starts, releases only ready waves,
+  blocks failed descendants, and lets independent branches finish
+- [`mori workflow trace`](/docs/commands/workflow#mori-workflow-trace) text, JSON, and Mermaid plus
+  the Workflow HTTP endpoints expose the immutable root, graph edges, waves, upstreams, delivery
+  states, and blockers. Ordinary `*dependents*` fan-out remains one hop
+
 ## 2026-08-28
 
 ### Explicit file kind for named automation configs

@@ -172,6 +172,12 @@ and maps *declared* outcomes onto signals. See
 [Automation › Decision](/docs/guides/automation#decision) for their exact
 schemas.
 
+An explicitly authored `SignalAction.cascade` is the dependency-ordered cross-repository policy.
+It is valid only with exactly `targets = [ "*dependents*" ]`: Mori freezes the bounded transitive
+graph before Workflow start, releases ready waves, and blocks only failed descendants. The same
+dynamic target without `cascade` remains an ordinary one-hop fan-out. See
+[Cross-Repo Workflows](/docs/guides/cross-repo-workflows#ordered-dependency-cascades).
+
 ### RunCommand
 
 ```haskell

@@ -137,20 +137,19 @@ Five pieces of work are open. None of them changes an existing contract.
 ## Requested, not committed
 
 Improvement requests are how other projects — and Mori itself — record a capability gap as a
-durable, addressable fact rather than a wish. These seven are registered and open with no plan
+durable, addressable fact rather than a wish. These six are registered and open with no plan
 behind them. Listing one here is not a commitment to build it.
 
 | Request | Gap |
 |---------|-----|
 | **IR-3** | Model practice adoption, and re-evaluate affected decisions when registered guidance changes |
 | **IR-8** | A LIFO automation queue discipline — run the newest eligible pending reaction next, without losing one-at-a-time execution or cancellation semantics |
-| **IR-12** | Orchestrate upgrade cascades in dependency order — a DAG driven in topological waves, not an unordered one-hop fan-out |
 | **IR-13** | Expose project grounding over a protocol-neutral agent interface, so an agent that is not Claude Code can retrieve context and resolve `mori://` references |
 | **IR-14** | Enforce the declared automation execution policy, and record a refusal as a fact |
 | **IR-15** | Schedule a reaction to a wall-clock deadline, with a coalesce key that absorbs repeats into the pending deadline |
 | **IR-16** | Trigger automations on a recurring schedule, owned by a durable schedule with an explicit catch-up policy |
 
-Four of these seven are automation-engine gaps, which makes the automation engine the largest
+Four of these six are automation-engine gaps, which makes the automation engine the largest
 single pool of uncommitted demand.
 
 See [Improvement Requests](/docs/guides/improvement-requests) for how they are raised, linked to

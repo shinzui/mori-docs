@@ -91,7 +91,7 @@ never has to satisfy the auth check.
 | `/v1/health`, `/v1/health/db` | Versioned health compatibility surface, including a database smoke check |
 | `/v1/openapi.json` | Generated OpenAPI 3.1 document, including the published security contract |
 | `/v1/projects`, `/v1/reactions`, `/v1/workflows`, `/v1/repositories`, `/v1/groups`, `/v1/apps`, `/v1/ingest` | Application resources |
-| `/v1/workflows/{id}/steps`, `/v1/workflows/{id}/chain` | A workflow's steps, and its complete causal chain — the HTTP equivalent of [`mori workflow trace`](/docs/commands/workflow#mori-workflow-trace) |
+| `/v1/workflows/{id}`, `/v1/workflows/{id}/steps`, `/v1/workflows/{id}/chain` | A workflow, its steps, and its complete causal chain — including frozen cascade graph, waves, upstreams, and blockers — equivalent to [`mori workflow trace`](/docs/commands/workflow#mori-workflow-trace) |
 | `/v1/plans/graph` | The bounded, versioned plan dependency DAG |
 | `/v1/improvement-requests/fulfillment` | One request's source graph, readiness, and actionable frontier |
 

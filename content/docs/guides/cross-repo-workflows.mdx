@@ -80,6 +80,7 @@ The `Signal` action fields:
 | `targets` | `List Text` | Project names from the registry, or `"*dependents*"` (see below) |
 | `payload` | `List { mapKey, mapValue }` | Key-value data forwarded to targets |
 | `payloadJson` | `Optional Text` | A structured JSON document, validated when the config loads |
+| `cascade` | `Optional SignalCascade` | Opt in to bounded dependency-ordered execution; valid only with exactly `targets = [ "*dependents*" ]` |
 
 #### Structured payloads
 
@@ -276,6 +277,41 @@ You can mix dynamic and explicit targets — they are deduplicated:
 , targets = [ "*dependents*", "extra-service" ]
 ```
 
+That mixed form is an ordinary one-hop fan-out. It cannot opt into cascade mode.
+
+### Ordered dependency cascades
+
+Inspect the current bounded graph and waves before authorizing work:
+
+```bash
+mori registry dependents shinzui/schema-repo --transitive --waves
+mori registry dependents shinzui/schema-repo --transitive --waves --json
+```
+
+Transitive mode selects `regular` edges by default. Repeat `--scope` for an intentional union,
+lower `--max-depth` when appropriate, and add `--packages` to inspect edge provenance.
+
+```dhall
+Schema.ReactionAction.Signal Schema.SignalAction::{
+  signalType = "UpgradeDependency"
+, targets = [ "*dependents*" ]
+, payload = [ { mapKey = "version", mapValue = "5.0.0" } ]
+, cascade = Some Schema.SignalCascade::{
+    scopes = [ Schema.DependencyScope.Regular ]
+  , maxDepth = 32
+  }
+}
+```
+
+Mori validates and checkpoints the transitive graph before starting the Workflow. Only targets
+whose frozen upstreams succeeded receive SignalDelivery rows. A failure blocks descendants while
+independent branches continue, and the Workflow closes `partial` after all runnable work finishes.
+Waiting and blocked targets have no delivery to retry.
+
+The registry command is a live preflight; a Workflow trace is immutable execution evidence.
+Changing the registry after dispatch can change a later preflight, but not an in-flight or
+historical run. Without `cascade`, `"*dependents*"` retains its compatible one-hop behavior.
+
 ---
 
 ## Event Flow
@@ -377,6 +413,12 @@ The HTTP equivalent is `GET /v1/workflows/<WORKFLOW_ID>/chain`; JSON field names
 there follow the API's snake_case convention. See
 [`mori serve`](/docs/commands/serve).
 
+Cascade traces additionally publish `workflow_kind`, the versioned frozen root, scopes, graph
+limits and edges, plus every step's `wave_index`, `upstreams`, and `blocked_by`. Mermaid draws the
+source root as already satisfied and uses the frozen provider-to-consumer edges, with distinct
+failed and blocked styles. The Workflow, steps, and chain HTTP endpoints expose the same facts;
+trace never re-runs the registry query.
+
 History recorded before workflow parent correlation was introduced has no
 reconstructible chain edge. Those workflows are shown honestly as independent
 roots rather than guessed into a tree. Tracing covers the Kiroku functional
@@ -388,6 +430,7 @@ automation path; the removed legacy MessageDB path is not supported.
 Workflow Detail
 ===============
 ID:              wf_01h455vb4pex5vsknk084sn02q
+Kind:            fanout
 Signal Type:     SchemaChanged
 Source Project:  shinzui/schema-repo
 Source Reaction: notify-clients
@@ -399,9 +442,9 @@ Completed At:    2026-03-06 10:15:33 UTC
 Duration:        1253ms
 
   Steps for wf_01h455vb4pex5vsknk084sn02q:
-  TARGET            STATUS       REACTION                DURATION  ERROR
-  payment-service   ✓ completed  rxn_01h4...002            1040ms
-  billing-service   ✓ completed  rxn_01h4...003            1168ms
+  TARGET            WAVE  UPSTREAMS  BLOCKED BY  STATUS       REACTION                DURATION  ERROR
+  payment-service   -     -          -           ✓ completed  rxn_01h4...002            1040ms
+  billing-service   -     -          -           ✓ completed  rxn_01h4...003            1168ms
 ```
 
 `Source Project` is the qualified upstream project (matching `SOURCE` from

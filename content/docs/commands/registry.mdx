@@ -110,6 +110,8 @@ mori registry dependents shinzui/rei
 mori registry dependents effectful --packages
 mori registry dependents effectful --scope test
 mori registry dependents effectful --json
+mori registry dependents shinzui/rei --transitive
+mori registry dependents shinzui/rei --transitive --waves --json
 ```
 
 ### Flags
@@ -118,10 +120,19 @@ mori registry dependents effectful --json
 |------|-------------|
 | `--json` | JSON output |
 | `--packages` | Show per-package dependency edges instead of a project rollup |
-| `--scope SCOPE` | Only show edges with this dependency scope, such as `regular`, `dev`, `test`, or `build` |
+| `--transitive` | Resolve the complete bounded reverse-dependency graph; defaults to `regular` edges |
+| `--waves` | Render topological project work batches and imply `--transitive` |
+| `--scope SCOPE` | Filter one-hop output, or repeat `regular`, `dev`, `test`, and `build` scopes in transitive mode; `all` is transitive-only |
+| `--max-depth N` | Positive transitive traversal bound (default: `32`) |
 
 The same authoritative package, project, and pinned-import query expands a
 Signal action whose target list contains `"*dependents*"`.
+
+Transitive output is the live preflight for an explicitly authored dependency cascade. It publishes
+a deterministic version-1 graph, effective safety limits, optional edge evidence, and waves; any
+cycle or whole-graph bound violation fails before output. Cascade execution separately checkpoints
+that graph, so a later registry change never rewrites an existing Workflow trace. Ordinary dynamic
+Signal targeting remains one hop.
 
 ## `mori registry release record`
 

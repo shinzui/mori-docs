@@ -60,14 +60,21 @@ mori workflow trace <WORKFLOW_ID> --max-depth 8
 By default `trace` walks to the chain root and renders every descendant workflow
 and target step as a tree, so it can be started from any workflow in the chain.
 
-- Workflow metadata (ID, signal, source project, source reaction, targets,
+- Workflow metadata (ID, kind, signal, source project, source reaction, targets,
   status, timing)
-- All steps with status, reaction ID, duration, errors
+- For cascades, the immutable plan version, root, scopes, graph limits, and ordered edges
+- All steps with status, reaction ID, duration, errors, wave, upstream prerequisites, and blockers
 
 With `--flat`, only the requested workflow is shown, in the original detail view.
 
 The HTTP equivalent is `GET /v1/workflows/<WORKFLOW_ID>/chain`, whose JSON field
 names use the API's snake_case convention — see [`mori serve`](/docs/commands/serve).
+
+Cascade Mermaid output draws the frozen provider-to-consumer graph from a distinct
+already-satisfied root and distinguishes failed from dependency-blocked targets. Dependency edges
+are not child-Workflow causation edges. JSON and HTTP expose the same `workflow_kind`, cascade
+metadata, `wave_index`, `upstreams`, and `blocked_by` fields. Historical non-cascade workflows use
+`workflow_kind = "fanout"`, null scalar cascade metadata, and empty graph relation lists.
 
 History recorded before workflow parent correlation was introduced has no
 reconstructible chain edge and is shown honestly as independent roots. Tracing
