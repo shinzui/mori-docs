@@ -500,8 +500,8 @@ rather than inferred from an exit code.
 ```dhall
 Schema.ReactionAction.Decision Schema.DecisionAction::{
   command = "./decide.sh"
-, timeout = Some +30
-, maxResultBytes = Some +1048576
+, timeout = Some 30
+, maxResultBytes = Some 1048576
 , routes =
     [ Schema.DecisionRoute::{
         outcome = "proceed"
