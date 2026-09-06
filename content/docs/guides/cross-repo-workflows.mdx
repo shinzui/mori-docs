@@ -281,6 +281,14 @@ That mixed form is an ordinary one-hop fan-out. It cannot opt into cascade mode.
 
 ### Ordered dependency cascades
 
+Only explicit package and project dependencies impose cascade order. Pinned imports and
+published profile bindings remain visible in one-hop discovery but add no ordered targets or
+prerequisites. A dependency accompanying a pin still imposes order. Existing checkpoints retain
+their frozen plans; new emissions use the current selection.
+
+Root-only preflight succeeds with zero targets. Emitting an ordered cascade with no targets
+is refused before any checkpoint is written; ordinary one-hop zero-target fan-out is unchanged.
+
 Inspect the current bounded graph and waves before authorizing work:
 
 ```bash

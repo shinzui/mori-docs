@@ -128,6 +128,14 @@ mori registry dependents shinzui/rei --transitive --waves --json
 The same authoritative package, project, and pinned-import query expands a
 Signal action whose target list contains `"*dependents*"`.
 
+Only explicit package and project dependencies impose cascade order. Pinned imports and
+published profile bindings remain visible in one-hop discovery but add no ordered targets or
+prerequisites. A dependency accompanying a pin still imposes order. Existing checkpoints retain
+their frozen plans; new emissions use the current selection.
+
+Root-only preflight succeeds with zero targets. Emitting an ordered cascade with no targets
+is refused before any checkpoint is written; ordinary one-hop zero-target fan-out is unchanged.
+
 Transitive output is the live preflight for an explicitly authored dependency cascade. It publishes
 a deterministic version-1 graph, effective safety limits, optional edge evidence, and waves; any
 cycle or whole-graph bound violation fails before output. Cascade execution separately checkpoints
