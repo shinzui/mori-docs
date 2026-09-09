@@ -9,6 +9,45 @@ features, commands, and schema changes.
 
 ---
 
+## 2026-09-09
+
+### `mori audit` — what is stale relative to current mori capabilities
+
+- [`mori audit`](/docs/commands/audit) reports, for one project, everything written in a
+  shape a later mori capability replaced. It reads files and runs pure checks: no agent
+  session, no tokens, and running it repeatedly has the effect of running it once
+- Rules are grouped into three dimensions — `schema` (the mori-schema commit each Dhall file
+  imports and the field migrations not yet applied to it), `automation` (nine rules over
+  automation config shape), and `deps` (four rules over typed and package-grained dependency
+  declarations). Select with `--dimension`; the catalog a report was produced by is
+  identified by `rule_catalog_version` in the JSON
+- [`mori audit fix`](/docs/commands/audit#mori-audit-fix) remediates, mechanically or through
+  one agent session per rule. `--mechanical-only` spends no tokens; `--dry-run` prints the
+  chain and stops. A clean working tree is required unless you pass `--allow-dirty`
+- `--registry` sweeps the whole fleet with the same rules and the same `--json`, narrowed by
+  group, namespace, type, origin, lifecycle, or glob. A sweep writes nothing — including no
+  receipt — so it is safe to run against the real registry at any time
+- [`mori audit record`](/docs/commands/audit#mori-audit-record) and
+  [`mori audit status`](/docs/commands/audit#mori-audit-status) write and read an immutable
+  receipt ledger; recording one publishes a typed `AuditReceipt` project signal. `mori audit
+  coverage` aggregates receipts against the compiled rule catalog
+- New [Auditing a project](/docs/guides/audit) guide and
+  [`mori audit` command reference](/docs/commands/audit)
+
+### Opt-in regular expressions in selectors
+
+- `RefSelector.refRegexes` and `ChangesetSelector.pathRegexes` accept case-sensitive POSIX
+  extended regular expressions that match the whole input, for the distinctions a glob cannot
+  draw — separating an umbrella release tag from its sibling package tags, for instance
+- Both default to empty and impose no restriction when unused. Regex and glob lists combine
+  with AND; alternatives within one list are OR'd. Not PCRE: no lookaround, no capture
+  interpolation
+- An invalid expression fails config loading naming the selector, field, and list index; a
+  stored invalid configuration is reported as broken rather than silently ignored
+- Documented in [Opt-in regular expressions](/docs/guides/automation#opt-in-regular-expressions)
+  and the [schema reference](/docs/guides/schema-reference), whose `EventSelector` block also
+  gained the `SignalSelector` and `ProjectSelector` arms it had been missing
+
 ## 2026-09-06
 
 Dependency cascades order explicit package and project dependencies. Profile pins remain

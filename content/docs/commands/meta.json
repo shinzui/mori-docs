@@ -40,6 +40,7 @@
 		"completions",
 		"help",
 		"doctor",
+		"audit",
 		"status"
 	]
 }

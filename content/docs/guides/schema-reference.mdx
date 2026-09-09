@@ -620,9 +620,16 @@ Default | AcceptEdits | DontAsk | BypassPermissions | Plan
 Selects which VCS events trigger reactions (used in `mori.automation.dhall`):
 
 ```
-ChangesetSelector : { name, paths, branches, messagePatterns, trailerPatterns }
-RefSelector : { name, refPatterns, kinds }
+ChangesetSelector : { name, pathRegexes, paths, branches, messagePatterns, trailerPatterns }
+RefSelector       : { name, refRegexes, refPatterns, kinds }
+SignalSelector    : { name, signalTypes, sourceProjects, payloadPredicates }
+ProjectSelector   : { name, aggregates, families, artifactKinds, actions,
+                      eventTypes, projectIds, references, includeImported }
 ```
+
+`pathRegexes` and `refRegexes` are opt-in whole-input POSIX extended regexes,
+default empty, AND-combined with their glob sibling. See
+[Opt-in regular expressions](/docs/guides/automation#opt-in-regular-expressions).
 
 ### ReactionAction
 

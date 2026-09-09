@@ -1,0 +1,313 @@
+---
+title: Auditing a project
+description: Find what is stale relative to current mori capabilities, remediate it, and record what was done
+icon: ScanSearch
+---
+
+Every capability mori ships leaves behind projects still written in the old
+shape — a `mori.dhall` pinned to a months-old mori-schema commit, an automation
+config in a form that directory configuration replaced, a bare dependency string
+where a typed package-grained reference now belongs.
+
+`mori audit` is how you find out whether a checkout is one of them. It reads
+files and runs pure checks: no agent session, no tokens. Running it a hundred
+times has exactly the effect of running it once.
+
+For the exact flags of each subcommand, see the
+[`mori audit` command reference](/docs/commands/audit).
+
+## Reporting what is stale
+
+```bash
+mori audit
+mori audit --path ../other-project
+mori audit --dimension schema --json
+```
+
+The rules live in the binary, beside the migrations they are lifted from — not
+in Dhall data and not in a Markdown skill. That is what lets `mori audit` decide
+a finding without spending a token, and it means the rules a report was produced
+by are identified by `rule_catalog_version` in the JSON.
+
+The registry read is optional. With no `MORI_PG_CONNECTION_STRING` the report
+still runs, the three registry-dependent `deps` rules report nothing, and the
+header says the registry was not consulted rather than calling the project
+clean.
+
+### Three dimensions
+
+| Dimension | Covers |
+|---|---|
+| `schema` | The mori-schema commit each Dhall file imports, and the field migrations not yet applied to it |
+| `automation` | The shape of automation configuration |
+| `deps` | How dependencies are declared |
+
+With no `--dimension`, every dimension is audited. The flag repeats and takes
+one name each time:
+
+```bash
+mori audit --dimension schema
+mori audit --dimension schema --dimension deps
+```
+
+A selection is deduplicated and put into canonical order, so the report's shape
+never depends on how the flags were typed. An unknown name is rejected before
+any check runs, so a typo can never silently narrow the audit.
+
+### Severity and exit codes
+
+Each finding is `advisory`, `recommended`, or `required`, and each is either
+mechanical (the same rewrite `mori schema migrate` performs) or agent-guided
+(it opens one skill session).
+
+| Code | Meaning |
+|---|---|
+| `0` | Nothing stale, or only advisory findings |
+| `2` | At least one finding is `recommended` or `required` |
+| `1` | The audit could not be performed at all |
+
+Advisory findings map to `0` on purpose: an advisory is an opinion a project is
+free to decline, and a build that goes red on an opinion teaches people to
+append `|| true`, which destroys the other two codes. In CI:
+
+```bash
+mori audit || exit $?
+```
+
+## The automation rules
+
+Nine rules over the automation configuration a project has registered — or, when
+it has registered none, over the conventional `mori.automation.dhall`. Which
+files are read depends on the registry: a project whose automation lives in an
+`automation/` directory, or under several `--name` registrations, is only
+reachable through its registration rows, and a run that cannot reach the
+registry falls back to the conventional path and says so.
+
+| Rule | Severity | Fix |
+|---|---|---|
+| `automation.rewrite-automation-to-mk-form` | recommended | mechanical |
+| `automation.complete-legacy-selector-payloads` | required | mechanical |
+| `automation.complete-legacy-signal-payloads` | required | mechanical |
+| `automation.lift-legacy-schedule-action` | advisory | mechanical |
+| `automation.ref-guard-in-reaction-command` | recommended | agent-guided |
+| `automation.sibling-tag-glob-without-ref-regex` | recommended | agent-guided |
+| `automation.relative-command-working-dir` | recommended | agent-guided |
+| `automation.unqualified-signal-source-project` | required | agent-guided |
+| `automation.single-file-bundles-independent-rule-groups` | advisory | agent-guided |
+
+Three of these are worth understanding because they encode capabilities that
+landed after most configs were written:
+
+**Raw union payloads block schema bumps.** A record written directly inside
+`Schema.EventSelector.RefSelector { … }` rather than as `Schema.RefSelector::{ … }`
+is a raw payload. Adding a defaulted field is source-compatible for a
+completion-form payload but changes the raw one's *type* — so these are
+`required` rather than merely aging. `refRegexes`, `pathRegexes`, `cascade`, and
+`payloadPredicates` are all such fields.
+
+**Shell ref guards that `refRegexes` replaced.** Before `refRegexes` a glob could
+not separate an umbrella tag from its siblings, so a reaction fired on all of
+them and the narrowing lived in a shell conditional — which still creates a
+reaction history entry for every irrelevant input. The rule fires only when all
+four hold: a glob-only `RefSelector` triggers the reaction, the command is a
+shell, its args carry `-c`, and the program both interpolates `{{ref.name}}` and
+branches.
+
+**A bare project name in a signal selector never matches.** mori matches on the
+qualified `namespace/name` form, and nothing rejects a bare name: the config
+loads, registers, and the selector silently never fires. That is why it is
+`required` — a selector that never matches is worse than a broken one, because
+nothing reports it. An empty `sourceProjects` is the documented "empty = all"
+wildcard and is never reported.
+
+See [Automation configuration](/docs/guides/automation) for `refRegexes` and
+`pathRegexes` themselves, and
+[Cross-repo workflows](/docs/guides/cross-repo-workflows) for `cascade`.
+
+## The deps rules
+
+Four rules, covering the two capabilities most of the fleet never adopted: typed
+dependency references, and dependency edges that are package-grained on both
+sides.
+
+| Rule | Severity | Remediated by |
+|---|---|---|
+| `deps.missing-dependency-version-constraint` | required | mechanical |
+| `deps.untyped-dependency-refs` | recommended | `typed-deps-migrate` kit skill |
+| `deps.project-grained-dependency-edge` | recommended | `typed-deps-migrate` kit skill |
+| `deps.cabal-manifest-drift` | recommended | `cabal-deps-sync` kit skill |
+
+`deps.missing-dependency-version-constraint` is `required` because a
+`Dependency.WithAugmentation` literal written before the record grew its
+`versionConstraint` field does not typecheck at all — the manifest stops
+loading, and the audit is often the only thing that can say why.
+
+`deps.project-grained-dependency-edge` fires on evidence, never a heuristic: the
+target must declare more than one package, and your build files must name at
+least one and fewer than all of them.
+
+`deps.cabal-manifest-drift` reports only one direction — a real build dependency
+the manifest never mentions. A manifest entry with no matching `build-depends`
+is *not* reported, because it is usually a `cabal.project` pin and removing one
+is the most likely mistake in the whole workflow.
+
+Two things the deps rules never do: they never judge a version (comparing
+version text is not something mori does), and they never report a dependency
+that resolves to no registered project — that is
+[`mori validate --check-deps`](/docs/commands/validate), which already exits
+non-zero for it.
+
+## Sweeping the whole fleet
+
+`--registry` changes the subject from *the project in this directory* to *a set
+of registered projects*. Same rules, same dimensions, same `--json`.
+
+```bash
+mori audit --registry
+mori audit --registry --filter 'shinzui/*'
+mori audit --registry --group keiro-substrate --dimension deps
+mori audit --registry --jobs 8 --json
+```
+
+Every sweep opens with a line on stderr naming both numbers:
+
+```text
+Considering 4 of 177 registered projects.
+```
+
+The denominator is the whole registry, never the filtered set — that is the
+point of printing it. It tells you how much of the fleet you did not look at.
+
+Selectors compose, narrowing to the intersection. Glob matching is over the full
+`<namespace>/<name>` string: `*` matches any run of characters *including* `/`,
+so write the slash when you mean one, and `?` matches exactly one character.
+There is no hidden default — an unnarrowed sweep includes archived and
+deprecated projects, because quietly excluding them would make the
+`Considering N of M` line a lie about what `M` counts.
+
+`--dry-run` prints the selection and opens no project file, which is how you
+check a selector before spending the wall-clock of a real sweep.
+
+### Reading the sweep
+
+```text
+project              │ schema │ automation │ deps │ status
+─────────────────────┼────────┼────────────┼──────┼───────
+shinzui/mori         │      0 │          0 │    0 │ clean
+shinzui/mori-app     │      1 │          0 │   23 │ stale
+shinzui/mori-kit     │      — │          — │    — │ skipped: project path directory missing
+```
+
+Four status words. `clean` and `stale` mean inspected without and with findings.
+`skipped: <why>` and `failed: <why>` mean not inspected, for an expected and an
+unexpected reason respectively — spelled exactly as
+[`mori registry upgrade-schema`](/docs/guides/registry-upgrade) spells them,
+because they mean the same thing there. A `—` in a count cell means the project
+was not inspected: zero findings and no look are different answers, so they get
+different marks.
+
+`--jobs N` audits N projects at once. Results are collected before anything is
+rendered and always emitted in `(namespace, name)` order, so `--jobs 8` is
+byte-identical to `--jobs 1`.
+
+Exit codes aggregate the single-project rule, with one addition: incomplete
+outranks findings. A CI job told "3 projects are stale" can act; a job told that
+after failing to read 40 checkouts cannot. A `skipped` project does not change
+the code on its own — a checkout that is not on this machine is an expected
+condition.
+
+### What a sweep will not do
+
+It spawns no subprocess, and it **writes nothing, including no receipt**. A
+receipt records a remediation, and a report performed none; recording one anyway
+would make a rule look done forever. Only `mori audit fix` writes receipts. That
+is what makes a sweep safe to run against the real registry whenever you like.
+
+There is no `--allow-dirty` and no `--commit` either. Nothing is written, so a
+dirty tree is not a hazard, and refusing to audit one would make the sweep
+useless in exactly the repositories you are working in. Those rails belong to
+`mori audit fix`. One unreadable project does not stop the run.
+
+## Fixing what is stale
+
+```bash
+mori audit fix --dry-run
+mori audit fix --mechanical-only
+mori audit fix
+```
+
+`--dry-run` prints the chain that would run and stops without touching
+anything. `--mechanical-only` applies the deterministic rewrites and launches no
+agent session, so it spends no tokens — the right first pass. A full run
+additionally opens one skill session per agent-guided rule.
+
+### Safety rails
+
+A clean working tree is required unless you pass `--allow-dirty`, because
+version control is the only undo a rewrite has. `--commit` commits each
+mechanical step's file as it is applied; agent steps are never auto-committed,
+so you always review what a session changed before it becomes a commit.
+
+Every fix step is bracketed by an immutable receipt, which is what makes an
+interrupted run resumable: a rule with an `applied` receipt is skipped on the
+next run unless you ask for it again with `--rerun RULE_ID` or `--rerun-all`.
+
+### The three outcomes
+
+A receipt carries `applied`, `not_applicable`, or `failed`. Only `applied`
+suppresses a later run. An agent session reports its own outcome with:
+
+```bash
+mori audit report-outcome --rule RULE_ID --applied
+mori audit report-outcome --rule RULE_ID --not-applicable --reason "no automation config here"
+```
+
+There is deliberately no `--failed` on `report-outcome`: a session that could
+not finish should say nothing and let the next run see the finding again.
+
+## Reading the ledger
+
+Receipts are immutable project facts. Recording one publishes a typed project
+signal in the `AuditReceipt` family, so automation can react to a remediation
+the same way it reacts to a release.
+
+```bash
+mori audit status --project shinzui/mori
+mori audit status --registry
+mori audit status --project shinzui/mori --all-runs
+```
+
+Retries within one `--run-id` converge on a single receipt, so re-recording is
+safe.
+
+## Coverage
+
+`mori audit coverage` aggregates recorded receipts against the compiled rule
+catalog: which rules the fleet has answered for, and which projects still owe an
+answer.
+
+```bash
+mori audit coverage
+mori audit coverage --by-project
+mori audit coverage --rule deps.untyped-dependency-refs --json
+```
+
+Coverage is decided from the ledger, not from a fresh report. A rule counts as
+satisfied for a project when its latest receipt is `applied` or
+`not_applicable`. `--by-project` inverts the report to one block per project
+instead of one per rule; `--limit 0` prints every frontier entry, and `--json`
+is never truncated.
+
+## What this does not do
+
+`mori audit` reports staleness relative to mori's own capabilities. It is not a
+linter, a security scanner, or a test runner, and it never judges whether a
+version constraint is behind the latest release.
+
+## See also
+
+- [`mori audit` command reference](/docs/commands/audit)
+- [Automation configuration](/docs/guides/automation) — `refRegexes` and `pathRegexes`
+- [Schema migrations](/docs/guides/schema-migrations) — the rewrites the mechanical rules perform
+- [`mori kit`](/docs/guides/kit) — the `typed-deps-migrate` and `cabal-deps-sync` skills
+- [Registry upgrade](/docs/guides/registry-upgrade) — the fleet-wide schema rewrite

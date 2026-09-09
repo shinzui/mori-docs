@@ -1,0 +1,224 @@
+---
+title: mori audit
+description: Report, record, and remediate what is stale in a project relative to current mori capabilities
+icon: ScanSearch
+---
+
+`mori audit` reports everything in a project that is out of date relative to the
+mori capabilities the running binary knows about. It reads files and runs pure
+checks: no agent session, no tokens. Running it a hundred times has exactly the
+effect of running it once.
+
+Every capability mori ships leaves behind projects still written in the old
+shape — a `mori.dhall` pinned to a months-old mori-schema commit, an automation
+config in a form that directory configuration replaced, a bare dependency string
+where a typed package-grained reference now belongs. `mori audit` finds them
+without opening a skill and reading the config by hand.
+
+See [Auditing a project](/docs/guides/audit) for the workflow, the rule
+catalog in detail, and the fleet-wide sweep.
+
+```bash
+mori audit
+mori audit --path ../other-project
+mori audit --dimension schema --json
+```
+
+The registry read is optional. With no `MORI_PG_CONNECTION_STRING` the report
+still runs, the three registry-dependent `deps` rules report nothing, and the
+header says the registry was not consulted rather than calling the project
+clean.
+
+## `mori audit report`
+
+Report audit findings. This is the default subcommand, so `mori audit` and
+`mori audit report` are the same command.
+
+```bash
+mori audit
+mori audit --dimension schema --dimension deps
+mori audit --registry --group keiro-substrate --dimension deps
+mori audit --registry --jobs 8 --json
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--path DIR` | Project directory to audit; must contain `mori.dhall` (default `.`) |
+| `--registry` | Audit every registered project instead of the one at `--path` |
+| `--group GROUP` | Only projects that are members of `GROUP` |
+| `--namespace NAMESPACE`, `-n` | Only projects in `NAMESPACE` |
+| `--type TYPE` | Only projects of this project type |
+| `--origin ORIGIN` | Only projects with this origin |
+| `--lifecycle LIFECYCLE` | Only projects at this lifecycle stage, e.g. `active` or `archived` |
+| `--filter GLOB` | Only projects whose `NAMESPACE/NAME` matches `GLOB` (`*` spans `/`, `?` is one character) |
+| `--dimension DIMENSION` | Audit only `schema`, `automation`, or `deps`. Repeatable; omit for all |
+| `--dry-run` | With `--registry`, list the selected projects and read no project file |
+| `--jobs N`, `-j` | With `--registry`, audit up to `N` projects concurrently. Output is identical at any `N` (default `1`) |
+| `--json` | Emit command-owned snake_case JSON |
+
+A `--dimension` selection is deduplicated and put into canonical order, so the
+report's shape never depends on how the flags were typed. An unknown name is
+rejected before any check runs.
+
+### Exit codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | Nothing stale, or only advisory findings |
+| `2` | At least one finding is `recommended` or `required` |
+| `1` | The audit could not be performed at all |
+
+This is the same 0/2 split [`mori doctor`](/docs/commands/doctor) draws: `2`
+means the audited thing is unhealthy, `1` means the tool could not complete.
+Advisory findings map to `0` because an advisory is an opinion a project may
+decline, and a build that goes red on an opinion teaches people to append
+`|| true`.
+
+## `mori audit fix`
+
+Remediate findings, mechanically or through one agent session per rule.
+
+```bash
+mori audit fix --dry-run
+mori audit fix --mechanical-only
+mori audit fix --rerun-all
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--path DIR` | Project directory to remediate (default `.`) |
+| `--dimension DIMENSION` | Fix only this dimension. Repeatable; omit for all |
+| `--rule RULE_ID` | Fix only this rule id. Repeatable; omit for all |
+| `--rerun-all` | Attempt every rule again, even those with an applied receipt |
+| `--rerun RULE_ID` | Attempt this rule again despite an applied receipt. Repeatable |
+| `--mechanical-only` | Apply only deterministic fixes; launch no agent session and spend no tokens |
+| `--dry-run` | Print the chain that would run, then stop without touching anything |
+| `--allow-dirty` | Proceed even though the working tree has uncommitted changes |
+| `--commit` | Commit each mechanical step's file as it is applied. Agent steps are never auto-committed |
+
+Mechanical fixes are the same rewrites [`mori schema migrate`](/docs/commands/schema)
+performs. Agent-guided rules open one skill session each. A clean working tree
+is required unless you pass `--allow-dirty`, because version control is the only
+undo a rewrite has.
+
+## `mori audit record`
+
+Record one immutable audit outcome for a project. Retries within a run converge
+on a single receipt, so re-recording the same `--run-id` is safe.
+
+```bash
+mori audit record --project shinzui/mori \
+  --rule schema.pin.root-import-stale \
+  --dimension schema --rule-version 1 \
+  --run-id 2026-09-09-a --outcome applied
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--project PROJECT` | Registered project as `NAMESPACE/NAME`, or a unique bare name (required) |
+| `--rule RULE_ID` | Audit rule id, e.g. `schema.pin.root-import-stale` (required) |
+| `--dimension DIMENSION` | The rule's dimension: `schema`, `automation`, or `deps` (required) |
+| `--rule-version VERSION` | The rule version this outcome was produced against (required) |
+| `--run-id RUN_ID` | Identifies one audit run (required) |
+| `--outcome OUTCOME` | `applied`, `not_applicable`, or `failed`. Only `applied` suppresses a later run (required) |
+| `--catalog-version TEXT` | What produced this outcome (default: this binary's version) |
+| `--agent-session-id ID` | The agent session that produced this outcome, when there was one |
+| `--detail TEXT` | Free text recorded with the receipt |
+| `--recorded-at ISO-8601` | When the outcome was produced (default: now) |
+| `--json` | Emit snake_case JSON |
+
+Receipts are immutable project facts. Recording one publishes a typed
+`Project/AuditReceipt` signal available to automation interpolation.
+
+## `mori audit report-outcome`
+
+Record the current agent session's outcome for one rule. This is what a
+remediation skill session calls when it finishes; it writes a sentinel rather
+than a registry row.
+
+```bash
+mori audit report-outcome --rule RULE_ID --applied
+mori audit report-outcome --rule RULE_ID --not-applicable --reason "no automation config here"
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--path DIR` | Project directory whose sentinel to write (default `.`) |
+| `--rule RULE_ID` | The audit rule this session was asked to remediate (required) |
+| `--applied` | The work this rule describes is done |
+| `--not-applicable` | This rule's precondition is unmet here, so nothing was changed |
+| `--reason TEXT` | One line saying why. Required with `--not-applicable` |
+
+`--applied` and `--not-applicable` are mutually exclusive and one is required.
+There is deliberately no `--failed`: a session that could not finish should say
+nothing and let the next run see the finding again.
+
+## `mori audit status`
+
+Show what the audit ledger says for a project or the whole registry.
+
+```bash
+mori audit status --project shinzui/mori
+mori audit status --registry
+mori audit status --project shinzui/mori --all-runs --limit 500
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--project PROJECT` | Registered project as `NAMESPACE/NAME`, or a unique bare name |
+| `--registry` | Report every registered project. Mutually exclusive with `--project` |
+| `--dimension DIMENSION` | Report only this dimension. Repeatable; omit for all |
+| `--rule RULE_ID` | Report only this rule id |
+| `--outcome OUTCOME` | Report only rules whose latest receipt carries this outcome |
+| `--all-runs` | Show every receipt rather than the latest per rule |
+| `--limit N` | Maximum receipts to read (default `100`) |
+| `--json` | Emit snake_case JSON |
+
+## `mori audit coverage`
+
+Aggregate recorded receipts against the compiled rule catalog: which rules the
+fleet has answered for, and which projects still owe an answer.
+
+```bash
+mori audit coverage
+mori audit coverage --by-project --json
+mori audit coverage --rule deps.untyped-dependency-refs
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--group GROUP` | Only projects that are members of `GROUP` |
+| `--namespace NAMESPACE`, `-n` | Only projects in `NAMESPACE` |
+| `--type TYPE` | Only projects of this project type |
+| `--origin ORIGIN` | Only projects with this origin |
+| `--lifecycle LIFECYCLE` | Only projects at this lifecycle stage |
+| `--filter GLOB` | Only projects whose `NAMESPACE/NAME` matches `GLOB` |
+| `--dimension DIMENSION` | Report only this dimension. Repeatable; omit for all |
+| `--rule RULE_ID` | Report only this rule id |
+| `--by-project` | Invert the report: one block per project instead of one per rule |
+| `--limit N` | Frontier entries to print per block; `0` prints all. Never truncates `--json` (default `10`) |
+| `--receipt-limit N` | Maximum resolved receipts to read from the ledger (default `100000`) |
+| `--json` | Emit snake_case JSON |
+
+Coverage is decided from the ledger, not from a fresh report: a rule counts as
+satisfied for a project when its latest receipt is `applied` or
+`not_applicable`.
+
+## Related
+
+- [Auditing a project](/docs/guides/audit) — the workflow and the full rule catalog
+- [`mori schema`](/docs/commands/schema) — the migrations the mechanical rules are lifted from
+- [`mori validate`](/docs/commands/validate) — `--check-deps` for dependencies that resolve to nothing
+- [`mori doctor`](/docs/commands/doctor) — system health, and the same exit-code policy

@@ -163,6 +163,7 @@ Matches `ChangesetObserved` events (commits ingested via `mori automate ingest g
 | Field | Type | Behavior |
 |-------|------|----------|
 | `name` | `Text` | Unique selector name |
+| `pathRegexes` | `List Text` | Whole-input POSIX extended regex alternatives for touched file paths. Empty = unrestricted. See [Opt-in regular expressions](#opt-in-regular-expressions). |
 | `paths` | `List Text` | Glob patterns for touched file paths. Empty = match all. |
 | `branches` | `List Text` | Branch name patterns. Empty = match all. |
 | `messagePatterns` | `List Text` | Commit message patterns. Empty = match all. |
@@ -175,6 +176,7 @@ Matches `RefObserved` events (branch/tag pointer changes).
 | Field | Type | Behavior |
 |-------|------|----------|
 | `name` | `Text` | Unique selector name |
+| `refRegexes` | `List Text` | Whole-input POSIX extended regex alternatives for the ref name. Empty = unrestricted. See [Opt-in regular expressions](#opt-in-regular-expressions). |
 | `refPatterns` | `List Text` | Ref name patterns (e.g., `"main"`, `"release/*"`). Empty = match all. |
 | `kinds` | `List Text` | `"branch"`, `"tag"`, or both. Empty = match all. |
 
@@ -224,7 +226,52 @@ project genuinely gaining a hundred packages.
 > delivery remain disabled until the shared signal-delivery infrastructure is
 > implemented, so a ProjectSelector will validate but not yet fire.
 
+### Opt-in regular expressions
+
+`RefSelector.refRegexes` and `ChangesetSelector.pathRegexes` opt into
+case-sensitive POSIX extended regular expressions, for the cases a glob cannot
+express. Both default to empty, and an empty list imposes no restriction — the
+glob language below is unchanged for every project that does not use them.
+
+Each expression matches the **entire input**, including when it contains
+alternatives such as `foo|bar`. Multiline mode is disabled, so anchors refer to
+the whole input, and a regex may cross `/` when the expression permits it. This
+is not PCRE: lookaround and capture interpolation are not supported. An empty
+regex string matches only empty text.
+
+Alternatives within one list are OR'd; the glob list and the regex list combine
+with **AND**. For changed paths, one touched path must satisfy both lists. Both
+path lists empty still matches an event with no touched paths.
+
+```dhall
+Schema.EventSelector.RefSelector Schema.RefSelector::{
+, name = "umbrella-release-tag"
+, refRegexes = [ "keiro-[0-9]+([.][0-9]+)*" ]
+}
+```
+
+That matches the umbrella tag `keiro-0.15.0.0` and excludes
+`keiro-core-0.15.0.0` — the distinction a glob cannot draw, and the reason the
+[`automation.sibling-tag-glob-without-ref-regex` audit rule](/docs/guides/audit#the-automation-rules)
+exists. Use `[.]` for a literal dot, or double each backslash inside a Dhall
+double-quoted string.
+
+An invalid expression fails config loading and names the selector, the field,
+and the list index; a stored configuration with an invalid expression is
+reported as broken and excluded rather than silently ignored.
+
+Completion-form Dhall (`Schema.RefSelector::{ … }`) receives these defaults
+automatically. A legacy **raw** selector record needs
+`mori schema migrate --apply --file mori.automation.dhall` before the schema
+bump, because adding a field changes a raw payload's type — see
+[`automation.complete-legacy-selector-payloads`](/docs/guides/audit#the-automation-rules).
+
 ### Glob patterns
+
+Globs are unchanged by the regex fields: only `*` and `**` are special, and
+brackets, `?`, `+`, braces, and backslashes remain literal. Branches, commit
+messages, trailers, and signal types retain this glob language and have no
+regex counterpart.
 
 - `*` matches any characters within a single path segment (stops at `/`)
 - `**` matches any characters across path segments (crosses `/`)

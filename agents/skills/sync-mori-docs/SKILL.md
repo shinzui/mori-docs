@@ -150,10 +150,11 @@ Primary mappings from `docs/user/`:
 Command reference pages are curated from command behavior and may combine several source files or help topics. Current command pages:
 
 ```text
-agent alias app automate backfill browse cd checklist completions cookbook ddd
-deps diagram doctor extension help identity improvement-requests init kit observe
-ops path plans project reaction register registry schema serve show signal status
-tech-radar upstream-issues validate workflow
+agent alias app audit automate backfill browse capabilities cd checklist
+completions cookbook ddd deps diagram doctor extension help identity
+improvement-requests init kit observe ops path plans project reaction register
+registry schema serve show signal status store tech-radar upstream-issues
+validate workflow
 ```
 
 Do not hand-maintain this list against memory. Enumerate the real surface and
@@ -172,8 +173,9 @@ If a new top-level command is added, create `content/docs/commands/<command>.mdx
 
 ### 5. Map Help Topics To Guides
 
-Thirty-two of the thirty-eight topics have a same-slug guide today, and the
-other six are deliberate consolidations. Verify rather than trusting the list:
+Thirty-five of the forty-three topics have a same-slug guide today, and the
+other eight are deliberate consolidations. Verify rather than trusting the list
+— these counts drift every time a topic is added:
 
 ```bash
 for t in /Users/shinzui/Keikaku/bokuno/mori-project/mori/mori-cli/help/*.md; do
@@ -193,6 +195,8 @@ printed are consolidated on purpose:
 | `schema-modification` | `guides/schema-migrations.mdx` |
 | `schema-records` | `schema-guide.mdx` |
 | `schema-types` | `guides/schema-reference.mdx` |
+| `capabilities` | `commands/capabilities.mdx` — the command reference carries the catalog workflow, with the authoring format in `guides/okf.mdx` |
+| `store-lifecycle` | `guides/event-store-lifecycle.mdx` |
 
 There are currently **no** uncovered help topics. If the loop above prints a
 topic that is not in that table, it is a real gap: create the guide.
@@ -259,9 +263,11 @@ Current command-page assignments, read off the pages themselves:
 - `agent`: `Bot`
 - `alias`: `CornerDownRight`
 - `app`: `Webhook`
+- `audit`: `ScanSearch`
 - `automate`: `Zap`
 - `backfill`: `DatabaseZap`
 - `browse`: `Globe`
+- `capabilities`: `BadgeCheck`
 - `cd`: `FolderOpen`
 - `changelog`: `ScrollText`
 - `checklist`: `ListChecks`
@@ -290,6 +296,7 @@ Current command-page assignments, read off the pages themselves:
 - `show`: `Eye`
 - `signal`: `Radio`
 - `status`: `Activity`
+- `store`: `Archive`
 - `tech-radar`: `Radar`
 - `upstream-issues`: `CircleAlert`
 - `validate`: `CircleCheck`
