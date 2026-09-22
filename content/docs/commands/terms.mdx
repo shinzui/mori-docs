@@ -1,0 +1,67 @@
+---
+title: mori terms
+description: Query and validate controlled terminology catalogs
+icon: BookOpenText
+---
+
+`mori terms` queries a project's controlled vocabulary. Each term has a stable
+bundle-scoped `TERM-N` handle, canonical wording, a one-sentence definition,
+accepted aliases, and optional discouraged wording. Catalogs use the
+`documentation.terminology` OKF profile published by
+`mori://shinzui/okf-profiles`.
+
+## List terms
+
+```bash
+mori terms list
+mori terms list --project shinzui/mori --status current
+mori terms list --bundle terminology --tag event-sourcing --json
+```
+
+Filters are `--project NAMESPACE/NAME`, `--bundle NAME`, `--status
+current|deprecated`, and `--tag TAG`. Without `--project`, the command reads
+all registered catalogs. Invalid records remain visible instead of silently
+disappearing.
+
+## Show one term
+
+```bash
+mori terms show mori://shinzui/mori/okf/terminology/concepts/TERM-1
+mori terms show --project shinzui/mori --id TERM-1 --bundle terminology --json
+```
+
+Because handles are bundle-scoped, handle lookup requires `--project` and may
+need `--bundle`. The detail view resolves outgoing relations, incoming
+references, the derived inverse `narrower` relation, and the transitive
+cross-project `sameAs` cluster. Unresolved and ambiguous targets stay visible.
+
+## Search vocabulary
+
+```bash
+mori terms search decider
+mori terms search handler --group runtime --status current
+mori terms search workflow --project shinzui/mori --project shinzui/keiro --json
+```
+
+Search ignores case and matches titles, aliases, abbreviations, and discouraged
+wording. Exact matches sort before prefixes and substrings. A discouraged hit
+names the canonical term to use. `--project` repeats; it cannot be combined
+with `--group`.
+
+## Validate a checkout
+
+```bash
+okf validate docs/terminology --strict \
+  --profile mori/terminology-profile.dhall --profile-enforce --log-enforce
+mori terms validate --path .
+mori terms validate --path . --bundle terminology --json
+```
+
+OKF validates document shape and reference spelling. Mori adds repository and
+registry checks: relation resolution, `broader` cycles, replacement mirrors,
+discouraged-word collisions, and local file/doc anchors. Validation exits
+non-zero on any problem and never rewrites records.
+
+`list`, `show`, and `search` read the last registration snapshot. Run `mori
+observe` or `mori register` after editing. `validate` reads the checkout and can
+run before registration.

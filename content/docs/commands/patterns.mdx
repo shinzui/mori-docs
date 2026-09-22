@@ -1,0 +1,60 @@
+---
+title: mori patterns
+description: Import immutable pattern evidence and query revision-aware scorecards
+icon: ClipboardCheck
+---
+
+`mori patterns` records immutable criterion evidence for assessable patterns and
+derives its current freshness from Repository and OKF provenance.
+
+## Import an assessment
+
+```bash
+mori patterns import-assessment assessment.json
+```
+
+The file is a `PatternAssessmentV1` JSON envelope. Its deterministic key covers
+the application, service revision, contract hashes, criterion, and check
+revision. Evidence is required. Reimporting equivalent content appends no
+event; different content under an existing key is rejected and never
+overwrites history.
+
+Use `Mori.Types.PatternAssessment.V1.withDerivedKeyV1` when producing an
+envelope. The versioned envelope keeps camelCase JSON keys.
+
+## Query a service scorecard
+
+```bash
+mori patterns scorecard mori://NAMESPACE/PROJECT
+mori patterns scorecard mori://NAMESPACE/PROJECT --json
+```
+
+The result distinguishes `conforming`, `non_conforming`, `error`,
+`unassessed`, and `stale`. A stale result names the recorded and current
+revision or contract hash. The command reads current application and pattern
+contracts from functional OKF projections and the service revision from
+Repository history; missing provenance remains visible as an error.
+
+The CLI JSON uses snake_case. An embedded original assessment retains the
+versioned envelope's camelCase encoding.
+
+## Find affected applications
+
+```bash
+mori patterns affected \
+  mori://NAMESPACE/CATALOG/okf/BUNDLE/concepts/PAT-N
+mori patterns affected \
+  mori://NAMESPACE/CATALOG/okf/BUNDLE/concepts/PAT-N --json
+```
+
+This returns current applications that explicitly reference the exact pattern
+URI, deduplicated and sorted by application URI. It reports impact and does not
+schedule reassessment.
+
+## Recovery
+
+Pattern assessments belong to the `pattern_assurance_models` rebuild group.
+Stop the daemon and use the normal [`mori ops rebuild`](/docs/commands/ops#mori-ops-rebuild)
+preview/start lifecycle. The group preserves the assessment table while
+re-inserting missing immutable rows from events. Preserve the identity
+directory: projection replay does not reconstruct aggregate identities.

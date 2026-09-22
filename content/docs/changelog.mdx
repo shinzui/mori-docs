@@ -9,6 +9,22 @@ features, commands, and schema changes.
 
 ---
 
+## 2026-09-21
+
+### Startup refuses incomplete database migrations
+
+- The HTTP API and both automation entry points verify the candidate migration
+  plan before listeners, executor locks, projection reads, or workers start
+- Startup never applies migrations. A missing, pending, unknown, or
+  checksum-mismatched plan refuses startup until the migration runner applies
+  and verifies it
+- The [`mori ops` command reference](/docs/commands/ops#projection-catalog-drift)
+  records the ordering between migration readiness and projection-catalog
+  readiness
+- Added the missing [`mori patterns`](/docs/commands/patterns) and
+  [`mori terms`](/docs/commands/terms) references found by the documentation
+  command-coverage check
+
 ## 2026-09-09
 
 ### `mori audit` — what is stale relative to current mori capabilities

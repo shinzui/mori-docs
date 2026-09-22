@@ -173,6 +173,12 @@ A binary whose declared projection catalog disagrees with what the target
 database has registered would write read-model rows under a different shape
 than the rows already there. Two gates stop that before it happens.
 
+Migration readiness runs before the catalog check. The HTTP API,
+`mori automate daemon`, and `mori automate run` refuse startup when the
+candidate migration plan is missing, pending, unknown, or checksum-mismatched.
+The check is read-only: apply the plan through `mori-core:mori-migrations -- up`
+and verify it before restarting.
+
 **Deployment gate.** `just migrate-verify` compares the candidate build's
 rebuild-group slices against the registered catalog, after the ledger check
 passes:
