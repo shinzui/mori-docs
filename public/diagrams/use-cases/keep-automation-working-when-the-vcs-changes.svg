@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="875" viewBox="0 0 1040 875" role="img" aria-labelledby="title desc">
+<title id="title">UC-7: Keep automation working through VCS change</title><desc id="desc">UC-7: A repository rewrites Git history or adopts a different VCS. Normalize Git changesets and refs into recorded facts. Deduplicate observed work by content across rewritten SHAs. Detect orphaned cursors and safely resume exact replays. Observe a declared Jujutsu repository through its own adapter. Git rewrites replay safely; another VCS still needs a selected adapter. Jujutsu adapter and selection · discovered; Durable rewrite lineage · discovered</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#166534"/></marker></defs>
+<rect width="1040" height="875" rx="20" fill="#f4f8f5"/>
+<g font-family="Inter, system-ui, sans-serif"><text x="40" y="42" font-size="12" font-weight="700" fill="#166534" letter-spacing="2">UC-7 · AT A GLANCE</text>
+<text x="40" y="82" font-size="29" font-weight="700" fill="#18352a" >Keep automation working through VCS change</text>
+<text x="40" y="116" font-size="11" font-weight="700" fill="#526b5c" letter-spacing="1.5">AUTOMATION TRUST</text>
+<text x="870" y="116" font-size="11" font-weight="700" fill="#566575" letter-spacing="1.5">DRAFT</text>
+<text x="40" y="157" font-size="11" font-weight="700" fill="#526b5c" letter-spacing="1.5">WHAT STARTS IT</text>
+<text x="304" y="157" font-size="11" font-weight="700" fill="#526b5c" letter-spacing="1.5">WHAT MORI DOES</text>
+<rect x="40" y="174" width="226" height="156" rx="13" fill="#e8f5ec" stroke="#166534"/>
+<text x="58" y="203" font-size="11" font-weight="700" fill="#166534" letter-spacing="1">TRIGGER</text>
+<text x="58" y="232" font-size="15" font-weight="500" fill="#18352a" >A repository rewrites Git</text>
+<text x="58" y="254" font-size="15" font-weight="500" fill="#18352a" >history or adopts a</text>
+<text x="58" y="276" font-size="15" font-weight="500" fill="#18352a" >different VCS.</text>
+<path d="M266 250 H295" fill="none" stroke="#166534" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="304" y="174" width="448" height="108" rx="13" fill="#ffffff" stroke="#166534" stroke-width="1.5"/>
+<rect x="304" y="174" width="6" height="108" rx="3" fill="#166534"/>
+<text x="326" y="203" font-size="14" font-weight="700" fill="#18352a" >1. VCS observation</text>
+<rect x="636" y="186" width="100" height="23" rx="11" fill="#e8f5ec"/>
+<text x="686" y="202" font-size="10.5" font-weight="700" fill="#166534" text-anchor="middle">exists today</text>
+<text x="326" y="231" font-size="14" font-weight="400" fill="#3f5b4b" >Normalize Git changesets and refs into recorded</text>
+<text x="326" y="251" font-size="14" font-weight="400" fill="#3f5b4b" >facts.</text>
+<path d="M528 284 V303" fill="none" stroke="#166534" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="304" y="306" width="448" height="108" rx="13" fill="#ffffff" stroke="#166534" stroke-width="1.5"/>
+<rect x="304" y="306" width="6" height="108" rx="3" fill="#166534"/>
+<text x="326" y="335" font-size="14" font-weight="700" fill="#18352a" >2. Content identity</text>
+<rect x="636" y="318" width="100" height="23" rx="11" fill="#e8f5ec"/>
+<text x="686" y="334" font-size="10.5" font-weight="700" fill="#166534" text-anchor="middle">exists today</text>
+<text x="326" y="363" font-size="14" font-weight="400" fill="#3f5b4b" >Deduplicate observed work by content across rewritten</text>
+<text x="326" y="383" font-size="14" font-weight="400" fill="#3f5b4b" >SHAs.</text>
+<path d="M528 416 V435" fill="none" stroke="#166534" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="304" y="438" width="448" height="108" rx="13" fill="#ffffff" stroke="#166534" stroke-width="1.5"/>
+<rect x="304" y="438" width="6" height="108" rx="3" fill="#166534"/>
+<text x="326" y="467" font-size="14" font-weight="700" fill="#18352a" >3. Rewrite recovery</text>
+<rect x="636" y="450" width="100" height="23" rx="11" fill="#e8f5ec"/>
+<text x="686" y="466" font-size="10.5" font-weight="700" fill="#166534" text-anchor="middle">exists today</text>
+<text x="326" y="495" font-size="14" font-weight="400" fill="#3f5b4b" >Detect orphaned cursors and safely resume exact</text>
+<text x="326" y="515" font-size="14" font-weight="400" fill="#3f5b4b" >replays.</text>
+<path d="M528 548 V567" fill="none" stroke="#166534" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="304" y="570" width="448" height="108" rx="13" fill="#ffffff" stroke="#566575" stroke-width="1.5" stroke-dasharray="6 4"/>
+<rect x="304" y="570" width="6" height="108" rx="3" fill="#566575"/>
+<text x="326" y="599" font-size="14" font-weight="700" fill="#18352a" >4. Adapter selection</text>
+<rect x="636" y="582" width="100" height="23" rx="11" fill="#eef2f5"/>
+<text x="686" y="598" font-size="10.5" font-weight="700" fill="#566575" text-anchor="middle">discovered</text>
+<text x="326" y="627" font-size="14" font-weight="400" fill="#3f5b4b" >Observe a declared Jujutsu repository through its own</text>
+<text x="326" y="647" font-size="14" font-weight="400" fill="#3f5b4b" >adapter.</text>
+<path d="M752 624 H782" fill="none" stroke="#166534" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="793" y="536" width="207" height="190" rx="13" fill="#e8f5ec" stroke="#166534"/>
+<text x="811" y="565" font-size="11" font-weight="700" fill="#166534" letter-spacing="1">OUTCOME</text>
+<text x="811" y="594" font-size="14" font-weight="500" fill="#18352a" >Git rewrites replay</text>
+<text x="811" y="614" font-size="14" font-weight="500" fill="#18352a" >safely; another VCS</text>
+<text x="811" y="634" font-size="14" font-weight="500" fill="#18352a" >still needs a selected</text>
+<text x="811" y="654" font-size="14" font-weight="500" fill="#18352a" >adapter.</text>
+<text x="40" y="751" font-size="11" font-weight="700" fill="#526b5c" letter-spacing="1.5">STILL TO BUILD</text>
+<rect x="40" y="768" width="472" height="65" rx="11" fill="#ffffff" stroke="#566575" stroke-dasharray="5 4"/>
+<text x="57" y="796" font-size="14" font-weight="600" fill="#18352a" >Jujutsu adapter and selection · discovered</text>
+<rect x="528" y="768" width="472" height="65" rx="11" fill="#ffffff" stroke="#566575" stroke-dasharray="5 4"/>
+<text x="545" y="796" font-size="14" font-weight="600" fill="#18352a" >Durable rewrite lineage · discovered</text></g></svg>

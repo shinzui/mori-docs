@@ -1,0 +1,36 @@
+---
+title: "UC-1: Architect a 30-service system"
+description: Use registered DDD models and a meta repository to steer a changing service architecture
+---
+
+**Source status:** delivered · **Theme:** architecture governance
+
+## At a glance
+
+![An architect uses service-owned DDD models, fleet queries, a meta repository, and model-change automation to keep architecture decisions grounded in the current system.](/diagrams/use-cases/architect-a-multi-service-system-from-a-meta-repo.svg)
+
+[Open the SVG at full size](/diagrams/use-cases/architect-a-multi-service-system-from-a-meta-repo.svg)
+
+## The scenario
+
+More than thirty services are being refactored while their teams keep shipping.
+Each service owns its current bounded contexts, aggregates, flows, and terms in
+its [DDD model](/docs/guides/ddd-decomposition). A meta repository owns the
+target system context map, cross-context workflows, architecture decisions,
+and migration requests. This gives the architect one view of **current** and
+**target** structure without declaring each fact twice.
+
+## How it works
+
+1. Service teams register their models; a registry group scopes the fleet.
+2. [`mori ddd search`](/docs/commands/ddd) queries contexts, terms, flows, and lifecycle facts across the group, with canonical sources on the results.
+3. The meta repository describes the target map and compares it with the service-owned models. [`mori ddd map`](/docs/commands/ddd) renders the group context graph.
+4. Decisions cite typed references. [`mori validate --check-refs`](/docs/commands/validate) checks them, and model-change signals can refresh meta-repository reports.
+
+All features recorded for this use case are delivered, including context
+succession, terminology replacement, group-scoped map rendering, and typed
+cross-repository references. The generic registry relationship graph and the
+DDD context graph serve different queries; context mappings remain in the
+dedicated DDD graph.
+
+**Source concept:** `mori://shinzui/mori/okf/use-cases/concepts/UC-1`

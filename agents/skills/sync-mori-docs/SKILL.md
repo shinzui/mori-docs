@@ -1,6 +1,6 @@
 ---
 name: sync-mori-docs
-description: Sync documentation from the mori source repository to this mori-docs Fumadocs site, reconciling docs/user, embedded CLI help, schema changes, and public MDX pages.
+description: Sync Mori source documentation, use cases, CLI help, and schema changes to this Fumadocs site, including an SVG diagram for every use case.
 ---
 
 # Sync Mori Documentation
@@ -26,10 +26,11 @@ Documentation site:
 Use the source repo in this order:
 
 1. `docs/user/` - curated public user docs and the primary source for most site pages.
-2. `mori-cli/help/` - exact embedded help topics shown by `mori help <topic>`.
-3. `mori-cli/src/Mori/Cli.hs` and `mori-cli/src/Mori/Command/` - command surface and flags when docs disagree or are missing.
-4. `schema/` and `schema/extensions/` - Dhall schema types, defaults, migrations, and extension schemas.
-5. `CHANGELOG.md` and implementation docs under `docs/` - recent feature context, but do not copy internal plans directly into public docs.
+2. `docs/use-cases/` - source concepts and themes for every public use-case page and diagram. Read each concept's frontmatter and prose; its `status` and feature statuses answer different questions.
+3. `mori-cli/help/` - exact embedded help topics shown by `mori help <topic>`.
+4. `mori-cli/src/Mori/Cli.hs` and `mori-cli/src/Mori/Command/` - command surface and flags when docs disagree or are missing.
+5. `schema/` and `schema/extensions/` - Dhall schema types, defaults, migrations, and extension schemas.
+6. `CHANGELOG.md` and implementation docs under `docs/` - recent feature context, but do not copy internal plans directly into public docs.
 
 Mori help topics should have user-guide coverage. Prefer a focused guide page for each help topic when the topic is substantial. When several small or closely related help topics are better served by one guide, document that consolidation in the guide and keep the relevant command reference in sync.
 
@@ -46,8 +47,13 @@ Current structure:
 - `content/docs/commands/` - command reference pages.
 - `content/docs/concepts/` - conceptual architecture and mental models.
 - `content/docs/guides/` - task-oriented user guides.
+- `content/docs/use-cases/` - one page per source use case, plus the catalog index.
 - `content/docs/architecture/` - implementation architecture that is still suitable for public docs.
 - `content/docs/index.mdx`, `getting-started.mdx`, `schema-guide.mdx`, `roadmap.mdx`, `changelog.mdx` - top-level pages.
+
+Use-case SVGs live in `public/diagrams/use-cases/`. Their editable data and
+layout live in `scripts/generate-use-case-diagrams.mjs`; regenerate with
+`bun run diagrams:use-cases` rather than editing the SVG output by hand.
 
 When adding or renaming pages, update the nearest `meta.json`.
 
@@ -79,11 +85,14 @@ From the source repo:
 
 ```bash
 cd /Users/shinzui/Keikaku/bokuno/mori-project/mori
-git log --oneline <baseline>..HEAD -- docs/user mori-cli/help mori-cli/src/Mori/Cli.hs mori-cli/src/Mori/Command schema CHANGELOG.md
-git diff --name-only <baseline>..HEAD -- docs/user mori-cli/help mori-cli/src/Mori/Cli.hs mori-cli/src/Mori/Command schema CHANGELOG.md
+git log --oneline <baseline>..HEAD -- docs/user docs/use-cases mori-cli/help mori-cli/src/Mori/Cli.hs mori-cli/src/Mori/Command schema CHANGELOG.md
+git diff --name-only <baseline>..HEAD -- docs/user docs/use-cases mori-cli/help mori-cli/src/Mori/Cli.hs mori-cli/src/Mori/Command schema CHANGELOG.md
 ```
 
-For each changed file, decide whether it affects public docs, command syntax, flags, schema fields, setup, automation, registry behavior, or examples.
+For each changed file, decide whether it affects public docs, use-case outcomes
+or delivery states, command syntax, flags, schema fields, setup, automation,
+registry behavior, or examples. Audit the complete use-case inventory in step 3
+even when no use-case file appears in this commit range.
 
 ### 3. Check Current Source Coverage
 
@@ -92,12 +101,14 @@ List current source docs and help topics:
 ```bash
 find /Users/shinzui/Keikaku/bokuno/mori-project/mori/docs/user -maxdepth 1 -type f -name '*.md' -exec basename {} .md \; | sort
 find /Users/shinzui/Keikaku/bokuno/mori-project/mori/mori-cli/help -maxdepth 1 -type f -name '*.md' -exec basename {} .md \; | sort
+rg -l '^useCaseId: UC-' /Users/shinzui/Keikaku/bokuno/mori-project/mori/docs/use-cases -g '*.md' | sort
 ```
 
 Then compare with site pages:
 
 ```bash
 find /Users/shinzui/Keikaku/bokuno/mori-project/mori-docs/content/docs -maxdepth 2 -type f -name '*.mdx' | sort
+ls /Users/shinzui/Keikaku/bokuno/mori-project/mori-docs/public/diagrams/use-cases/*.svg
 ```
 
 Every `mori-cli/help/*.md` topic should be covered by either:
@@ -108,6 +119,12 @@ Every `mori-cli/help/*.md` topic should be covered by either:
 Command reference pages are not enough by themselves for help-topic coverage. They should contain exact syntax and flags, while guides should explain workflows, context, examples, and tradeoffs.
 
 Missing a `docs/user/*.md` page usually means the site needs a page or an existing page needs to absorb that content.
+
+Every source file with `useCaseId: UC-...` must have a corresponding
+`content/docs/use-cases/<source-slug>.mdx` page, a
+`public/diagrams/use-cases/<source-slug>.svg` diagram, an entry in the
+use-case catalog, and a diagram specification in the generator. Exclude the
+source bundle's `index.md`, `log.md`, and `themes/` files from this one-page-per-case check.
 
 ### 4. Map Source Docs To Site Pages
 
@@ -171,7 +188,22 @@ whose command no longer exists.
 
 If a new top-level command is added, create `content/docs/commands/<command>.mdx`, add frontmatter, and add the page to `content/docs/commands/meta.json`. When a command is *removed*, delete its page, drop it from `meta.json`, and repoint every inbound link — including historical `changelog.mdx` entries, where the prose stays but the link must go.
 
-### 5. Map Help Topics To Guides
+### 5. Sync Use Cases And SVG Diagrams
+
+Do this on **every** Mori docs sync, including syncs whose source diff contains
+no use-case files:
+
+1. Compare the source concepts discovered in step 3 with `content/docs/use-cases/`, `content/docs/use-cases/meta.json`, the catalog in `index.mdx`, the cases in `scripts/generate-use-case-diagrams.mjs`, and `public/diagrams/use-cases/`. Add new cases and reconcile changed or removed ones across all of these surfaces.
+2. For each case, read its source frontmatter and prose before updating the public summary. Preserve the distinction between the concept's `status` (such as `draft`) and each feature's `delivered`, `planned`, `discovered`, or `blocked` state. Check triggers, actors, flow, outcome, limitations, and source-owned improvement requests; do not imply an unfinished step works today.
+3. Give each page an **At a glance** SVG before the detailed flow, descriptive image alt text, a full-size SVG link, and the canonical source concept URI `mori://shinzui/mori/okf/use-cases/concepts/UC-N`. Keep public pages task-focused and link to existing guides and command references where useful.
+4. Edit the matching case data in `scripts/generate-use-case-diagrams.mjs`, then run `bun run diagrams:use-cases`. Keep the Mori green palette for the main flow, with legible status cues for unfinished work, and update the generated `catalog.svg` with the per-case SVGs. Keep each SVG's `<title>` and `<desc>` meaningful. Render changed diagrams and check text fit and state accuracy.
+5. Update `content/docs/use-cases/index.mdx` and `meta.json` for the current catalog. Check that every image and full-size link resolves. If a case is removed upstream, repoint inbound site links before dropping its page and SVG.
+
+The source bundle URI is `mori://shinzui/mori/okf/use-cases`; use the most
+specific concept URI for a particular case. Do not replace source-owned
+delivery facts with a diagram's editorial shorthand.
+
+### 6. Map Help Topics To Guides
 
 Thirty-five of the forty-three topics have a same-slug guide today, and the
 other eight are deliberate consolidations. Verify rather than trusting the list
@@ -203,7 +235,7 @@ topic that is not in that table, it is a real gap: create the guide.
 
 For new help topics, create a guide by default. Consolidate only when a standalone page would duplicate an existing guide; in that case, add a clearly named section and keep this table current.
 
-### 6. Convert Markdown To MDX
+### 7. Convert Markdown To MDX
 
 MDX pages should use this frontmatter shape:
 
@@ -223,7 +255,7 @@ Rules:
 - Keep public docs task-focused; avoid copying internal implementation plans, issue notes, or old migration logs unless they help users.
 - Keep command syntax exact. Verify flags against source code or `mori <command> --help` when in doubt.
 
-### 7. Update Changelogs
+### 8. Update Changelogs
 
 The source repo's `docs/user/CHANGELOG.md` tracks source-doc audit baselines. Do not edit it from `mori-docs` unless the user explicitly asks to update the source repo too.
 
@@ -250,6 +282,7 @@ cd /Users/shinzui/Keikaku/bokuno/mori-project/mori-docs
 git status --short
 
 # Validate docs site after edits
+bun run diagrams:use-cases
 bun run types:check
 bun run build
 ```
@@ -320,6 +353,7 @@ node -e "console.log(Object.keys(require('lucide-react').icons).join('\n'))"
 
 - Public behavior and examples match source docs/help/code.
 - Every `mori-cli/help/*.md` topic has guide coverage, with consolidated topics called out intentionally.
+- Every source use case has a current page, catalog entry, generator specification, and accessible SVG; changed diagrams have been rendered and reviewed.
 - New or renamed pages are listed in the relevant `meta.json`.
 - Internal-only source docs were not copied into public pages.
 - `content/docs/changelog.mdx` has a user-facing entry when the sync changes visible docs.

@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="875" viewBox="0 0 1040 875" role="img" aria-labelledby="title desc">
+<title id="title">UC-3: Regenerate after a contract change</title><desc id="desc">UC-3: A producer changes an OpenAPI, protobuf, Dhall, or DDL contract. Match changed contract paths and emit a structured signal. Resolve direct consumers from declared dependencies. Check target consent, then run its bounded regeneration command. Coalesce repeat changes and show each consumer's delivery state. Each consenting consumer regenerates its own derived artifacts. Agent-driven regeneration and call-site repair · planned</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#166534"/></marker></defs>
+<rect width="1040" height="875" rx="20" fill="#f4f8f5"/>
+<g font-family="Inter, system-ui, sans-serif"><text x="40" y="42" font-size="12" font-weight="700" fill="#166534" letter-spacing="2">UC-3 · AT A GLANCE</text>
+<text x="40" y="82" font-size="29" font-weight="700" fill="#18352a" >Regenerate after a contract change</text>
+<text x="40" y="116" font-size="11" font-weight="700" fill="#526b5c" letter-spacing="1.5">FLEET MAINTENANCE</text>
+<text x="870" y="116" font-size="11" font-weight="700" fill="#566575" letter-spacing="1.5">DRAFT</text>
+<text x="40" y="157" font-size="11" font-weight="700" fill="#526b5c" letter-spacing="1.5">WHAT STARTS IT</text>
+<text x="304" y="157" font-size="11" font-weight="700" fill="#526b5c" letter-spacing="1.5">WHAT MORI DOES</text>
+<rect x="40" y="174" width="226" height="156" rx="13" fill="#e8f5ec" stroke="#166534"/>
+<text x="58" y="203" font-size="11" font-weight="700" fill="#166534" letter-spacing="1">TRIGGER</text>
+<text x="58" y="232" font-size="15" font-weight="500" fill="#18352a" >A producer changes an</text>
+<text x="58" y="254" font-size="15" font-weight="500" fill="#18352a" >OpenAPI, protobuf, Dhall,</text>
+<text x="58" y="276" font-size="15" font-weight="500" fill="#18352a" >or DDL contract.</text>
+<path d="M266 250 H295" fill="none" stroke="#166534" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="304" y="174" width="448" height="108" rx="13" fill="#ffffff" stroke="#166534" stroke-width="1.5"/>
+<rect x="304" y="174" width="6" height="108" rx="3" fill="#166534"/>
+<text x="326" y="203" font-size="14" font-weight="700" fill="#18352a" >1. Producer selector</text>
+<rect x="636" y="186" width="100" height="23" rx="11" fill="#e8f5ec"/>
+<text x="686" y="202" font-size="10.5" font-weight="700" fill="#166534" text-anchor="middle">exists today</text>
+<text x="326" y="231" font-size="14" font-weight="400" fill="#3f5b4b" >Match changed contract paths and emit a structured</text>
+<text x="326" y="251" font-size="14" font-weight="400" fill="#3f5b4b" >signal.</text>
+<path d="M528 284 V303" fill="none" stroke="#166534" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="304" y="306" width="448" height="108" rx="13" fill="#ffffff" stroke="#166534" stroke-width="1.5"/>
+<rect x="304" y="306" width="6" height="108" rx="3" fill="#166534"/>
+<text x="326" y="335" font-size="14" font-weight="700" fill="#18352a" >2. Mori registry</text>
+<rect x="636" y="318" width="100" height="23" rx="11" fill="#e8f5ec"/>
+<text x="686" y="334" font-size="10.5" font-weight="700" fill="#166534" text-anchor="middle">exists today</text>
+<text x="326" y="363" font-size="14" font-weight="400" fill="#3f5b4b" >Resolve direct consumers from declared dependencies.</text>
+<path d="M528 416 V435" fill="none" stroke="#166534" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="304" y="438" width="448" height="108" rx="13" fill="#ffffff" stroke="#166534" stroke-width="1.5"/>
+<rect x="304" y="438" width="6" height="108" rx="3" fill="#166534"/>
+<text x="326" y="467" font-size="14" font-weight="700" fill="#18352a" >3. Consumer reaction</text>
+<rect x="636" y="450" width="100" height="23" rx="11" fill="#e8f5ec"/>
+<text x="686" y="466" font-size="10.5" font-weight="700" fill="#166534" text-anchor="middle">exists today</text>
+<text x="326" y="495" font-size="14" font-weight="400" fill="#3f5b4b" >Check target consent, then run its bounded</text>
+<text x="326" y="515" font-size="14" font-weight="400" fill="#3f5b4b" >regeneration command.</text>
+<path d="M528 548 V567" fill="none" stroke="#166534" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="304" y="570" width="448" height="108" rx="13" fill="#ffffff" stroke="#166534" stroke-width="1.5"/>
+<rect x="304" y="570" width="6" height="108" rx="3" fill="#166534"/>
+<text x="326" y="599" font-size="14" font-weight="700" fill="#18352a" >4. Workflow trace</text>
+<rect x="636" y="582" width="100" height="23" rx="11" fill="#e8f5ec"/>
+<text x="686" y="598" font-size="10.5" font-weight="700" fill="#166534" text-anchor="middle">exists today</text>
+<text x="326" y="627" font-size="14" font-weight="400" fill="#3f5b4b" >Coalesce repeat changes and show each consumer's</text>
+<text x="326" y="647" font-size="14" font-weight="400" fill="#3f5b4b" >delivery state.</text>
+<path d="M752 624 H782" fill="none" stroke="#166534" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="793" y="536" width="207" height="190" rx="13" fill="#e8f5ec" stroke="#166534"/>
+<text x="811" y="565" font-size="11" font-weight="700" fill="#166534" letter-spacing="1">OUTCOME</text>
+<text x="811" y="594" font-size="14" font-weight="500" fill="#18352a" >Each consenting</text>
+<text x="811" y="614" font-size="14" font-weight="500" fill="#18352a" >consumer regenerates</text>
+<text x="811" y="634" font-size="14" font-weight="500" fill="#18352a" >its own derived</text>
+<text x="811" y="654" font-size="14" font-weight="500" fill="#18352a" >artifacts.</text>
+<text x="40" y="751" font-size="11" font-weight="700" fill="#526b5c" letter-spacing="1.5">STILL TO BUILD</text>
+<rect x="40" y="768" width="960" height="65" rx="11" fill="#ffffff" stroke="#9a5a07" stroke-dasharray="5 4"/>
+<text x="57" y="796" font-size="14" font-weight="600" fill="#18352a" >Agent-driven regeneration and call-site repair · planned</text></g></svg>

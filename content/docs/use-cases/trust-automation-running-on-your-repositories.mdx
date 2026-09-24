@@ -1,0 +1,34 @@
+---
+title: "UC-4: Trust repository automation"
+description: Bound, explain, and audit reactions that run across repositories
+---
+
+**Source status:** draft · **Theme:** automation trust
+
+## At a glance
+
+![A maintainer declares automation separately from project identity, controls cross-repository reach, explains reactions, and rebuilds audit history from events.](/diagrams/use-cases/trust-automation-running-on-your-repositories.svg)
+
+[Open the SVG at full size](/diagrams/use-cases/trust-automation-running-on-your-repositories.svg)
+
+## The scenario
+
+A maintainer wants to leave repository automation running unattended. They
+need to know what may reach a repository, why a reaction fired, what it did,
+and whether the record will still be trustworthy after the operational logs
+are gone.
+
+## How it works
+
+1. [`mori.dhall`](/docs/schema-guide) declares project identity; the separate `mori.automation.dhall` declares reactive behavior. Registration alone grants no execution.
+2. Target-owned signal consent and emitter bounds limit cross-repository delivery.
+3. [`mori automate explain`](/docs/commands/automate), reaction history, and [workflow traces](/docs/commands/workflow) expose matching and execution decisions.
+4. Recorded config, provenance, and event history support projection rebuild and replay audit. See the [event store lifecycle guide](/docs/guides/event-store-lifecycle).
+
+The source records **ExecutionPolicy enforcement** as discovered: its
+`allowLocal`, `allowCI`, and `maxConcurrency` fields are declared but execution
+does not consult them. `RunCommand` executes on the daemon host and is not a
+sandbox. Selective physical event compaction is separately **blocked** pending
+fact-preserving upstream support and proof.
+
+**Source concept:** `mori://shinzui/mori/okf/use-cases/concepts/UC-4`

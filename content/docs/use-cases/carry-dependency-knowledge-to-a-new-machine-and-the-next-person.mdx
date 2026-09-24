@@ -1,0 +1,34 @@
+---
+title: "UC-6: Carry dependency knowledge forward"
+description: Attach team knowledge to dependency wrapper projects so it survives people and machines
+---
+
+**Source status:** draft · **Theme:** knowledge access
+
+## At a glance
+
+![A wrapper project holds upstream source and curated knowledge; the registry resolves it by name and searches its findings, while syncing the fleet index to a new machine remains undiscovered work.](/diagrams/use-cases/carry-dependency-knowledge-to-a-new-machine-and-the-next-person.svg)
+
+[Open the SVG at full size](/diagrams/use-cases/carry-dependency-knowledge-to-a-new-machine-and-the-next-person.svg)
+
+## The scenario
+
+An engineer learns something difficult about an upstream dependency. Months
+later, a teammate on another machine needs the same answer. Mori treats the
+dependency as a registered wrapper project: source code on disk, curated docs,
+typed findings, provenance, and a qualified name that consumers can declare.
+
+## How it works
+
+1. The wrapper keeps a local copy of upstream source and can declare the upstream it tracks as a typed reference.
+2. Consumers depend on the wrapper by name. The [local registry](/docs/concepts/local-registry) resolves its path for each machine, so durable documents do not encode checkout layouts.
+3. [`mori registry docs`](/docs/commands/registry) and catalog search find the team's guidance from any registered project. See the [corpus learning guide](/docs/guides/corpus-learning).
+
+The wrapper, named resolution, catalogs, and navigation are delivered. The
+**new-machine step is still discovered**: a fresh environment currently needs
+PostgreSQL, migrations, and registration of its checkouts before fleet-wide
+queries work. Registry sync between machines and a lower-friction read tier
+remain separate design gaps. [UC-5](/docs/use-cases/ground-a-coding-agent-in-declared-project-knowledge)
+shows how an agent uses knowledge after it is available locally.
+
+**Source concept:** `mori://shinzui/mori/okf/use-cases/concepts/UC-6`

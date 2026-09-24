@@ -1,0 +1,32 @@
+---
+title: "UC-7: Keep automation working through VCS change"
+description: Preserve normalized automation observations through Git rewrites and prepare for another VCS
+---
+
+**Source status:** draft · **Theme:** automation trust
+
+## At a glance
+
+![Mori records normalized Git observations, deduplicates by content, detects and recovers exact history replays; selecting a Jujutsu adapter and durable rewrite lineage remain discovered.](/diagrams/use-cases/keep-automation-working-when-the-vcs-changes.svg)
+
+[Open the SVG at full size](/diagrams/use-cases/keep-automation-working-when-the-vcs-changes.svg)
+
+## The scenario
+
+A repository rebases or rewrites Git history, or declares that it now uses
+Jujutsu. Automation should react to meaningful observations rather than to
+tool output or changed commit hashes. Mori has a normalized observation model,
+but its ingest path still selects Git extraction.
+
+## How it works
+
+1. A VCS adapter extracts changesets and refs; Mori records normalized observations for selectors and reactions.
+2. Content-hash deduplication recognizes work already observed under a different Git SHA, avoiding duplicate reactions after a replay.
+3. Ingest detects an orphaned cursor. An exact replay can resume from the merge base after checking the content index; ambiguous rewrites halt for review.
+
+These Git behaviors are delivered. Two **discovered** features remain: selecting
+an adapter from the declared VCS and implementing Jujutsu extraction, and
+retaining durable old-to-new rewrite lineage when content changes. Declaring
+`Jujutsu` in project metadata does not yet switch the observer.
+
+**Source concept:** `mori://shinzui/mori/okf/use-cases/concepts/UC-7`

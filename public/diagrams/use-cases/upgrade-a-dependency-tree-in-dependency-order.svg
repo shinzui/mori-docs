@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="875" viewBox="0 0 1040 875" role="img" aria-labelledby="title desc">
+<title id="title">UC-2: Upgrade a dependency tree in order</title><desc id="desc">UC-2: Project A records a major release; B depends on A, and C depends on both. Record a durable release fact and find its dependents. Preflight a bounded reverse graph in topological waves. Checkpoint the graph; advance a target after its upstream steps succeed. Show completed, blocked, and independent branches under one workflow. B upgrades before C, while failures block only their descendants. Constraint-aware release classification · planned; Agent-driven upgrade repair · planned</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#166534"/></marker></defs>
+<rect width="1040" height="875" rx="20" fill="#f4f8f5"/>
+<g font-family="Inter, system-ui, sans-serif"><text x="40" y="42" font-size="12" font-weight="700" fill="#166534" letter-spacing="2">UC-2 · AT A GLANCE</text>
+<text x="40" y="82" font-size="29" font-weight="700" fill="#18352a" >Upgrade a dependency tree in order</text>
+<text x="40" y="116" font-size="11" font-weight="700" fill="#526b5c" letter-spacing="1.5">FLEET MAINTENANCE</text>
+<text x="870" y="116" font-size="11" font-weight="700" fill="#566575" letter-spacing="1.5">DRAFT</text>
+<text x="40" y="157" font-size="11" font-weight="700" fill="#526b5c" letter-spacing="1.5">WHAT STARTS IT</text>
+<text x="304" y="157" font-size="11" font-weight="700" fill="#526b5c" letter-spacing="1.5">WHAT MORI DOES</text>
+<rect x="40" y="174" width="226" height="156" rx="13" fill="#e8f5ec" stroke="#166534"/>
+<text x="58" y="203" font-size="11" font-weight="700" fill="#166534" letter-spacing="1">TRIGGER</text>
+<text x="58" y="232" font-size="15" font-weight="500" fill="#18352a" >Project A records a major</text>
+<text x="58" y="254" font-size="15" font-weight="500" fill="#18352a" >release; B depends on A,</text>
+<text x="58" y="276" font-size="15" font-weight="500" fill="#18352a" >and C depends on both.</text>
+<path d="M266 250 H295" fill="none" stroke="#166534" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="304" y="174" width="448" height="108" rx="13" fill="#ffffff" stroke="#166534" stroke-width="1.5"/>
+<rect x="304" y="174" width="6" height="108" rx="3" fill="#166534"/>
+<text x="326" y="203" font-size="14" font-weight="700" fill="#18352a" >1. Registry release</text>
+<rect x="636" y="186" width="100" height="23" rx="11" fill="#e8f5ec"/>
+<text x="686" y="202" font-size="10.5" font-weight="700" fill="#166534" text-anchor="middle">exists today</text>
+<text x="326" y="231" font-size="14" font-weight="400" fill="#3f5b4b" >Record a durable release fact and find its</text>
+<text x="326" y="251" font-size="14" font-weight="400" fill="#3f5b4b" >dependents.</text>
+<path d="M528 284 V303" fill="none" stroke="#166534" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="304" y="306" width="448" height="108" rx="13" fill="#ffffff" stroke="#166534" stroke-width="1.5"/>
+<rect x="304" y="306" width="6" height="108" rx="3" fill="#166534"/>
+<text x="326" y="335" font-size="14" font-weight="700" fill="#18352a" >2. Dependency graph</text>
+<rect x="636" y="318" width="100" height="23" rx="11" fill="#e8f5ec"/>
+<text x="686" y="334" font-size="10.5" font-weight="700" fill="#166534" text-anchor="middle">exists today</text>
+<text x="326" y="363" font-size="14" font-weight="400" fill="#3f5b4b" >Preflight a bounded reverse graph in topological</text>
+<text x="326" y="383" font-size="14" font-weight="400" fill="#3f5b4b" >waves.</text>
+<path d="M528 416 V435" fill="none" stroke="#166534" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="304" y="438" width="448" height="108" rx="13" fill="#ffffff" stroke="#166534" stroke-width="1.5"/>
+<rect x="304" y="438" width="6" height="108" rx="3" fill="#166534"/>
+<text x="326" y="467" font-size="14" font-weight="700" fill="#18352a" >3. Signal cascade</text>
+<rect x="636" y="450" width="100" height="23" rx="11" fill="#e8f5ec"/>
+<text x="686" y="466" font-size="10.5" font-weight="700" fill="#166534" text-anchor="middle">exists today</text>
+<text x="326" y="495" font-size="14" font-weight="400" fill="#3f5b4b" >Checkpoint the graph; advance a target after its</text>
+<text x="326" y="515" font-size="14" font-weight="400" fill="#3f5b4b" >upstream steps succeed.</text>
+<path d="M528 548 V567" fill="none" stroke="#166534" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="304" y="570" width="448" height="108" rx="13" fill="#ffffff" stroke="#166534" stroke-width="1.5"/>
+<rect x="304" y="570" width="6" height="108" rx="3" fill="#166534"/>
+<text x="326" y="599" font-size="14" font-weight="700" fill="#18352a" >4. Workflow trace</text>
+<rect x="636" y="582" width="100" height="23" rx="11" fill="#e8f5ec"/>
+<text x="686" y="598" font-size="10.5" font-weight="700" fill="#166534" text-anchor="middle">exists today</text>
+<text x="326" y="627" font-size="14" font-weight="400" fill="#3f5b4b" >Show completed, blocked, and independent branches</text>
+<text x="326" y="647" font-size="14" font-weight="400" fill="#3f5b4b" >under one workflow.</text>
+<path d="M752 624 H782" fill="none" stroke="#166534" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="793" y="536" width="207" height="190" rx="13" fill="#e8f5ec" stroke="#166534"/>
+<text x="811" y="565" font-size="11" font-weight="700" fill="#166534" letter-spacing="1">OUTCOME</text>
+<text x="811" y="594" font-size="14" font-weight="500" fill="#18352a" >B upgrades before C,</text>
+<text x="811" y="614" font-size="14" font-weight="500" fill="#18352a" >while failures block</text>
+<text x="811" y="634" font-size="14" font-weight="500" fill="#18352a" >only their</text>
+<text x="811" y="654" font-size="14" font-weight="500" fill="#18352a" >descendants.</text>
+<text x="40" y="751" font-size="11" font-weight="700" fill="#526b5c" letter-spacing="1.5">STILL TO BUILD</text>
+<rect x="40" y="768" width="472" height="65" rx="11" fill="#ffffff" stroke="#9a5a07" stroke-dasharray="5 4"/>
+<text x="57" y="796" font-size="14" font-weight="600" fill="#18352a" >Constraint-aware release classification ·</text>
+<text x="57" y="816" font-size="14" font-weight="600" fill="#18352a" >planned</text>
+<rect x="528" y="768" width="472" height="65" rx="11" fill="#ffffff" stroke="#9a5a07" stroke-dasharray="5 4"/>
+<text x="545" y="796" font-size="14" font-weight="600" fill="#18352a" >Agent-driven upgrade repair · planned</text></g></svg>

@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="875" viewBox="0 0 1040 875" role="img" aria-labelledby="title desc">
+<title id="title">UC-6: Carry dependency knowledge forward</title><desc id="desc">UC-6: A teammate needs a hard-won dependency answer on a new machine. Keep upstream source and curated findings under one identity. Resolve the wrapper by name, independent of checkout layout. Search docs and typed findings across registered projects. Acquire a fleet index before visiting every checkout. Findings stay with the dependency; fresh-machine lookup awaits registry sync. Registry sync between machines · discovered; Low-friction read tier · discovered</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#166534"/></marker></defs>
+<rect width="1040" height="875" rx="20" fill="#f4f8f5"/>
+<g font-family="Inter, system-ui, sans-serif"><text x="40" y="42" font-size="12" font-weight="700" fill="#166534" letter-spacing="2">UC-6 · AT A GLANCE</text>
+<text x="40" y="82" font-size="29" font-weight="700" fill="#18352a" >Carry dependency knowledge forward</text>
+<text x="40" y="116" font-size="11" font-weight="700" fill="#526b5c" letter-spacing="1.5">KNOWLEDGE ACCESS</text>
+<text x="870" y="116" font-size="11" font-weight="700" fill="#566575" letter-spacing="1.5">DRAFT</text>
+<text x="40" y="157" font-size="11" font-weight="700" fill="#526b5c" letter-spacing="1.5">WHAT STARTS IT</text>
+<text x="304" y="157" font-size="11" font-weight="700" fill="#526b5c" letter-spacing="1.5">WHAT MORI DOES</text>
+<rect x="40" y="174" width="226" height="156" rx="13" fill="#e8f5ec" stroke="#166534"/>
+<text x="58" y="203" font-size="11" font-weight="700" fill="#166534" letter-spacing="1">TRIGGER</text>
+<text x="58" y="232" font-size="15" font-weight="500" fill="#18352a" >A teammate needs a</text>
+<text x="58" y="254" font-size="15" font-weight="500" fill="#18352a" >hard-won dependency</text>
+<text x="58" y="276" font-size="15" font-weight="500" fill="#18352a" >answer on a new machine.</text>
+<path d="M266 250 H295" fill="none" stroke="#166534" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="304" y="174" width="448" height="108" rx="13" fill="#ffffff" stroke="#166534" stroke-width="1.5"/>
+<rect x="304" y="174" width="6" height="108" rx="3" fill="#166534"/>
+<text x="326" y="203" font-size="14" font-weight="700" fill="#18352a" >1. Wrapper project</text>
+<rect x="636" y="186" width="100" height="23" rx="11" fill="#e8f5ec"/>
+<text x="686" y="202" font-size="10.5" font-weight="700" fill="#166534" text-anchor="middle">exists today</text>
+<text x="326" y="231" font-size="14" font-weight="400" fill="#3f5b4b" >Keep upstream source and curated findings under one</text>
+<text x="326" y="251" font-size="14" font-weight="400" fill="#3f5b4b" >identity.</text>
+<path d="M528 284 V303" fill="none" stroke="#166534" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="304" y="306" width="448" height="108" rx="13" fill="#ffffff" stroke="#166534" stroke-width="1.5"/>
+<rect x="304" y="306" width="6" height="108" rx="3" fill="#166534"/>
+<text x="326" y="335" font-size="14" font-weight="700" fill="#18352a" >2. Mori registry</text>
+<rect x="636" y="318" width="100" height="23" rx="11" fill="#e8f5ec"/>
+<text x="686" y="334" font-size="10.5" font-weight="700" fill="#166534" text-anchor="middle">exists today</text>
+<text x="326" y="363" font-size="14" font-weight="400" fill="#3f5b4b" >Resolve the wrapper by name, independent of checkout</text>
+<text x="326" y="383" font-size="14" font-weight="400" fill="#3f5b4b" >layout.</text>
+<path d="M528 416 V435" fill="none" stroke="#166534" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="304" y="438" width="448" height="108" rx="13" fill="#ffffff" stroke="#166534" stroke-width="1.5"/>
+<rect x="304" y="438" width="6" height="108" rx="3" fill="#166534"/>
+<text x="326" y="467" font-size="14" font-weight="700" fill="#18352a" >3. Knowledge catalogs</text>
+<rect x="636" y="450" width="100" height="23" rx="11" fill="#e8f5ec"/>
+<text x="686" y="466" font-size="10.5" font-weight="700" fill="#166534" text-anchor="middle">exists today</text>
+<text x="326" y="495" font-size="14" font-weight="400" fill="#3f5b4b" >Search docs and typed findings across registered</text>
+<text x="326" y="515" font-size="14" font-weight="400" fill="#3f5b4b" >projects.</text>
+<path d="M528 548 V567" fill="none" stroke="#166534" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="304" y="570" width="448" height="108" rx="13" fill="#ffffff" stroke="#566575" stroke-width="1.5" stroke-dasharray="6 4"/>
+<rect x="304" y="570" width="6" height="108" rx="3" fill="#566575"/>
+<text x="326" y="599" font-size="14" font-weight="700" fill="#18352a" >4. New machine</text>
+<rect x="636" y="582" width="100" height="23" rx="11" fill="#eef2f5"/>
+<text x="686" y="598" font-size="10.5" font-weight="700" fill="#566575" text-anchor="middle">discovered</text>
+<text x="326" y="627" font-size="14" font-weight="400" fill="#3f5b4b" >Acquire a fleet index before visiting every checkout.</text>
+<path d="M752 624 H782" fill="none" stroke="#166534" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="793" y="536" width="207" height="190" rx="13" fill="#e8f5ec" stroke="#166534"/>
+<text x="811" y="565" font-size="11" font-weight="700" fill="#166534" letter-spacing="1">OUTCOME</text>
+<text x="811" y="594" font-size="14" font-weight="500" fill="#18352a" >Findings stay with the</text>
+<text x="811" y="614" font-size="14" font-weight="500" fill="#18352a" >dependency;</text>
+<text x="811" y="634" font-size="14" font-weight="500" fill="#18352a" >fresh-machine lookup</text>
+<text x="811" y="654" font-size="14" font-weight="500" fill="#18352a" >awaits registry sync.</text>
+<text x="40" y="751" font-size="11" font-weight="700" fill="#526b5c" letter-spacing="1.5">STILL TO BUILD</text>
+<rect x="40" y="768" width="472" height="65" rx="11" fill="#ffffff" stroke="#566575" stroke-dasharray="5 4"/>
+<text x="57" y="796" font-size="14" font-weight="600" fill="#18352a" >Registry sync between machines · discovered</text>
+<rect x="528" y="768" width="472" height="65" rx="11" fill="#ffffff" stroke="#566575" stroke-dasharray="5 4"/>
+<text x="545" y="796" font-size="14" font-weight="600" fill="#18352a" >Low-friction read tier · discovered</text></g></svg>

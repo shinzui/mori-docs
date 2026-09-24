@@ -1,0 +1,34 @@
+---
+title: "UC-5: Ground a coding agent"
+description: Assemble project purpose, dependency source, documentation, and standards from declared metadata
+---
+
+**Source status:** draft · **Theme:** knowledge access
+
+## At a glance
+
+![An agent reads a declared project manifest, resolves dependency source and docs through the local registry, searches curated knowledge, and receives role context with canonical references.](/diagrams/use-cases/ground-a-coding-agent-in-declared-project-knowledge.svg)
+
+[Open the SVG at full size](/diagrams/use-cases/ground-a-coding-agent-in-declared-project-knowledge.svg)
+
+## The scenario
+
+An agent or engineer opening an unfamiliar repository needs to learn its
+purpose, dependencies, dependency source and docs, and local conventions.
+Mori makes those answers queries over declared project knowledge rather than
+facts assembled for a one-off prompt.
+
+## How it works
+
+1. [`mori show`](/docs/commands/show) and [`mori status`](/docs/commands/status) read the project manifest.
+2. [`mori deps locate`](/docs/commands/deps) and [`mori registry docs`](/docs/commands/registry) resolve dependency source and curated docs by qualified project name.
+3. Registry concept search and typed catalogs find examples and knowledge with producer and trust provenance.
+4. [`mori agent context <role>`](/docs/commands/agent#mori-agent-context) assembles JSON for a role; `mori://` references can be resolved with [`mori path`](/docs/commands/path).
+
+The manifest, registry, catalogs, and role context are delivered. Two
+**discovered** gaps remain: a protocol-neutral agent interface beyond the
+current agent-specific integration, and a way to check whether curated
+references still point to current material. [UC-6](/docs/use-cases/carry-dependency-knowledge-to-a-new-machine-and-the-next-person)
+covers how this knowledge is stored and carried forward.
+
+**Source concept:** `mori://shinzui/mori/okf/use-cases/concepts/UC-5`

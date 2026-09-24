@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="755" viewBox="0 0 1040 755" role="img" aria-labelledby="title desc">
+<title id="title">Mori use-case catalog</title><desc id="desc">Seven Mori use cases with source status and remaining gaps. Each row links to its page.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#166534"/></marker></defs>
+<rect width="1040" height="755" rx="20" fill="#f4f8f5"/>
+<g font-family="Inter, system-ui, sans-serif"><text x="40" y="42" font-size="12" font-weight="700" fill="#166534" letter-spacing="2">MORI · USE CASES</text>
+<text x="40" y="82" font-size="28" font-weight="700" fill="#18352a" >Seven outcomes, one connected system</text>
+<text x="40" y="113" font-size="15" font-weight="400" fill="#3f5b4b" >Open a case to see its trigger, flow, outcome, and remaining work.</text>
+<a href="/docs/use-cases/architect-a-multi-service-system-from-a-meta-repo">
+<rect x="40" y="143" width="960" height="68" rx="11" fill="#ffffff" stroke="#cbded0"/>
+<rect x="40" y="143" width="6" height="68" rx="3" fill="#166534"/>
+<text x="60" y="169" font-size="12" font-weight="700" fill="#166534" >UC-1</text>
+<text x="119" y="169" font-size="17" font-weight="700" fill="#18352a" >Architect a 30-service system</text>
+<text x="119" y="192" font-size="12" font-weight="400" fill="#526b5c" >Architecture governance · all recorded features delivered</text>
+<rect x="878" y="163" width="100" height="26" rx="13" fill="#e8f5ec"/>
+<text x="928" y="181" font-size="11" font-weight="700" fill="#166534" text-anchor="middle">delivered</text>
+</a>
+<a href="/docs/use-cases/upgrade-a-dependency-tree-in-dependency-order">
+<rect x="40" y="225" width="960" height="68" rx="11" fill="#ffffff" stroke="#cbded0"/>
+<rect x="40" y="225" width="6" height="68" rx="3" fill="#566575"/>
+<text x="60" y="251" font-size="12" font-weight="700" fill="#166534" >UC-2</text>
+<text x="119" y="251" font-size="17" font-weight="700" fill="#18352a" >Upgrade a dependency tree in order</text>
+<text x="119" y="274" font-size="12" font-weight="400" fill="#526b5c" >Fleet maintenance · 2 remaining gaps</text>
+<rect x="878" y="245" width="100" height="26" rx="13" fill="#eef2f5"/>
+<text x="928" y="263" font-size="11" font-weight="700" fill="#566575" text-anchor="middle">draft</text>
+</a>
+<a href="/docs/use-cases/regenerate-a-downstream-artifact-when-its-contract-changes">
+<rect x="40" y="307" width="960" height="68" rx="11" fill="#ffffff" stroke="#cbded0"/>
+<rect x="40" y="307" width="6" height="68" rx="3" fill="#566575"/>
+<text x="60" y="333" font-size="12" font-weight="700" fill="#166534" >UC-3</text>
+<text x="119" y="333" font-size="17" font-weight="700" fill="#18352a" >Regenerate after a contract change</text>
+<text x="119" y="356" font-size="12" font-weight="400" fill="#526b5c" >Fleet maintenance · 1 remaining gap</text>
+<rect x="878" y="327" width="100" height="26" rx="13" fill="#eef2f5"/>
+<text x="928" y="345" font-size="11" font-weight="700" fill="#566575" text-anchor="middle">draft</text>
+</a>
+<a href="/docs/use-cases/trust-automation-running-on-your-repositories">
+<rect x="40" y="389" width="960" height="68" rx="11" fill="#ffffff" stroke="#cbded0"/>
+<rect x="40" y="389" width="6" height="68" rx="3" fill="#566575"/>
+<text x="60" y="415" font-size="12" font-weight="700" fill="#166534" >UC-4</text>
+<text x="119" y="415" font-size="17" font-weight="700" fill="#18352a" >Trust repository automation</text>
+<text x="119" y="438" font-size="12" font-weight="400" fill="#526b5c" >Automation trust · 2 remaining gaps</text>
+<rect x="878" y="409" width="100" height="26" rx="13" fill="#eef2f5"/>
+<text x="928" y="427" font-size="11" font-weight="700" fill="#566575" text-anchor="middle">draft</text>
+</a>
+<a href="/docs/use-cases/ground-a-coding-agent-in-declared-project-knowledge">
+<rect x="40" y="471" width="960" height="68" rx="11" fill="#ffffff" stroke="#cbded0"/>
+<rect x="40" y="471" width="6" height="68" rx="3" fill="#566575"/>
+<text x="60" y="497" font-size="12" font-weight="700" fill="#166534" >UC-5</text>
+<text x="119" y="497" font-size="17" font-weight="700" fill="#18352a" >Ground a coding agent</text>
+<text x="119" y="520" font-size="12" font-weight="400" fill="#526b5c" >Knowledge access · 2 remaining gaps</text>
+<rect x="878" y="491" width="100" height="26" rx="13" fill="#eef2f5"/>
+<text x="928" y="509" font-size="11" font-weight="700" fill="#566575" text-anchor="middle">draft</text>
+</a>
+<a href="/docs/use-cases/carry-dependency-knowledge-to-a-new-machine-and-the-next-person">
+<rect x="40" y="553" width="960" height="68" rx="11" fill="#ffffff" stroke="#cbded0"/>
+<rect x="40" y="553" width="6" height="68" rx="3" fill="#566575"/>
+<text x="60" y="579" font-size="12" font-weight="700" fill="#166534" >UC-6</text>
+<text x="119" y="579" font-size="17" font-weight="700" fill="#18352a" >Carry dependency knowledge forward</text>
+<text x="119" y="602" font-size="12" font-weight="400" fill="#526b5c" >Knowledge access · 2 remaining gaps</text>
+<rect x="878" y="573" width="100" height="26" rx="13" fill="#eef2f5"/>
+<text x="928" y="591" font-size="11" font-weight="700" fill="#566575" text-anchor="middle">draft</text>
+</a>
+<a href="/docs/use-cases/keep-automation-working-when-the-vcs-changes">
+<rect x="40" y="635" width="960" height="68" rx="11" fill="#ffffff" stroke="#cbded0"/>
+<rect x="40" y="635" width="6" height="68" rx="3" fill="#566575"/>
+<text x="60" y="661" font-size="12" font-weight="700" fill="#166534" >UC-7</text>
+<text x="119" y="661" font-size="17" font-weight="700" fill="#18352a" >Keep automation working through VCS change</text>
+<text x="119" y="684" font-size="12" font-weight="400" fill="#526b5c" >Automation trust · 2 remaining gaps</text>
+<rect x="878" y="655" width="100" height="26" rx="13" fill="#eef2f5"/>
+<text x="928" y="673" font-size="11" font-weight="700" fill="#566575" text-anchor="middle">draft</text>
+</a></g></svg>

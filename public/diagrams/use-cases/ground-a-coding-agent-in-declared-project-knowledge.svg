@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="875" viewBox="0 0 1040 875" role="img" aria-labelledby="title desc">
+<title id="title">UC-5: Ground a coding agent</title><desc id="desc">UC-5: An agent or engineer opens an unfamiliar repository. Read project identity, dependencies, standards, and agent hints. Resolve dependency source and curated docs by project name. Search concepts and worked examples with provenance. Assemble role context and cite facts with resolvable mori:// URIs. The task starts from declared, inspectable project knowledge. Protocol-neutral agent access · discovered; Curated reference freshness · discovered</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#166534"/></marker></defs>
+<rect width="1040" height="875" rx="20" fill="#f4f8f5"/>
+<g font-family="Inter, system-ui, sans-serif"><text x="40" y="42" font-size="12" font-weight="700" fill="#166534" letter-spacing="2">UC-5 · AT A GLANCE</text>
+<text x="40" y="82" font-size="29" font-weight="700" fill="#18352a" >Ground a coding agent</text>
+<text x="40" y="116" font-size="11" font-weight="700" fill="#526b5c" letter-spacing="1.5">KNOWLEDGE ACCESS</text>
+<text x="870" y="116" font-size="11" font-weight="700" fill="#566575" letter-spacing="1.5">DRAFT</text>
+<text x="40" y="157" font-size="11" font-weight="700" fill="#526b5c" letter-spacing="1.5">WHAT STARTS IT</text>
+<text x="304" y="157" font-size="11" font-weight="700" fill="#526b5c" letter-spacing="1.5">WHAT MORI DOES</text>
+<rect x="40" y="174" width="226" height="156" rx="13" fill="#e8f5ec" stroke="#166534"/>
+<text x="58" y="203" font-size="11" font-weight="700" fill="#166534" letter-spacing="1">TRIGGER</text>
+<text x="58" y="232" font-size="15" font-weight="500" fill="#18352a" >An agent or engineer</text>
+<text x="58" y="254" font-size="15" font-weight="500" fill="#18352a" >opens an unfamiliar</text>
+<text x="58" y="276" font-size="15" font-weight="500" fill="#18352a" >repository.</text>
+<path d="M266 250 H295" fill="none" stroke="#166534" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="304" y="174" width="448" height="108" rx="13" fill="#ffffff" stroke="#166534" stroke-width="1.5"/>
+<rect x="304" y="174" width="6" height="108" rx="3" fill="#166534"/>
+<text x="326" y="203" font-size="14" font-weight="700" fill="#18352a" >1. Project manifest</text>
+<rect x="636" y="186" width="100" height="23" rx="11" fill="#e8f5ec"/>
+<text x="686" y="202" font-size="10.5" font-weight="700" fill="#166534" text-anchor="middle">exists today</text>
+<text x="326" y="231" font-size="14" font-weight="400" fill="#3f5b4b" >Read project identity, dependencies, standards, and</text>
+<text x="326" y="251" font-size="14" font-weight="400" fill="#3f5b4b" >agent hints.</text>
+<path d="M528 284 V303" fill="none" stroke="#166534" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="304" y="306" width="448" height="108" rx="13" fill="#ffffff" stroke="#166534" stroke-width="1.5"/>
+<rect x="304" y="306" width="6" height="108" rx="3" fill="#166534"/>
+<text x="326" y="335" font-size="14" font-weight="700" fill="#18352a" >2. Local registry</text>
+<rect x="636" y="318" width="100" height="23" rx="11" fill="#e8f5ec"/>
+<text x="686" y="334" font-size="10.5" font-weight="700" fill="#166534" text-anchor="middle">exists today</text>
+<text x="326" y="363" font-size="14" font-weight="400" fill="#3f5b4b" >Resolve dependency source and curated docs by project</text>
+<text x="326" y="383" font-size="14" font-weight="400" fill="#3f5b4b" >name.</text>
+<path d="M528 416 V435" fill="none" stroke="#166534" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="304" y="438" width="448" height="108" rx="13" fill="#ffffff" stroke="#166534" stroke-width="1.5"/>
+<rect x="304" y="438" width="6" height="108" rx="3" fill="#166534"/>
+<text x="326" y="467" font-size="14" font-weight="700" fill="#18352a" >3. Knowledge catalogs</text>
+<rect x="636" y="450" width="100" height="23" rx="11" fill="#e8f5ec"/>
+<text x="686" y="466" font-size="10.5" font-weight="700" fill="#166534" text-anchor="middle">exists today</text>
+<text x="326" y="495" font-size="14" font-weight="400" fill="#3f5b4b" >Search concepts and worked examples with provenance.</text>
+<path d="M528 548 V567" fill="none" stroke="#166534" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="304" y="570" width="448" height="108" rx="13" fill="#ffffff" stroke="#166534" stroke-width="1.5"/>
+<rect x="304" y="570" width="6" height="108" rx="3" fill="#166534"/>
+<text x="326" y="599" font-size="14" font-weight="700" fill="#18352a" >4. Agent context</text>
+<rect x="636" y="582" width="100" height="23" rx="11" fill="#e8f5ec"/>
+<text x="686" y="598" font-size="10.5" font-weight="700" fill="#166534" text-anchor="middle">exists today</text>
+<text x="326" y="627" font-size="14" font-weight="400" fill="#3f5b4b" >Assemble role context and cite facts with resolvable</text>
+<text x="326" y="647" font-size="14" font-weight="400" fill="#3f5b4b" >mori:// URIs.</text>
+<path d="M752 624 H782" fill="none" stroke="#166534" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="793" y="536" width="207" height="190" rx="13" fill="#e8f5ec" stroke="#166534"/>
+<text x="811" y="565" font-size="11" font-weight="700" fill="#166534" letter-spacing="1">OUTCOME</text>
+<text x="811" y="594" font-size="14" font-weight="500" fill="#18352a" >The task starts from</text>
+<text x="811" y="614" font-size="14" font-weight="500" fill="#18352a" >declared, inspectable</text>
+<text x="811" y="634" font-size="14" font-weight="500" fill="#18352a" >project knowledge.</text>
+<text x="40" y="751" font-size="11" font-weight="700" fill="#526b5c" letter-spacing="1.5">STILL TO BUILD</text>
+<rect x="40" y="768" width="472" height="65" rx="11" fill="#ffffff" stroke="#566575" stroke-dasharray="5 4"/>
+<text x="57" y="796" font-size="14" font-weight="600" fill="#18352a" >Protocol-neutral agent access · discovered</text>
+<rect x="528" y="768" width="472" height="65" rx="11" fill="#ffffff" stroke="#566575" stroke-dasharray="5 4"/>
+<text x="545" y="796" font-size="14" font-weight="600" fill="#18352a" >Curated reference freshness · discovered</text></g></svg>

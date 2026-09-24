@@ -1,0 +1,33 @@
+---
+title: Use Cases
+description: Seven source-backed scenarios showing how Mori's registry, knowledge, and automation work together
+icon: Route
+---
+
+These scenarios start with a person's goal and follow the path through Mori's
+declared project data, registry, and automation. Each page opens with an SVG
+showing the trigger, the main steps, the outcome, and what remains to be built.
+The steps distinguish capabilities that exist today from planned or discovered
+work. A use case marked **draft** can still contain delivered features.
+
+The source bundle is `mori://shinzui/mori/okf/use-cases`. Its seven concepts
+are `UC-1` through `UC-7`; these pages summarize the source and link to the
+relevant public guides.
+
+![Seven Mori use cases, with their status and number of remaining gaps. Each row links to its page.](/diagrams/use-cases/catalog.svg)
+
+[Open the SVG at full size](/diagrams/use-cases/catalog.svg)
+
+| Use case | Goal | Source status |
+|---|---|---|
+| [UC-1: Architect a 30-service system](/docs/use-cases/architect-a-multi-service-system-from-a-meta-repo) | Query a fleet's current and target domain models to steer architecture. | Delivered |
+| [UC-2: Upgrade a dependency tree](/docs/use-cases/upgrade-a-dependency-tree-in-dependency-order) | Sequence a release across dependents in topological waves. | Draft |
+| [UC-3: Regenerate after a contract change](/docs/use-cases/regenerate-a-downstream-artifact-when-its-contract-changes) | Let each consuming repository regenerate its own derived artifacts. | Draft |
+| [UC-4: Trust repository automation](/docs/use-cases/trust-automation-running-on-your-repositories) | Explain and audit what unattended reactions can reach and do. | Draft |
+| [UC-5: Ground a coding agent](/docs/use-cases/ground-a-coding-agent-in-declared-project-knowledge) | Supply declared project context and dependency knowledge. | Draft |
+| [UC-6: Carry dependency knowledge forward](/docs/use-cases/carry-dependency-knowledge-to-a-new-machine-and-the-next-person) | Preserve findings with the dependency for the next person and machine. | Draft |
+| [UC-7: Keep automation working through VCS change](/docs/use-cases/keep-automation-working-when-the-vcs-changes) | Survive Git rewrites and eventually support another VCS adapter. | Draft |
+
+The source status describes the use case concept. The delivery notes on each
+page describe its individual features, including gaps that remain even when
+the main flow works.

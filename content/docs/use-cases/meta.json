@@ -1,0 +1,13 @@
+{
+	"title": "Use Cases",
+	"pages": [
+		"index",
+		"architect-a-multi-service-system-from-a-meta-repo",
+		"upgrade-a-dependency-tree-in-dependency-order",
+		"regenerate-a-downstream-artifact-when-its-contract-changes",
+		"trust-automation-running-on-your-repositories",
+		"ground-a-coding-agent-in-declared-project-knowledge",
+		"carry-dependency-knowledge-to-a-new-machine-and-the-next-person",
+		"keep-automation-working-when-the-vcs-changes"
+	]
+}

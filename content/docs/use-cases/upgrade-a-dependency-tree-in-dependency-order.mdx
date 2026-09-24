@@ -1,0 +1,33 @@
+---
+title: "UC-2: Upgrade a dependency tree in order"
+description: Move a major release through dependent repositories in topological waves
+---
+
+**Source status:** draft · **Theme:** fleet maintenance
+
+## At a glance
+
+![A major release becomes a registry fact; Mori derives dependency waves, checkpoints a cascade, advances each dependent after its upstreams, and traces the result.](/diagrams/use-cases/upgrade-a-dependency-tree-in-dependency-order.svg)
+
+[Open the SVG at full size](/diagrams/use-cases/upgrade-a-dependency-tree-in-dependency-order.svg)
+
+## The scenario
+
+Project A releases a major version. B depends on A; C depends on both A and B.
+Running C's upgrade before B's would combine incompatible versions. Mori uses
+the [registered dependency graph](/docs/commands/deps) to order the work,
+while each dependent owns its own upgrade reaction.
+
+## How it works
+
+1. [`mori registry release record`](/docs/commands/registry) stores an immutable release fact. Recording it alone does not launch a cascade.
+2. [`mori registry dependents A --transitive --waves`](/docs/commands/registry) preflights the bounded reverse graph.
+3. An explicitly configured signal cascade freezes that graph and starts dependent reactions in topological waves. C waits until B succeeds; an unrelated branch can continue after B fails.
+4. [`mori workflow trace`](/docs/commands/workflow) shows waves, deliveries, blockers, and the final outcome under one workflow.
+
+The ordered cascade and durable release facts are delivered. Two features
+remain **planned**: comparing a dependent's declared version constraint with
+the selected release, and letting an agent repair a version bump and build.
+The constraint is currently stored and displayed as opaque text.
+
+**Source concept:** `mori://shinzui/mori/okf/use-cases/concepts/UC-2`

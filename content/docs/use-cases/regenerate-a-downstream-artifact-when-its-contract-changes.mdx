@@ -1,0 +1,32 @@
+---
+title: "UC-3: Regenerate after a contract change"
+description: Dispatch a producer's contract change to its registered consumers for owned regeneration
+---
+
+**Source status:** draft · **Theme:** fleet maintenance
+
+## At a glance
+
+![A producer changes a contract; Mori resolves direct dependents, checks target consent, runs consumer-owned regeneration, and traces every delivery.](/diagrams/use-cases/regenerate-a-downstream-artifact-when-its-contract-changes.svg)
+
+[Open the SVG at full size](/diagrams/use-cases/regenerate-a-downstream-artifact-when-its-contract-changes.svg)
+
+## The scenario
+
+One repository changes an OpenAPI document, protobuf package, Dhall schema, or
+database DDL. Other repositories own clients, stubs, fixtures, or checks derived
+from it. The producer signals the change; each consumer decides whether and
+how to regenerate its own artifacts.
+
+## How it works
+
+1. A path-scoped [`ChangesetSelector`](/docs/guides/automation) observes the contract change and emits a structured signal.
+2. Mori resolves the producer's direct dependents from the registry at dispatch time. The producer does not maintain a consumer list.
+3. Each target checks `consent.allowSignalsFrom`, then its reaction runs a bounded `RunCommand`. Coalescing and an idempotency check avoid duplicate work during churn.
+4. A shared [`WorkflowId` trace](/docs/commands/workflow) distinguishes consumers that ran, refused, failed, or were not reached.
+
+The single-hop path is delivered. A **planned** agent action would also repair
+call sites when regeneration breaks consuming code. Wider transitive reach uses
+the explicit cascade in [UC-2](/docs/use-cases/upgrade-a-dependency-tree-in-dependency-order).
+
+**Source concept:** `mori://shinzui/mori/okf/use-cases/concepts/UC-3`

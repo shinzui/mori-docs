@@ -8,6 +8,7 @@
 	"description": "Documentation site for mori",
 	"scripts": {
 		"dev": "vite dev",
+		"diagrams:use-cases": "node scripts/generate-use-case-diagrams.mjs",
 		"build": "vite build",
 		"start": "serve dist/client",
 		"types:check": "fumadocs-mdx && tsc --noEmit",
