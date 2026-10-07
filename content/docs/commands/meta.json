@@ -37,6 +37,7 @@
 		"patterns",
 		"terms",
 		"capabilities",
+		"transitions",
 		"serve",
 		"alias",
 		"completions",

@@ -23,6 +23,7 @@ export default defineConfig({
 				"fish",
 				"haskell",
 				"json",
+				"yaml",
 				"nix",
 				"sql",
 				"zsh",

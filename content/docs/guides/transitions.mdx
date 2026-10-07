@@ -1,0 +1,206 @@
+---
+title: Platform Transitions
+description: Track independent predecessor duties, evidence and retirement reviews
+icon: GitFork
+---
+
+
+Use transitions when responsibilities move between services but each predecessor has its own
+remaining callers, data, events and operational duties. Mori records declared intent and
+immutable evidence, then explains retirement readiness per predecessor and environment.
+`mori help transitions` and `mori transitions <subcommand> --help` give exact flag lists.
+
+## Three separate layers
+
+| Layer | What it records | How it changes |
+|---|---|---|
+| Declaration | Participants, moved or discontinued responsibilities, accountable parties, requirements and transition phase | Edit the coordinator's OKF bundle and run `mori observe --path PROJECT` |
+| Observation | An attributed immutable fact, basis, input revisions, measurement window and acceptance keys | Import a new envelope; equivalent retries append nothing |
+| Verdict | Current requirement state, freshness, reasons and named next actions | Query again or compare captures |
+
+Project lifecycle, DDD target architecture and capability provision claims remain their own
+records. A transition marked complete does not prove that its predecessor can retire. The
+verdict `ready-for-owner-acceptance` is advice for the owner and authorizes nothing.
+
+## Author a coordinator bundle
+
+The profile publisher is `mori://shinzui/okf-profiles`; its v0.20.0 catalog exports
+`coordination.transitions` and the `adopt-transitions` blueprint. Pin the released descriptor
+and semantic hash. The blueprint supplies metadata conventions and preserves existing handles.
+Declare a normal `Schema.OkfBundle::{ name = "transitions", path = "docs/transitions",
+profile = Some "mori/transitions-profile.dhall", okfVersion = "0.2" }` in `okfBundles`.
+
+One Markdown concept describes one effort. This abbreviated fictional declaration shows the
+relationship fields; also supply the profile's generated provenance and timestamp metadata:
+
+```yaml
+type: Transition
+transitionId: TR-1
+title: Replace member registration
+description: Move registration while accounting for predecessor duties.
+coordinator: mori://example/platform
+kind: replacement
+phase: in-progress
+environments: [staging, production]
+accountable: [{role: coordinator, party: unassigned}]
+predecessors: [{project: mori://example/registration, disposition: retire}]
+successors: [{key: registration-v2, project: mori://example/registration-v2}]
+responsibilities:
+  - key: registration
+    title: Register a member
+    from: mori://example/registration
+    disposition: move
+    to: registration-v2
+requirements:
+  - key: duties
+    predecessor: mori://example/registration
+    kind: responsibility-transfer
+    statement: Account for every moved and discontinued predecessor duty.
+    owner: {role: service-owner, party: unassigned}
+    minimumBasis: runtime-observed
+    itemized: true
+    requiresAcceptance: true
+```
+
+Known participants use canonical project-root URIs. A successor whose identity is unsettled
+uses `pendingIdentity` instead of `project`. That gap prevents readiness for any duty moved to
+it. Every moved duty names a successor key; discontinued and retained duties do not.
+Requirements declare an owner, environment scope, minimum basis and optional `maxAge`, such as
+`P30D`. Use `unassigned` explicitly for an owner gap; required acceptance stays pending.
+
+```bash
+okf validate --profile mori/transitions-profile.dhall --strict docs/transitions
+mori transitions validate --path . --bundle transitions --json
+mori observe --path .
+mori transitions list --project example/registration --json
+mori transitions show --project example/platform --id TR-1 --json
+```
+
+Strict OKF validation checks the published profile. Mori separately checks semantic constraints,
+participants and capability/context/flow/use-case references. Registration indexes declarations;
+queries see that snapshot until the next refresh.
+
+## Import evidence without upgrading its basis
+
+An envelope uses the camelCase `TransitionObservationV1` wire format. The importer computes
+`observationKey` when absent. Here is an explicit fictional production gap:
+
+```json
+{
+  "schemaVersion": 1,
+  "transition": "mori://example/platform/okf/transitions/concepts/TR-1",
+  "requirement": "cutover",
+  "environment": "production",
+  "aspect": "requirement",
+  "item": null,
+  "inventoryItems": null,
+  "finding": "unknown",
+  "basis": "declared",
+  "accepts": [],
+  "observer": {"role": "review-curator", "party": "example-reviewer"},
+  "observedAt": "2026-10-07T00:00:00Z",
+  "window": null,
+  "inputs": [],
+  "evidence": [],
+  "validUntil": null,
+  "note": "Fictional example: production routing has not been established."
+}
+```
+
+Create a separate envelope for each kind of evidence. These example field sets extend the
+same structure; replace example references, times and digests with inspected facts:
+
+| Basis | Example fields | What it establishes |
+|---|---|---|
+| `declared` | `finding: unknown`, `note: "Cutover not established"` | An attributed gap, never runtime success |
+| `source-observed` | `finding: unmet`, `inputs: [{project: "mori://example/gateway", path: "src/routes.ts", revision: "<full Git SHA>", digest: "sha256:<raw blob SHA256>"}]` | The inspected gateway source still names the predecessor |
+| `runtime-observed` | `finding: met`, `window: {from: "2026-10-06T22:00:00Z", to: "2026-10-06T23:00:00Z"}`, an evidence artifact and digest | A measured condition within the stated real runtime window |
+| `owner-accepted` | `finding: met`, `observer` equal to the requirement owner, `accepts: ["sha256:<exact observation key>"]` | The declared owner accepted those exact facts |
+
+Do not copy a source observation and relabel it runtime-observed. Every basis needs its own
+attribution and evidence. Acceptance is a separate fact; it cannot replace missing, stale or
+weak evidence. A content correction changes the inputs/window identity or records a newer
+measurement. Different content under an existing key is a conflict and preserves the first fact.
+
+```bash
+mori transitions import-observation observation.json --json
+mori transitions observations \
+  --transition mori://example/platform/okf/transitions/concepts/TR-1 \
+  --requirement cutover --environment production --json
+```
+
+History remains readable after expiry and even before the declaration is registered. Observations
+without a matching transition, requirement and environment are reported as orphaned.
+
+## Account for duties and callers
+
+Itemized requirements need a fresh, adequate complete inventory and an observation per item.
+An empty dependency query supplies neither. Incomplete discovery belongs in an `unknown`
+inventory with explicit named gaps.
+
+A `responsibility-transfer` inventory lists duty keys, or `<transition URI>#<duty key>` for duties
+in another transition. Mori reconciles it with every moved or discontinued duty of that
+predecessor. An undeclared inventory duty, an omitted declared duty or a missing transfer
+requirement prevents readiness. Consumer inventories preserve caller identity separately from
+the duty inventory; optional item `consumer` fields identify the canonical caller project.
+
+Capability links only supply consistency cautions. A moved duty whose successor claim is not
+shipped, whose predecessor still claims it as shipped, whose provider cannot be resolved, or
+whose `replacedBy` disagrees gets a named provider action. Such records never satisfy a migration,
+cutover, data or drain requirement.
+
+## Read verdicts and freshness
+
+```bash
+mori transitions retirement --project example/registration --environment production
+mori transitions retirement --use-case mori://example/platform/okf/business-use-cases/concepts/UC-1 --json
+```
+
+Selectors identify predecessors; Mori considers all transitions for each selected predecessor.
+A use-case filter cannot hide another open duty. Retained predecessors appear under `not_retiring`.
+
+For each requirement the first applicable rule wins: current unmet facts; incomplete adequate
+inventory; missing items; conflict or unsupported findings; insufficient basis; stale evidence;
+absent evidence; required owner acceptance pending; otherwise met. Stale unmet evidence still
+blocks, and a blocked verdict retains its unknown reasons too.
+
+| Verdict | Meaning |
+|---|---|
+| `blocked` | A known unmet condition or pending required owner acceptance |
+| `unknown` | Missing or inadequate facts, inventories, freshness or catalog consistency |
+| `ready-for-owner-acceptance` | Every declared scoped condition met with adequate fresh evidence and required acceptance |
+
+Reason codes include `unmet`, `inventory-incomplete`, `item-unobserved`, `conflict`,
+`unsupported`, `unknown-finding`, `insufficient-basis`, `stale-evidence`, `no-evidence`,
+`acceptance-pending`, `owner-unassigned`, `responsibility-inventory-incomplete`,
+`no-requirements-declared`, `responsibility-transfer-undeclared`, `undeclared-responsibility`,
+`responsibility-missing-from-inventory`, `successor-unidentified`, and `capability-inconsistent`.
+Each next action names a role and party, including an explicit unassigned owner gap.
+
+Freshness reads raw Git blob bytes at the input project's current *observed* revision.
+`input-changed`, `input-removed` and `input-unavailable` are distinct reasons, alongside
+`expired` and `max-age-exceeded`. An unrelated commit with identical input bytes stays fresh;
+uncommitted working-tree edits are ignored. Unbounded facts are labeled `unbounded`.
+
+## Save and compare reviews
+
+```bash
+mori transitions retirement --project example/registration --environment production \
+  --as-of 2026-10-07T00:00:00Z --output before.json
+mori transitions retirement --project example/registration --environment production \
+  --as-of 2026-10-07T00:00:00Z --output after.json
+mori transitions diff before.json after.json
+mori transitions diff before.json --live --as-of 2026-10-07T00:00:00Z --json
+mori transitions diff before.json after.json --exit-code
+```
+
+Captures are closed snake_case documents with `contract_version: 1`, policy version, scope,
+completeness, verdicts and their input digests. `--output` implies JSON and refuses overwrite
+unless `--force` is supplied. Comparison ignores `evaluated_at`, rejects incompatible versions,
+flags policy changes, and lists changed and unchanged predecessor/environment identities.
+Without live selectors it inherits the capture's scope. Use the same `--as-of` to prove a no-op;
+advancing time can change freshness. `--exit-code` returns 1 for any review change and 0 otherwise.
+
+`mori agent context ROLE` includes bounded
+transition participation and predecessor verdicts/actions; uninvolved projects have no section.
+Mori makes no lifecycle change, routes no traffic and retires no service.

@@ -153,6 +153,7 @@ Primary mappings from `docs/user/`:
 | `dependencies.md` | `content/docs/commands/deps.mdx` |
 | `ddd.md` | `content/docs/commands/ddd.mdx` and `content/docs/guides/ddd.mdx` |
 | `okf.md` | `content/docs/guides/okf.mdx` |
+| `transitions.md` | `content/docs/guides/transitions.mdx` and `content/docs/commands/transitions.mdx` |
 | `operations.md` | `content/docs/commands/ops.mdx` |
 | `plan-dependencies.md` | `content/docs/commands/plans.mdx` |
 | `api.md` | `content/docs/commands/serve.mdx` (endpoint reference is an open gap) |
@@ -171,7 +172,7 @@ agent alias app audit automate backfill browse capabilities cd checklist
 completions cookbook ddd deps diagram doctor extension help identity
 improvement-requests init kit observe ops path plans project reaction register
 registry schema serve show signal status store tech-radar upstream-issues
-validate workflow
+transitions validate workflow
 ```
 
 Do not hand-maintain this list against memory. Enumerate the real surface and
@@ -331,6 +332,7 @@ Current command-page assignments, read off the pages themselves:
 - `status`: `Activity`
 - `store`: `Archive`
 - `tech-radar`: `Radar`
+- `transitions`: `GitFork`
 - `upstream-issues`: `CircleAlert`
 - `validate`: `CircleCheck`
 - `workflow`: `GitPullRequest`

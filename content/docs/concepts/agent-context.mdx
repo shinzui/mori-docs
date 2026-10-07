@@ -644,3 +644,11 @@ The agent now has:
 * **Registry storage**: PostgreSQL projections derived from events. See [Event Sourcing](/docs/concepts/event-sourcing).
 * **Cookbooks**: Modeled as `docs` entries with `kind = Cookbook` rather than a separate field.
 * **Project-level dependencies**: `List Text` at project root, resolved by name via registry.
+
+## Transition participation
+
+`mori agent context ROLE` adds a `transitions` section when the current project is a coordinator,
+predecessor or known successor. It lists up to twenty declarations with roles and phases plus
+`remaining_count`. Retiring predecessors see per-environment verdicts and open owner actions.
+Uninvolved projects have no section; readiness authorizes nothing. See
+[Platform Transitions](/docs/guides/transitions).

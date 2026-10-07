@@ -1,0 +1,152 @@
+---
+title: mori transitions
+description: Declare platform transitions, record evidence and compare retirement readiness
+icon: GitFork
+---
+
+
+A transition records a coordinating project's declared movement of responsibilities from
+predecessors to successors. Participants keep their own project lifecycle, capability catalogs,
+and DDD models. A transition phase such as `complete` describes intent; it does not establish
+that a predecessor is safe to retire.
+
+Write one `Transition` concept per Markdown document in a configured OKF bundle. Handles are
+`TR-N` and scoped to the coordinator and bundle. Known participants use project-root `mori://`
+URIs. Successors without a settled project identity use `pendingIdentity`.
+
+## List
+
+```bash
+mori transitions list --project tan/user-service
+mori transitions list --group tan-services --phase in-progress --json
+mori transitions list --use-case mori://tan/tan-platform/okf/business-use-cases/concepts/UC-1
+```
+
+`--project` is repeatable and matches a coordinator, predecessor, or known successor.
+`--group` matches any participant in the group and cannot be combined with `--project`.
+Additional filters are `--kind`, `--phase`, `--context`, `--flow`, `--use-case`, and `--capability`.
+References are canonical Mori URIs. JSON contains sorted `transitions` and `invalid` arrays;
+invalid declarations remain visible for repair.
+
+## Show
+
+```bash
+mori transitions show --project tan/tan-platform --id TR-1 --json
+```
+
+The coordinator is required because handles are local. Use `--bundle` to disambiguate a handle
+that occurs in multiple bundles. Human output includes participant lifecycles, pending successor
+identities, responsibility links, and requirements with environments, owners, minimum evidence
+basis and acceptance flags. Reference problems are reported alongside the declaration.
+
+## Validate a checkout
+
+```bash
+mori transitions validate --path /path/to/tan-platform --bundle transitions --json
+```
+
+Validation walks the configured bundle and checks structure, participants and linked references
+against the registry. The checkout itself supplies the coordinator identity before registration.
+Missing predecessors, unresolved context/flow/use-case links, and mismatched capability providers
+are errors. An unregistered known successor produces a warning. Errors produce a non-zero exit.
+JSON findings include `source_path`, `bundle`, `concept_id`, `transition_id`, `field`, `code`,
+`severity`, and `message`.
+
+Requirements may declare evidence no older than `maxAge`. Supported durations use whole days,
+hours, minutes and seconds, for example `P30D` or `P1DT2H`; calendar months and years are not
+fixed durations and are rejected. Requirement defaults never imply observed readiness.
+
+
+Import immutable observations with `mori transitions import-observation FILE [--json]`.
+An equivalent retry appends no event. Different content under the same deterministic key
+returns a conflict and preserves the first fact. Invalid envelopes are rejected before identity
+allocation. Evidence can arrive before its declaration or project is registered.
+
+Read history with `mori transitions observations --transition MORI_URI [--requirement KEY]
+[--environment SLUG] [--consumer MORI_URI] [--json]`. JSON uses snake_case row fields and
+embeds the original normalized camelCase envelope. Expired facts remain readable; freshness
+and retirement readiness are derived separately.
+
+## Retirement readiness
+
+```bash
+mori transitions retirement --project tan/user-service --environment production
+mori transitions retirement --group tan-platform --as-of 2026-10-07T00:00:00Z --json
+mori transitions retirement --use-case mori://tan/tan-platform/okf/business-use-cases/concepts/UC-1
+```
+
+Selectors identify predecessors. Each selected predecessor is evaluated across every transition
+involving it, so a use-case or flow filter cannot hide an open duty. Malformed declarations fail
+the query. Retained predecessors are listed as `not-retiring`; unmatched evidence is listed as
+orphaned and cannot affect readiness.
+
+`blocked` means a condition is known unmet, including pending required owner acceptance.
+`unknown` means an inventory, observation, sufficient basis, fresh input, or consistent catalog
+is missing. `ready-for-owner-acceptance` means every scoped condition is met with adequate fresh
+evidence and any required acceptance. A current unmet fact still blocks when stale. Blocked
+verdicts also show unknown reasons and every next action names a role and party.
+
+Itemized conditions need a fresh complete inventory and a current observation per item.
+Responsibility-transfer inventories account for every declared moved or discontinued duty,
+including duties declared in another transition. Undeclared inventory duties and omitted declared
+duties prevent readiness. Catalog status can flag inconsistencies but never satisfies migration.
+
+Freshness reads raw bytes at each input project's current *observed* Git revision. Changed input
+bytes, removed paths and unavailable projects/checkouts/revisions are distinct stale reasons.
+Expiry and a declared `maxAge` also make evidence stale. An unrelated commit stays fresh; working
+tree edits are not substituted. Evidence without bounded freshness is explicitly `unbounded`.
+
+JSON uses `TransitionRetirementV1` with `contract_version: 1` and policy
+`mori.transition-retirement.policy.v1`. Repeated queries with identical inputs and `--as-of`
+differ only in `evaluated_at`. This is advice for the predecessor's owner and authorizes nothing.
+
+## Capture and compare
+
+```bash
+mori transitions retirement --project tan/user-service --environment production \
+  --as-of 2026-10-07T00:00:00Z --output before.json
+mori transitions diff before.json after.json --json
+mori transitions diff before.json --live --as-of 2026-10-07T00:00:00Z
+mori transitions diff before.json after.json --exit-code
+```
+
+`--output FILE` writes JSON and refuses an existing path unless `--force` is supplied.
+File-to-live comparison inherits the capture's scope unless selectors are supplied. Use the
+same `--as-of` for a no-op proof; advancing time can expire evidence. Comparison ignores
+`evaluated_at`, rejects unsupported or mismatched contract versions, and flags policy changes.
+It reports added, removed, changed and unchanged predecessor/environment keys, reasons,
+requirement state and freshness, owner actions, digests, retained predecessors and orphaned
+facts. A diff exits 0 normally; `--exit-code` exits 1 for changes.
+
+## Authoring and evidence
+
+Pin the released `coordination.transitions` profile from
+`mori://shinzui/okf-profiles` (v0.20.0 introduced it). The `adopt-transitions` blueprint supplies
+an authoring reference and a self-contained profile. Configure the coordinator's `okfBundles`,
+run strict `okf validate --profile PROFILE --strict BUNDLE`, then `mori transitions validate`.
+The profile gate checks expressible shapes; Mori checks cross-field and registry semantics.
+`mori observe --path PROJECT` refreshes declarations after their input bytes change.
+
+An envelope has `schemaVersion: 1`, transition URI, requirement key, environment, aspect
+(`requirement`, `item`, `inventory`), finding (`met`, `unmet`, `unknown`, `conflict`,
+`unsupported`), basis, observer role/party, `observedAt`, optional window and expiry, raw Git
+inputs, evidence artifacts, and acceptance keys. `observationKey` may be omitted; Mori computes
+its identity. Supplied keys must agree. An item names its key and optional consumer URI; an
+inventory lists the complete known item keys. A `met` inventory claims completeness, so use
+`unknown` while discovery is incomplete. Keep production and fixture facts separate.
+
+Each basis is a separate fact, never an inferred promotion:
+
+- `declared`: an attributed declaration or explicit gap; for example routing remains unknown.
+- `source-observed`: inspected source at a full Git revision, with its project, relative path
+  and `sha256:` digest of raw blob bytes; for example a caller still invokes the predecessor.
+- `runtime-observed`: an attributed real runtime measurement and its observation window;
+  source wiring alone cannot establish production cutover or drain.
+- `owner-accepted`: a `met` acceptance by the declared requirement owner naming exact `accepts`
+  observation keys. Acceptance never replaces the adequate fresh evidence it accepts.
+
+See the user guide for envelopes and the full review workflow. Empty dependency queries,
+completed plans, transition phase, and capability status cannot supply retirement evidence.
+Mori changes no lifecycle, routes no traffic, and retires no service.
+
+See [the workflow guide](/docs/guides/transitions).
