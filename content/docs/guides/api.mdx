@@ -149,6 +149,29 @@ configured limits. A cyclic graph returns `422` with code
 
 The body is the same versioned contract `mori plans graph --json` emits.
 
+## Improvement-request fulfillment
+
+`GET /v1/improvement-requests/fulfillment` publishes the same source-only version-1 document as
+`mori improvement-requests graph --json` and `ready --json`:
+
+```text
+GET /v1/improvement-requests/fulfillment?ref=mori%3A%2F%2Fshinzui%2Fmori%2Fokf%2Fimprovement-requests%2Fconcepts%2FIR-19
+GET /v1/improvement-requests/fulfillment?ref=mori%3A%2F%2Fshinzui%2Fmori%2Fokf%2Fimprovement-requests%2Fconcepts%2FIR-19&transitive=true&contract_version=1
+```
+
+`ref` must be a full canonical improvement-request concept URI. Direct scope includes the root and
+its immediate dependency endpoints; `transitive=true` follows the complete dependency closure and
+is the truthful scope for readiness and frontier decisions. The response retains Hard, Soft, and
+Integration edges, authored reasons and criteria, broken descendants, Hard-cycle witnesses,
+observation provenance, readiness, exclusions, and the actionable Hard frontier.
+
+The result is whole, deterministic, and bounded rather than paginated. Server defaults are 2,000
+nodes, 5,000 edges, and traversal depth 128. Oversized results, unsupported versions, and invalid
+roots return typed RFC 9457 errors; descendant defects remain in a successful diagnostic document.
+The authority block states that only source facts were considered—never live blockers or delivery
+evidence. See [Improvement Requests](/docs/guides/improvement-requests) for the CLI workflow and
+`mori://shinzui/mori` (project-relative `docs/architecture/IMPROVEMENT-REQUEST-FULFILLMENT.md`; artifact-level URI pending) for the complete contract.
+
 ## Serving from the daemon
 
 The automation daemon can serve the same API on one more concurrent leg,

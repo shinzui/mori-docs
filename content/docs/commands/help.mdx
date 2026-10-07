@@ -24,56 +24,73 @@ mori help <topic> --width 100
 
 | Topic | Description |
 |-------|-------------|
-| `project-config` | Root Project type structure and fields |
-| `status` | Project health at a glance: schema pins, registry, observation |
-| `registry-domains` | Tagging and filtering projects by business area |
-| `registry-groups` | First-class project groups (members, packages, docs, extensions) |
-| `registry-templates` | Browse seihou templates across the registry (list, show, filter) |
-| `registry-exec` | Run a command in every registered project, with `--group` filtering |
-| `okf` | OKF knowledge bundles: declaring `okfBundles`, discovery commands, advisory profile validation, `mori://` addressing |
-| `seihou-templates` | First-class seihou scaffold catalog (declaration, auto-discovery, filter) |
-| `corpus-learning` | Leverage corpus projects for debugging, API discovery, and best practices |
-| `aliases` | How to configure and use command aliases |
+| [`project-config`](/docs/guides/project-config) | Root Project type structure and fields |
+| [`sealed-evaluation`](/docs/guides/sealed-evaluation) | What repository Dhall may import: the sealing rules, root, and exemptions |
+| [`project-identity`](/docs/guides/project-identity) | Stable project IDs, aliases, renames, and repository IDs |
+| [`status`](/docs/guides/status) | Project health at a glance: schema pins, registry, observation |
+| [`registry-refresh`](/docs/guides/registry-refresh) | How the daemon keeps observed registrations current |
+| [`registry-domains`](/docs/guides/registry-domains) | Tagging and filtering projects by business area |
+| [`registry-groups`](/docs/guides/registry-groups) | First-class project groups (members, packages, docs, extensions) |
+| [`registry-templates`](/docs/guides/registry-templates) | Browse seihou templates across the registry (list, show, filter) |
+| [`registry-exec`](/docs/guides/registry-exec) | Run a command in every registered project, with --group filtering |
+| [`registry-releases`](/docs/guides/registry-releases) | Record immutable project releases and query history, latest releases, and dependents |
+| [`registry-upgrade`](/docs/guides/registry-upgrade) | Sweep mori-schema across every registered project (selectors, dry-run, commit) |
+| [`okf`](/docs/guides/okf) | OKF knowledge bundles: declaring okfBundles, discovery commands, advisory profile validation, mori:// addressing |
+| [`seihou-templates`](/docs/guides/seihou-templates) | First-class seihou scaffold catalog (declaration, auto-discovery, filter) |
+| [`corpus-learning`](/docs/guides/corpus-learning) | Leverage corpus projects for debugging, API discovery, and best practices |
+| [`aliases`](/docs/guides/aliases) | How to configure and use command aliases |
 
 ### Schema
 
 | Topic | Description |
 |-------|-------------|
-| `schema-types` | All Dhall union types with constructors |
-| `schema-records` | All Dhall record types with fields |
-| `schema-modification` | How to edit mori.dhall (Dhall syntax guide) |
-| `mori-refs` | Canonical `mori://` references for cross-project artifacts |
-| `extensions` | Dynamic schema extensions (define, query, add new) |
-| `tech-radar` | Tech-radar extension: package recommendations + cross-registry search |
-| `cookbook` | Cookbook extension for code examples, patterns, and guides |
-| `ddd` | DDD modeling extension: subdomains, bounded contexts, aggregates, context maps, message flows, glossary |
-| `agent-plans` | Agent-plans extension: cross-project plan dependencies + next-implementable |
-| `improvement-requests` | Cross-project OKF improvement requests and plan linkage |
-| `checklist` | Checklist extension for structured procedures (install, deploy, monitor, …) |
-| `upstream-issues` | Upstream-issues extension for known upstream defects with local workarounds |
+| [`schema-types`](/docs/guides/schema-reference) | All Dhall union types with constructors |
+| [`schema-records`](/docs/schema-guide) | All Dhall record types with fields |
+| [`schema-modification`](/docs/guides/schema-migrations) | How to edit mori.dhall (Dhall syntax guide) |
+| [`audit`](/docs/guides/audit) | What is stale in this project relative to current mori capabilities |
+| [`mori-refs`](/docs/guides/mori-refs) | Canonical mori:// references for cross-project artifacts |
+| [`extensions`](/docs/guides/extensions) | Dynamic schema extensions (define, query, add new) |
+| [`extensions-declarative`](/docs/guides/extensions-declarative) | Install local data-only extensions and understand their trust model |
+| [`tech-radar`](/docs/guides/tech-radar) | Tech-radar extension: package recommendations + cross-registry search |
+| [`cookbook`](/docs/guides/cookbook) | Cookbook extension for code examples, patterns, and guides |
+| [`ddd`](/docs/guides/ddd) | DDD modeling extension: subdomains, bounded contexts, aggregates, context maps, message flows, glossary |
+| [`ddd-decomposition`](/docs/guides/ddd-decomposition) | Split one DDD model across imported Dhall files |
+| [`agent-plans`](/docs/guides/agent-plans) | Agent-plans extension: cross-project plan dependencies + next-implementable |
+| [`transitions`](/docs/guides/transitions) | Declared platform transitions, participants and retirement requirements |
+| [`capabilities`](/docs/commands/capabilities) | Cross-project OKF capability catalogs and provision claims |
+| [`improvement-requests`](/docs/guides/improvement-requests) | Cross-project OKF improvement requests and plan linkage |
+| [`pattern-assurance`](/docs/guides/pattern-assurance) | Import immutable assessments and inspect revision-aware pattern scorecards |
+| [`terminology`](/docs/guides/terminology) | Cross-project OKF terminology catalogs: preferred and discouraged wording |
+| [`checklist`](/docs/guides/checklist) | Checklist extension for structured procedures (install, deploy, monitor, …) |
+| [`upstream-issues`](/docs/guides/upstream-issues) | Upstream-issues extension for known upstream defects with local workarounds |
 
 ### Automation
 
 | Topic | Description |
 |-------|-------------|
-| `automation-config` | Automation type structure (events, reactions, policies) |
-| `reaction-history` | Reaction execution history (list, show, filtering) |
-| `cross-repo-automation` | Cross-repo signals, workflows, and tracing |
-| `trailer-matching` | Trailer-based matching and event-data interpolation |
+| [`automation-config`](/docs/guides/automation) | Automation selectors (globs and regexes), reactions, and policies |
+| [`reaction-history`](/docs/guides/reaction-history) | Reaction execution history (list, show, filtering) |
+| [`cross-repo-automation`](/docs/guides/cross-repo-workflows) | Cross-repo signals, workflows, and tracing |
+| [`signal-deliveries`](/docs/guides/signal-deliveries) | Inspecting durable signal deliveries, consent refusals, and bound breaches |
+| [`debug-automation`](/docs/guides/debug-automation) | Debugging a misbehaving automation, layer by layer (also: automation-debug) |
+| [`trailer-matching`](/docs/guides/trailer-matching) | Trailer-based matching and event-data interpolation |
 
 ### Operations
 
 | Topic | Description |
 |-------|-------------|
-| `automation-daemon` | Multi-repo automation daemon usage and architecture |
-| `kit` | Managing Claude Code skills and subagents (install, update, status) |
-| `apps` | Mori Apps: webhook delivery to external applications |
+| [`automation-daemon`](/docs/guides/automation-daemon) | Multi-repo automation daemon usage and architecture |
+| [`operations`](/docs/commands/ops) | Event-store operations: daemon lock, subscription metrics, replay audits, projection rebuilds |
+| [`store-lifecycle`](/docs/guides/event-store-lifecycle) | Non-destructive event-store policy, inventory, compatibility, and archives |
+| [`api`](/docs/guides/api) | The mori serve HTTP API: loopback-first perimeter, auth, CORS, Relay pagination |
+| [`kit`](/docs/guides/kit) | Managing Claude Code skills and subagents (install, update, status) |
+| [`apps`](/docs/guides/apps) | Mori Apps: webhook delivery to external applications |
 
 ### Agents
 
 | Topic | Description |
 |-------|-------------|
-| `bootstrap-extensions` | Overview of `mori agent bootstrap-<ext>` commands and the schema-staleness guard |
-| `agent-ask` | Cross-project Claude sessions about a registered project |
+| [`bootstrap-extensions`](/docs/guides/bootstrap-extensions) | Overview of mori agent `bootstrap-<ext>` commands and the schema-staleness guard |
+| [`agent-ask`](/docs/guides/agent-ask) | Cross-project Claude sessions about a registered project |
 
 Use `mori <command> --help` for command-specific help.

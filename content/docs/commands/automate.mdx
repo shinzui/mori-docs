@@ -15,6 +15,7 @@ Ingest VCS events into the local event store.
 ```bash
 mori automate ingest git
 mori automate ingest git --path /path/to/repo
+mori automate ingest git --path /path/to/repo --no-auto-resume
 ```
 
 ### Behavior
@@ -88,11 +89,11 @@ mori automate daemon --metrics-port 9464
 
 ### Behavior
 
-- Bootstraps config registry from `automation_registrations` projection
-- Subscribes to `automationRegistration` category for live config updates
+- Bootstraps config registry from active Automation registrations
+- Subscribes to the `automation` category for live config updates
 - Routes repository events to registered repos' automation configs
-- Concurrent workers and projections for automation, execution, pending schedules, registry, tech radar, DDD, agent plans, workflow, registration, and app fan-out
-- Runs the shibuya worker for legacy per-action `Schedule` plus the scheduled-reactions worker for per-reaction `schedule` deferrals
+- Runs concurrent workers for repository and Project selectors, execution, configuration updates, signal delivery, joins, cascades, and app fan-out; aggregate read models update inline with writes
+- Runs workers for per-action `Schedule` and per-reaction `schedule` deferrals
 - Runs FIFO workers for `queued = True` automations. Each automation remains internally ordered, while distinct automations can drain concurrently
 - Event-driven after ingest; the daemon also has a periodic auto-ingest loop for observed repos
 
@@ -123,8 +124,10 @@ event store need it.
 
 | Flag | Description |
 |------|-------------|
-| `--refresh-interval SECONDS` | Interval between config refresh cycles. Default: `60` |
-| `--ingest-interval SECONDS` | Interval between auto-ingest cycles for observed projects. Default: `300`; use `0` to disable |
+| `--refresh-interval SECONDS` | Ignored; retained for compatibility. Config reloads are event-driven (default: `60`) |
+| `--ingest-interval SECONDS` | Interval between auto-ingest cycles for observed projects. Default: `300`; `0` disables auto-ingest and registration refresh |
+| `--no-registry-refresh` | Disable automatic refresh of observed project registrations |
+| `--no-auto-resume` | Halt after a detected history rewrite, including proven replays |
 | `--queued-concurrency N` | Number of FIFO worker instances for `queued = True` automations. Default: `3` |
 | `--serve` | Also serve the [HTTP API](/docs/commands/serve) from this daemon process |
 | `--api-port PORT` | Port for the embedded HTTP API. Default: `8080`, or `$MORI_API_PORT` |
@@ -318,20 +321,31 @@ default dry run first and read what it reports.
 
 ## `mori automate inspect`
 
-Inspect automation configuration.
+Inspect one automation's configuration, statistics, and ten most recent reactions.
 
 ```bash
-mori automate inspect
-mori automate inspect --json
+mori automate inspect --path /path/to/repo -c automation/release.dhall --name release
+mori automate inspect --path /path/to/repo -c automation/release.dhall --name release --json
 ```
 
-### Output
+| Flag | Description |
+|------|-------------|
+| `--path PATH` | Authoritative repository root; defaults to the current directory |
+| `--config`, `-c PATH` | Config file or directory, resolved relative to `--path`; default: `mori.automation.dhall` |
+| `--name NAME` | Automation name; default: `default` |
+| `--json` | Machine-readable output |
 
-- Automation config status and hash
-- Execution policy (local/CI)
-- Registered event selectors
-- Declared [`Decision`](/docs/guides/automation#decision) routes, when a reaction
-  has any
+History is scoped to that repository and automation name. Counts cover its full
+recorded history; `completed` means actions exited successfully. Configuration
+output includes merged files, declared execution and queue policy, selectors,
+reactions, joins, and Decision routes.
+
+Inspection creates no repository or automation identity. JSON distinguishes
+`reactionHistoryStatus: available`, `repository-unlinked`, and
+`database-unavailable`; the latter two have empty history arrays because no
+history could be read. Older rows with no recorded ownership are excluded here
+and remain available through `mori reaction list`. See
+[Inspect configuration](/docs/guides/automation#4-inspect-configuration).
 
 ## `mori automate explain`
 
@@ -347,7 +361,9 @@ mori automate explain <global-position> --json
 
 | Flag | Description |
 |------|-------------|
-| `--config`, `-c` | Path to automation config |
+| `--config`, `-c PATH` | Config file or directory, resolved against `--path`; default: `mori.automation.dhall` |
+| `--path PATH` | Authoritative repository root; defaults to the current directory |
+| `--name NAME` | Automation name; default: `default` |
 | `--json` | JSON output |
 
 `--json` includes the declared

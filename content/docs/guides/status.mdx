@@ -5,12 +5,12 @@ icon: Activity
 ---
 
 `mori status` prints a single health report for the mori project in the current
-directory. It answers four questions in one command:
+directory. It is the fastest way to answer:
 
-1. Are this project's schema pins current for this CLI?
-2. Is the project registered in the local registry?
-3. Is the project observed, with a linked repo id and a current config row?
-4. Are the reaction execution legs healthy?
+- Are this project's schema pins current for this CLI?
+- Is the project registered in the local registry?
+- Is the project observed, with a linked repo id and current config row?
+- Are the reaction execution legs healthy?
 
 ```bash
 mori status
@@ -22,59 +22,120 @@ mori status --json
 | Section | What it checks |
 |---------|----------------|
 | Header | Project identity and overall verdict |
-| Schema | `mori.dhall`, extension configs, and `mori.automation.dhall` pins |
+| Schema | `mori.dhall`, optional built-in extensions, and every resolved automation configuration pin |
 | Registry | Whether `(namespace, name)` exists in the read model |
-| Observation | Whether the project has a linked `mori/repo-id` and a current config row |
-| Automation execution | Whether any reaction execution leg is stuck or has an open halt |
+| Observation | Whether the project has a linked `mori/repo-id` and, when automation is configured, a config observation row |
+| Automation execution | Whether any reaction leg is stuck or has an open halt |
 
-Observation states include `observed`, `linked, no automation configured`,
-`linked, no config row yet`, and `not observed`.
+Schema files can be `current`, `stale`, `unpinned`, or `missing`. `unpinned`
+means the file uses a local import, which is expected in dogfooding setups and
+is not treated as an error.
 
-## Automation Execution
+### How automation sources are resolved
 
-The automation-execution line reports `ok` when no reaction execution leg is
-stuck or halted. When it is unhealthy it shows the number of affected legs,
-degrades the verdict to `attention`, and adds an issue pointing at
-`mori doctor --reactions`.
+Status uses the paths the daemon is configured to load:
 
-Diagnose before repairing:
+1. If the repository id has active automation registrations, those named
+   registrations are authoritative.
+2. If it has no active registrations, the conventional
+   `mori.automation.dhall` path is used when it exists.
+3. A file contributes itself. A directory contributes its sorted direct
+   `.dhall` children; nested directories and non-Dhall files are ignored.
 
-```bash
-mori doctor --reactions
+Status never combines registered sources with the fallback. That keeps its
+answer aligned with the daemon and avoids counting the default configuration
+twice. A missing registered path or a registered directory with no `.dhall`
+children remains visible as an attention-level problem instead of becoming
+"no automation configured."
+
+Text output groups each source under its automation name and stored path:
+
+```text
+automation release  /repo/automation/release.dhall  (registered)
+  /repo/automation/release.dhall  current  4024df757a01
+automation announce  /repo/automation/announce  (registered)
+  /repo/automation/announce/project.dhall  stale  91b47d43f104
 ```
 
-Fix the reported cause first, then use the recovery command doctor names —
-[`mori reaction recover --dead-letters`](/docs/guides/reaction-history#recover-parked-events)
-for parked events, or
-[`mori reaction recover --clear-halt <leg>`](/docs/guides/reaction-history#clear-a-halted-leg)
-for a halted leg — and re-run the audit to confirm.
+## Observation States
 
-Note the scope difference: this line is fleet-wide reaction execution health,
-not something specific to the project you are standing in. It appears in
-`mori status` because an unhealthy executor means *this* project's reactions are
-not running either.
+| State | Meaning |
+|-------|---------|
+| `observed` | A repo id is linked and a config row exists |
+| `linked, no automation configured` | A repo id is linked, has no active automation registration, and has no conventional fallback |
+| `linked, no config row yet` | At least one automation source resolves, but `mori automate` has not observed the config yet |
+| `not observed` | No repo id is linked; run `mori observe` |
 
-## Remediation
+## Exit Codes
 
-Common fixes:
+| Code | Meaning |
+|------|---------|
+| `0` | Healthy: pins are current, project is registered, and observation is healthy |
+| `1` | Attention needed: stale pin, missing/empty registered source, not registered, not observed, automation config not observed, or unhealthy automation execution |
+| `2` | `mori.dhall` is missing or unparseable |
+
+Use `--json` in scripts or CI:
 
 ```bash
-mori register --local
+mori status --json | jq '.verdict'
+mori status --json | jq '.issues'
+mori status --json | jq '.automationExecution'
+mori status --json | jq '.schema.automations'
+```
+
+`schema.automations` is an object keyed by automation name. Each value contains
+the registered or fallback `config_path`, its `origin`, an optional `problem`,
+and the participating `files`:
+
+```json
+{
+  "release": {
+    "config_path": "/repo/automation/release.dhall",
+    "origin": "registered",
+    "problem": null,
+    "files": [
+      {
+        "path": "/repo/automation/release.dhall",
+        "status": "current",
+        "hash": "sha256:4024df757a01..."
+      }
+    ]
+  }
+}
+```
+
+`origin` is `registered` or `conventional_fallback`. A broken registered
+source uses `problem: "path_missing"` or `"directory_empty"`, has no member
+files, adds an issue, and makes the verdict `attention`. This dynamic object
+replaces the old `schema["mori.automation.dhall"]` field; scripts consuming the
+old shape must migrate before upgrading Mori.
+
+Common remediation commands:
+
+```bash
+mori register
 mori observe
 mori automate
 mori schema upgrade
 mori registry upgrade-schema
 ```
 
-Use `--json` for scripts:
+`mori registry upgrade-schema` discovers automation sources by the same rules,
+so it can repair a stale named automation even when `mori.dhall` is already
+current. Preview the exact named paths with `--dry-run`; see
+[Registry Schema Upgrade](/docs/guides/registry-upgrade) for its
+dirty-tree, validation, and commit safety rails.
 
-```bash
-mori status --json | jq '.verdict'
-mori status --json | jq '.issues'
-mori status --json | jq '.automationExecution'
-```
+An unhealthy automation-execution line degrades the verdict to `attention` and
+adds an issue pointing to `mori doctor --reactions`. Diagnose first, repair the
+reported cause, then use `mori reaction recover --dead-letters` or
+`mori reaction recover --clear-halt <leg>` when instructed by the finding.
 
-`automationExecution` carries `{"healthy": true|false, "unhealthyLegs": 0}`.
+## Registration input freshness
 
-Exit code `0` means healthy, `1` means attention is needed (including unhealthy
-automation execution), and `2` means `mori.dhall` is missing or unparseable.
+The `registration` section reports `current`, `stale` or `untracked`, with changed input paths,
+reasons and the last refresh outcome. `untracked` means no freshness record has been made on
+this host. The daemon refreshes observed projects when content or its registration contract
+changes; registered projects that are not observed are only reported. Use
+`mori registry freshness --stale-only --json` for a fleet view and see
+[Registry Refresh](/docs/guides/registry-refresh) for policy and failure recovery.

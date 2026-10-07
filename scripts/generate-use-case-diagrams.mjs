@@ -226,6 +226,7 @@ const cases = [
 		gaps: [
 			"Protocol-neutral agent access · discovered",
 			"Curated reference freshness · discovered",
+			"Bounded agent session permissions · discovered",
 		],
 	},
 	{
@@ -370,7 +371,7 @@ ${textBlock(x + 22, y + 57, body, 53, 14, 400, color.body, 20)}`;
 
 function glance(item) {
 	const W = 1040,
-		H = item.gaps.length ? 875 : 767;
+		H = item.gaps.length ? 795 + Math.ceil(item.gaps.length / 2) * 80 : 767;
 	const parts = [
 		txt(
 			40,
@@ -454,19 +455,20 @@ function glance(item) {
 			),
 		);
 		item.gaps.forEach((gap, i) => {
-			const x = 40 + i * (item.gaps.length === 1 ? 0 : 488);
+			const x = 40 + (i % 2) * 488;
+			const y = 768 + Math.floor(i / 2) * 80;
 			const w = item.gaps.length === 1 ? 960 : 472;
 			const accent =
 				gap.endsWith("planned") || gap.endsWith("blocked")
 					? color.amber
 					: color.slate;
 			parts.push(
-				`<rect x="${x}" y="768" width="${w}" height="65" rx="11" fill="${color.paper}" stroke="${accent}" stroke-dasharray="5 4"/>`,
+				`<rect x="${x}" y="${y}" width="${w}" height="65" rx="11" fill="${color.paper}" stroke="${accent}" stroke-dasharray="5 4"/>`,
 			);
 			parts.push(
 				textBlock(
 					x + 17,
-					796,
+					y + 28,
 					gap,
 					item.gaps.length === 1 ? 94 : 43,
 					14,

@@ -97,6 +97,11 @@ mori automate generate registry-sync -o custom.dhall  # custom output path
 Generated configs are standalone files you can use directly or place in a
 config directory.
 
+The `registry-sync` template is retained for compatibility. The daemon now
+refreshes observed registrations natively when their recorded inputs change;
+see [Registry Refresh](/docs/guides/registry-refresh). Existing registry-sync
+reactions can cause an extra no-op reconciliation.
+
 ### Full example
 
 Every record in `mori.automation.dhall` publishes the
@@ -221,10 +226,9 @@ distinct from `Added` facts and never alias them: they stay suppressed unless yo
 set `includeImported = True`, so a one-time backfill does not look like a
 project genuinely gaining a hundred packages.
 
-> **Availability.** ProjectSelector configuration loading, validation, and
-> matching are available now. Live Project-stream subscription and durable
-> delivery remain disabled until the shared signal-delivery infrastructure is
-> implemented, so a ProjectSelector will validate but not yet fire.
+The automation engine routes committed Project root and artifact events through
+these selectors. The `Release` and `AuditReceipt` families can trigger reactions;
+bootstrap imports still require `includeImported = True`.
 
 ### Opt-in regular expressions
 
@@ -374,7 +378,7 @@ every target repo must have a `flake.nix` exposing a default devShell (see
 Schema.ReactionAction.RunCommand Schema.RunCommandAction::{
   command = "make"
 , args = [ "test" ]
-, workingDir = Some "./packages/core"
+, workingDir = Some "/work/my-project/packages/core"
 , timeout = Some +300              -- seconds
 , env = [ { mapKey = "CI", mapValue = "true" } ]
 }
@@ -384,7 +388,7 @@ Schema.ReactionAction.RunCommand Schema.RunCommandAction::{
 |-------|------|-------|
 | `command` | `Text` | Executable name or path. Resolved inside the devShell, not the daemon's PATH. |
 | `args` | `List Text` | Command arguments |
-| `workingDir` | `Optional Text` | Working directory. When absent, defaults to the repo root (the directory passed to `mori automate register --path …`). When set, resolves relative to that root. |
+| `workingDir` | `Optional Text` | Under the daemon, absent uses the linked registered project path, or the config directory if unlinked. Explicit values pass through unchanged; use an absolute path for a predictable override. |
 | `timeout` | `Optional Integer` | Timeout in seconds. Absent means the effective default — see below |
 | `env` | `List { mapKey, mapValue }` | Extra environment variables, merged over the daemon's own environment |
 
@@ -913,6 +917,31 @@ discipline is requested by
 `mori://shinzui/mori/okf/improvement-requests/concepts/IR-8` and is not
 implemented.
 
+## Command working directories
+
+The daemon resolves each registration's default command directory from the linked
+project's registered path. For a project at `/work/repo`, a config at
+`/work/repo/automation/release.dhall` still runs `./scripts/record-release.sh`
+from `/work/repo`. The config path remains the config's location. An explicit
+`RunCommand.workingDir` takes precedence and passes through unchanged; a relative
+override is relative to the executor process's current directory.
+
+Without a linked project, the default remains the config's parent directory,
+including a nested parent such as `/work/repo/automation`. If querying project
+paths fails, the daemon logs the error and uses that same fallback.
+`register --path` locates the config for registration; it does not independently
+set the daemon's command directory.
+
+The daemon resolves project paths at startup and on registration upserts
+(registered, imported, or config-updated events). Moving a project alone does
+not refresh a loaded automation; update that registration or restart the daemon.
+Deregistration removes only the named entry and does not query paths. Startup
+uses stored decoded configs without rereading their files.
+
+Directories are recorded in reaction actions before immediate, scheduled, or
+queued execution. Refreshing or restarting affects future work; it does not
+rewrite actions in already persisted reactions or repair their past failures.
+
 ## Workflow
 
 ### 1. Ingest VCS events
@@ -938,6 +967,11 @@ mori automate ingest git --path /path/to/repo
 > See the [Automation Daemon](/docs/guides/automation-daemon) guide for the
 > full daemon behavior, including `--ingest-interval`.
 
+After a history rewrite, ingest resumes automatically only when the content index
+proves an exact replay. Otherwise the repository stays halted until reset. Preview
+with `mori automate reset-checkpoint PROJECT --to-merge-base --dry-run`; see
+[Ingest Health](/docs/guides/ingest-health) for the proof, skips, and re-emission choices.
+
 ### 2. Start the automation engine
 
 ```bash
@@ -948,10 +982,14 @@ This starts a long-running process with concurrent processors:
 
 | Processor | Listens to | Purpose |
 |-------------|------------|---------|
-| `mori-automation` | `repository` events | Match selectors, trigger reactions |
-| `mori-reaction-executor` | `reaction` events | Execute triggered actions |
-| `mori-registry` | `project` events | Populate registry read model |
-| `mori-workflow` | `workflow` events | Maintain workflow projections |
+| `mori-automation-router` | `repository` events | Match repository selectors, trigger reactions |
+| `mori-project-root-automation-router` | `projectRoot` events | Match Project root selectors |
+| `mori-project-artifact-automation-router` | `projectArtifactV2` events | Match Project artifact selectors |
+| Reaction executor | `reaction` events | Execute triggered actions |
+
+Read models are maintained inline with aggregate writes. Additional routers
+handle signal delivery, fan-in joins, and frozen dependency cascades; see
+[Cross-Repo Workflows](/docs/guides/cross-repo-workflows).
 
 Plus queue processors for scheduled work. `scheduled_actions` and
 `scheduled_reactions` run as keiro-pgmq jobs, which bundle the queue name,
@@ -978,31 +1016,70 @@ config from disk via its IORef.
 
 ### 4. Inspect configuration
 
-View a summary of the current automation config and reaction statistics:
+View a summary of one automation's config plus its own reaction statistics and
+recent history:
 
 ```bash
-mori automate inspect
+mori automate inspect --path /path/to/repo -c mori.automation.dhall --name release
 ```
 
+`--path` is the authoritative repository root (it defaults to the current
+directory) and a relative `-c/--config` resolves against it. `--name` picks the
+named automation in that repository (default: `default`).
+
 ```
-Automation Configuration Summary
-================================
+Automation Config Summary
+  Name: release
+  Merged files:
+    - /path/to/repo/mori.automation.dhall
+  Effective execution: ExecutionPolicy {allowLocal = True, allowCI = False, maxConcurrency = Nothing}
+  Effective queued: no
+  Selectors: 2
+  Reactions: 2
+  Reaction definitions:
+    - test-on-core-change
+      [0] RunCommand
+    - notify-release
+      [0] Notify
+  Joins: 0
 
-Event Selectors (2):
-  core-changes (ChangesetSelector)
-  release-tags (RefSelector)
+Reaction Statistics:
+  completed: 8
+  failed: 3
 
-Reactions (2):
-  test-on-core-change → [core-changes]
-  notify-release → [release-tags]
-
-Execution Policy:
-  allowLocal: True
-  allowCI: False
-  maxConcurrency: None
+Recent Reactions (last 10):
+  [failed] notify-release (trigger: RefObserved @ repository-repo_01h455vb4pex5vsknk084sn02q:120) 240ms error: exit status 1
 ```
 
-Add `--json` for machine-readable output.
+Both blocks are scoped to that one repository and automation name: a sibling
+automation in the same repository, or an automation with the same name in
+another repository, is never counted here. The statistics cover all of the
+automation's recorded history, not only the ten rows shown, and they report
+recorded *statuses* — `completed` means the reaction's actions exited
+successfully, not that the intended effect happened.
+
+Inspection is read-only: it never creates `mori/repo-id` and never reserves an
+automation identity. A repository that was never linked therefore has no
+identity to scope by, and inspect says so instead of showing unrelated history:
+
+```
+Reaction Statistics: unavailable (repository not linked; no mori/repo-id)
+Recent Reactions: unavailable (repository not linked; no mori/repo-id)
+```
+
+A failed database read prints the same two lines with `(database unavailable)`
+and keeps the configuration summary above them.
+
+Add `--json` for machine-readable output. It carries the same distinction in
+`reactionHistoryStatus` — `available`, `repository-unlinked`, or
+`database-unavailable` — alongside the unchanged `reactionStatistics` (an array
+of `[status, count]` pairs) and `recentReactions` arrays. Empty arrays with
+`available` mean the automation has no history; empty arrays with either other
+status mean nothing could be read.
+
+Reaction history whose ownership was never recorded in the identity directories
+has no automation to attribute it to and is excluded from this view. Those rows
+are still visible through `mori reaction list`.
 
 ### 5. Explain event matching
 
@@ -1043,7 +1120,7 @@ daemon auto-ingest loop           (periodic, every --ingest-interval seconds)
     ▼
 mori automate run / daemon
     │
-    ├─ mori-automation processor
+    ├─ mori-automation-router
     │  reads repository events
     │  matches against selectors
     │  triggers reactions
@@ -1052,12 +1129,12 @@ mori automate run / daemon
     │      │  written to reaction-{id}:{name} stream
     │      │
     │      ▼
-    ├─ mori-reaction-executor processor
+    ├─ reaction executor
     │  reads reaction events
     │  executes RunCommand / Notify / EmitEvent
     │  writes ReactionCompleted / ReactionFailed
     │
-    └─ shibuya worker
+    └─ scheduled-action worker
        processes delayed Schedule actions from pgmq
 ```
 

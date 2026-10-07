@@ -36,7 +36,7 @@ it is unhealthy it shows how many legs are affected, degrades the verdict to
 | Code | Meaning |
 |------|---------|
 | `0` | Healthy |
-| `1` | Attention needed: stale pin, not registered, not observed, automation config not observed, or unhealthy automation execution |
+| `1` | Attention needed: stale pin, missing or empty registered automation source, not registered, not observed, automation config not observed, or unhealthy automation execution |
 | `2` | `mori.dhall` is missing or unparseable |
 
 Use `--json` in scripts or CI:
@@ -45,11 +45,18 @@ Use `--json` in scripts or CI:
 mori status --json | jq '.verdict'
 mori status --json | jq '.issues'
 mori status --json | jq '.automationExecution'
+mori status --json | jq '.schema.automations'
 ```
 
 `automationExecution` carries `{"healthy": true|false, "unhealthyLegs": 0}`.
 
-See [Status](/docs/guides/status) for remediation guidance.
+Automation pins are reported in `schema.automations`, keyed by automation name.
+Each entry has `config_path`, `origin`, `problem`, and `files`. Active registrations
+are authoritative; the conventional config is used only when none exist. A missing
+registered path or empty directory needs attention and never falls back to another
+config. This replaces the former `schema["mori.automation.dhall"]` JSON field.
+
+See [Status](/docs/guides/status) for the JSON shape and remediation guidance.
 
 
 Registration freshness appears in the `registration` JSON object. Use `mori registry freshness --stale-only` for a fleet query; see [Registry Refresh](/docs/guides/registry-refresh).

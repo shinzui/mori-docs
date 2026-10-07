@@ -442,6 +442,53 @@ Profile-governed concepts of type `Improvement Request` get a stable
 bundle-scoped `IR-N` handle and a typed query surface of their own. See the
 [Improvement Requests guide](/docs/guides/improvement-requests).
 
+## Typed capability catalogs
+
+A concept governed by the shared `coordination.capabilities` profile is a provision claim:
+something its provider ships now, with status, stability, release vocabulary, consumer entry
+points, and evidence. A gap or planned feature belongs in an improvement-request bundle instead.
+Adopt and author capability bundles with the `adopt-capabilities` blueprint published by
+`mori://shinzui/okf-profiles`; Mori reads that format but does not own a parallel bootstrap or
+extension file.
+
+The typed query surface reads the registration snapshot:
+
+```bash
+mori capabilities list [--project NAMESPACE/NAME] [--bundle NAME]
+  [--status shipped|deprecated|withdrawn] [--stability experimental|stable]
+  [--package NAME] [--tag TAG] [--provider NAMESPACE/NAME]
+  [--requires MORI_URI] [--json]
+mori capabilities show --project NAMESPACE/NAME [--bundle NAME] --id CAP-N [--json]
+```
+
+`CAP-N` is scoped to a project and bundle, so `show` requires `--project`. `--requires`
+accepts one canonical capability URI and performs a fleet-wide reverse lookup, treating the
+target bundle's local handle and its full URI as one edge. `show` resolves forward requirements
+and derives a Required by section. These provision edges come from typed `requires` frontmatter,
+not `mori.okf_concept_edges`: OKF's graph table represents Markdown links inside a bundle, while
+cross-project requirements exist only as canonical `mori://` values.
+
+Validation is deliberately two-layered:
+
+```bash
+okf validate docs/capabilities --profile docs/capabilities/profile.dhall --profile-enforce
+mori capabilities validate --path .
+```
+
+The profile owns document shape, closed vocabularies, and handle rules. Mori's semantic gate
+walks the checkout and resolves facts the profile cannot: provider ownership, evidence paths,
+local and external capability requirements, self-reference, and the required frontmatter/body
+link mirror. It groups every problem by concept path and exits non-zero; `--json` emits a
+snake_case problem array. Because list and show read the durable index, re-run `mori observe`
+after editing a record. See [mori capabilities](/docs/commands/capabilities)
+for exact flags and [Terminology Catalogs](/docs/guides/terminology) for vocabulary authoring.
+
+## Terminology catalogs
+
+The `documentation.terminology` profile governs preferred and discouraged wording,
+semantic relations, and `TERM-N` handles. Read [Terminology Catalogs](/docs/guides/terminology)
+for adoption, validation, query workflows, and the bounded agent-context catalog.
+
 ## Related
 
 - [`mori registry`](/docs/commands/registry) — `registry bundles` and `registry concepts`

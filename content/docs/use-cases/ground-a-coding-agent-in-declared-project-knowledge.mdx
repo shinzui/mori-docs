@@ -7,7 +7,7 @@ description: Assemble project purpose, dependency source, documentation, and sta
 
 ## At a glance
 
-![An agent reads a declared project manifest, resolves dependency source and docs through the local registry, searches curated knowledge, and receives role context with canonical references.](/diagrams/use-cases/ground-a-coding-agent-in-declared-project-knowledge.svg)
+![An agent resolves declared project knowledge and role context through Mori; protocol-neutral access, reference freshness, and bounded session permissions remain discovered.](/diagrams/use-cases/ground-a-coding-agent-in-declared-project-knowledge.svg)
 
 [Open the SVG at full size](/diagrams/use-cases/ground-a-coding-agent-in-declared-project-knowledge.svg)
 
@@ -25,10 +25,19 @@ facts assembled for a one-off prompt.
 3. Registry concept search and typed catalogs find examples and knowledge with producer and trust provenance.
 4. [`mori agent context <role>`](/docs/commands/agent#mori-agent-context) assembles JSON for a role; `mori://` references can be resolved with [`mori path`](/docs/commands/path).
 
-The manifest, registry, catalogs, and role context are delivered. Two
-**discovered** gaps remain: a protocol-neutral agent interface beyond the
-current agent-specific integration, and a way to check whether curated
-references still point to current material. [UC-6](/docs/use-cases/carry-dependency-knowledge-to-a-new-machine-and-the-next-person)
+The manifest, registry, catalogs, and role context are delivered. Three
+features remain **discovered**:
+
+- Protocol-neutral agent access beyond the current agent-specific integration,
+  tracked by `mori://shinzui/mori/okf/improvement-requests/concepts/IR-13`.
+  [HTTP reference resolution](/docs/guides/api#portable-reference-resolution) is available,
+  but it does not complete that broader grounding interface.
+- Checking whether curated references still point to current material.
+- Labelling prompt content with its project origin, granting permissions by agent
+  mode, and recording the effective permissions and context provenance in each
+  session, tracked by `mori://shinzui/mori/okf/improvement-requests/concepts/IR-33`.
+
+[UC-6](/docs/use-cases/carry-dependency-knowledge-to-a-new-machine-and-the-next-person)
 covers how this knowledge is stored and carried forward.
 
 **Source concept:** `mori://shinzui/mori/okf/use-cases/concepts/UC-5`

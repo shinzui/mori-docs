@@ -15,7 +15,8 @@ automation configs, and routes events to the correct repo automatically.
 mori automate daemon
 mori automate daemon --ingest-interval 30      # faster cycle for development
 mori automate daemon --ingest-interval 0       # disable auto-ingest
-mori automate daemon --refresh-interval 120    # config-refresh cycle
+mori automate daemon --no-registry-refresh     # disable registration refresh
+mori automate daemon --no-auto-resume          # halt all detected rewrites
 mori automate daemon --queued-concurrency 6    # FIFO queued automation workers
 mori automate daemon --serve                   # also serve the HTTP API
 mori automate daemon --metrics-port 9464       # also serve Kiroku's operator surface
@@ -25,8 +26,10 @@ mori automate daemon --metrics-port 9464       # also serve Kiroku's operator su
 
 | Flag | Default | Purpose |
 |------|---------|---------|
-| `--refresh-interval SECONDS` | 60 | Interval between config-refresh cycles |
-| `--ingest-interval SECONDS` | 300 | Interval between auto-ingest cycles (`0` to disable) |
+| `--refresh-interval SECONDS` | 60 | Ignored; retained for compatibility. Config reloads are event-driven |
+| `--ingest-interval SECONDS` | 300 | Interval between auto-ingest cycles (`0` disables auto-ingest and registration refresh) |
+| `--no-registry-refresh` | off | Disable automatic refresh of observed project registrations |
+| `--no-auto-resume` | off | Halt after a detected history rewrite, including proven replays |
 | `--queued-concurrency N` | 3 | Number of FIFO worker instances for `queued = True` automations |
 | `--serve` | off | Also serve the [HTTP API](/docs/commands/serve) from this process |
 | `--api-port PORT` | 8080 / `$MORI_API_PORT` | Port for the embedded HTTP API |
@@ -76,7 +79,7 @@ this surface is for.
 
 ## One Executor Per Database
 
-Before anything else, startup takes a PostgreSQL session advisory lock on a
+After the read-only migration-readiness check, startup takes a PostgreSQL session advisory lock on a
 dedicated, supervised connection. A second daemon — or a `mori automate run` —
 pointed at the same database refuses to start:
 
@@ -99,13 +102,13 @@ mean another daemon took ownership.
 
 ## How It Works
 
-1. On startup the daemon bootstraps its config registry from the
-   `automation_registrations` projection table (populated by
-   `mori automate register`).
+1. On startup the daemon bootstraps its config registry from the active
+   Automation registration read model (populated by `mori automate register`).
 
-2. Configs are loaded into a TVar-based ConfigRegistry keyed by RepoId.
+2. Stored decoded configs are loaded into the ConfigRegistry by repository and
+   automation name; startup does not reread their files.
 
-3. The daemon subscribes to the `automationRegistration` category for
+3. The daemon subscribes to the `automation` category for
    live config updates. When repos register, deregister, or update their
    automation configs, the daemon picks up changes automatically —
    fully event-driven with no filesystem polling.
@@ -122,15 +125,17 @@ mean another daemon took ownership.
 
 | Subscription | Purpose |
 |-------------|---------|
-| `mori-automation` (daemon mode) | Route events to per-repo configs + app fan-out |
-| `mori-reaction-executor` | Execute triggered actions |
-| `mori-pending-schedules-projection` | Maintain `mori.pending_scheduled_reactions` for `ReactionScheduled` / terminal events |
-| `mori-registry` | Populate registry read model |
-| `mori-tech-radar-projection` | Project tech-radar recommendations |
-| `mori-agent-plans-projection` | Project agent-plans catalog and dependencies |
-| `mori-workflow` | Maintain workflow projections |
-| Registration subscription | Update in-memory config registry on register/deregister |
-| App registration subscription | Update app registry on app events |
+| `mori-automation-router` | Route repository events to registered configs |
+| `mori-project-root-automation-router` | Route committed Project root events |
+| `mori-project-artifact-automation-router` | Route committed Project artifact events |
+| `mori-automation-config-registry` | Update in-memory configs from Automation events |
+| Reaction executor | Execute triggered actions |
+| Signal and join routers | Trigger reactions from deliveries and fan-in results |
+| Cascade routers | Advance frozen dependency waves |
+| App webhook fan-out | Deliver repository events to registered apps |
+
+Aggregate read models are maintained inline with writes rather than by separate
+registry, workflow, or pending-schedule projection subscriptions.
 
 Plus queue processors for deferred work and a periodic **auto-ingest loop**.
 The `scheduled_actions` and `scheduled_reactions` pgmq queues run through
@@ -160,6 +165,21 @@ reactions and no webhook deliveries. Failures are classified and recorded in
 recover an orphaned cursor with `mori automate reset-checkpoint`. See [Ingest
 Health](/docs/guides/ingest-health).
 
+## Registration refresh
+
+After each observed repository's ingest attempt, the daemon hashes its recorded
+registration inputs and reconciles changed content through `mori register`.
+This includes uncommitted input drift and a one-time refresh after the binary's
+registration contract changes. Unobserved registrations are reported for
+freshness but never refreshed automatically.
+
+Use `mori registry freshness --stale-only` to inspect the fleet. Disable refresh
+for one project with `mori observe refresh-policy NAMESPACE/NAME off`, or for the
+daemon with `--no-registry-refresh`. `--ingest-interval 0` also disables this loop.
+See [Registry Refresh](/docs/guides/registry-refresh) for input discovery and
+invalid-input retry behavior. Automatic registration refresh does not replace
+`mori automate update` for activating edited automation behavior.
+
 ## Registering with the Daemon
 
 A single `mori automate register` is enough to make a repo receive signals.
@@ -174,8 +194,7 @@ mori automate register
 # Register a different repo (path is authoritative — see below)
 mori automate register --path /path/to/repo
 
-# Update after editing config (also heals missing mori.projects rows from
-# pre-EP-4 register flows by re-emitting ProjectRepoLinked)
+# Activate edited config and reconcile repository linkage
 mori automate update
 
 # Register a second, independently named automation in the same repo

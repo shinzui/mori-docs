@@ -482,16 +482,19 @@ surfaces. See [`mori signal`](/docs/commands/signal).
 
 ## Subscriptions
 
-When `mori automate run` starts, it runs four concurrent subscriptions:
+The guarded executor runs concurrent routing and delivery workers. Important
+legs for cross-repository work are:
 
-| Subscription | Category | Purpose |
-|-------------|----------|---------|
-| `mori-automation` | `repository` | Match selectors, trigger reactions |
-| `mori-reaction-executor` | `reaction` | Execute triggered actions (including signal dispatch) |
-| `mori-registry` | `project` | Populate registry read model |
-| `mori-workflow` | `workflow` | Maintain `mori.workflows` and `mori.workflow_steps` projections |
+| Subscription or worker | Category | Purpose |
+|------------------------|----------|---------|
+| `mori-automation-router` | `repository` | Match repository selectors and trigger reactions |
+| `mori-reaction-executor-store` | `reaction` | Execute actions, including checkpointed signal dispatch |
+| Signal delivery timer worker | `signalDelivery` | Attempt deliveries and apply their retry policy |
+| `mori-signal-trigger-router` | `signalDelivery` | Settle workflow delivery state and apply immediate, scheduled, or queued policy to target reactions |
 
-Plus a shibuya worker for scheduled actions.
+Scheduled and queued workers reach the same dispatch path. Ordered cascades
+also bridge frozen emission and workflow facts through their start and wave
+routers. See [Automation Daemon](/docs/guides/automation-daemon).
 
 ---
 
@@ -516,8 +519,10 @@ mori register
 no repo-id for target: payment-service
 ```
 
-The target project directory doesn't have a `mori/repo-id` file. Run
-`mori automate ingest git` or `mori init` in the target project to create one.
+The target has no linked repository identity in the registry. Run
+`mori automate register --path /path/to/target` to link identity and behavior,
+or `mori observe --path /path/to/target` to link it without attaching automation.
+A local `mori/repo-id` file alone does not make the target reachable.
 
 ### No workflows found
 
@@ -529,7 +534,7 @@ If `mori workflow list` returns no results:
 4. Verify the target's `SignalSelector.sourceProjects` filter uses the
    **qualified** upstream project name (`namespace/name`, e.g.
    `shinzui/schema-repo`). Bare project names will silently match nothing —
-   `WorkflowSignalReceived` events carry the source project as
+   Successful first-class signal deliveries carry the source project as
    `namespace/name`, so a bare-name filter has no chance of matching.
 
 ### Signal delivered but the target never reacted

@@ -8,10 +8,10 @@ Canonical cross-project references use the `mori://` URI scheme. Every artifact
 owned by a registered project has one stable identifier you can copy out of the
 terminal, embed in a `mori.dhall`, or paste into a commit message.
 
-Twenty-one kinds are addressable, covering every entity mori's schema
+Twenty-five built-in kinds are addressable, covering every entity mori's schema
 extensions contribute — docs, packages, repos, skills, subagents, APIs,
 cookbook entries, seihou templates, plans, OKF bundles, checklists, upstream
-issues, tech-radar recommendations, and the seven DDD model entities.
+issues, tech-radar recommendations, and the ten DDD model entities.
 
 ```text
 mori://<namespace>/<name>/<kind-segment>[/<key>][#<anchor>]
@@ -85,12 +85,16 @@ shinzui/streamly:streamly-core
 | DddFlow | `ddd/flows` | `ddd-flow` |
 | DddGlossaryTerm | `ddd/glossary` | `ddd-term` |
 | DddCollaborator | `ddd/collaborators` | `ddd-collaborator` |
+| OkfProfile | `profiles` | `profile` |
+| DddReactor | `ddd/reactors` | `ddd-reactor` |
+| DddProcessManager | `ddd/process-managers` | `ddd-process-manager` |
+| DddDurableWorkflow | `ddd/durable-workflows` | `ddd-durable-workflow` |
 
 Four segments do not pluralise: `cookbook` (the artifact is "the cookbook
 entry"), `okf` (the format, not a plural noun), `radar` (it matches
 `mori tech-radar`), and `glossary` (a mass noun).
 
-The seven [DDD](/docs/guides/ddd) kinds take a **two-segment** path. The bare
+The ten [DDD](/docs/guides/ddd) kinds take a **two-segment** path. The bare
 segment `mori://<ns>/<name>/ddd` is not a ref and reports an unknown kind —
 `ddd` is a namespace within the URI, not a kind of its own. The compact form
 needs no second segment, because each DDD token is flat
@@ -126,10 +130,11 @@ pair. The reversed pair resolves only if the model declares it too.
 **Glossary terms.** Stored as prose (`Bounded Context`), addressed by slug
 (`bounded-context`).
 
-**Improvement requests.** `originPlan` and `targetPlan` fields accept only
-canonical, unanchored `masterplans/` or `plans/` references, and the
-[improvement-request validator](/docs/guides/improvement-requests)
-additionally checks project ownership and exact registration.
+**Improvement requests.** `originPlan` accepts a canonical, unanchored plan URI.
+`targetPlan` also accepts repository-relative `docs/masterplans/<id>-<slug>.md`
+or `docs/plans/<id>-<slug>.md`, normalized to the owning project's canonical
+URI. The [semantic validator](/docs/guides/improvement-requests) checks
+project ownership and exact registration after normalization.
 
 ## Nested refs
 
@@ -173,7 +178,7 @@ them:
 
 ```dhall
 Schema.MoriRef::{
-, namespace = "shinzui"
+  namespace = "shinzui"
 , name = "mori"
 , kind = Some Schema.MoriArtifactKind.DddContext
 , key = Some "registry"
@@ -189,25 +194,18 @@ they travel as canonical `Text` in a `DocLocation.Canonical` arm.
 mori validate --check-refs
 ```
 
-The check walks five sources and reports them as separate groups:
+The check walks the manifest and shipped reference-bearing extensions, including
+DDD typed links, plus installed declarative extensions that opt into canonical
+reference collection and stored relationship targets. Manifest checks include
+text doc locations, typed dependency and standard companions, ownership refs,
+and upstream refs. DDD ownership companions must target the declaring project;
+mapping endpoints, succession, participant, and flow refs may cross projects.
 
-| Source | What is checked |
-|--------|-----------------|
-| `mori.dhall` | project docs, per-package docs, dependency `extraDocs` |
-| `mori/cookbook.dhall` | each entry's `location` |
-| `mori/checklist.dhall` | each checklist's `sourceDoc` and item `docs` |
-| `mori/tech-radar.dhall` | each recommendation's `project` |
-| `mori/agent-plans.dhall` | each exposed plan's cross-project dependency `target`s |
-
-A missing extension file contributes nothing and is not an error. A file that
-fails to load prints one warning and contributes no refs, rather than failing
-the whole check.
-
-The last two are worth running deliberately after any registry change. Their
-loaders already reject a ref that does not *parse*, so what `--check-refs` adds
-is *resolution* — a plan dependency or radar pointer that still parses but
-names something no longer registered. That is the failure mode that rots
-quietly.
+Missing optional extension files contribute no references. Load failures are
+reported; unresolved projects and artifact keys fail the check. An upstream
+outside the registry is carried as declared with a warning. Run the dedicated
+capability, terminology, and improvement-request validators for their typed
+OKF frontmatter semantics.
 
 ## Shell completion
 
@@ -220,8 +218,8 @@ mori path mori://shinzui/mori/docs/<TAB> # every doc key
 mori path shinzui/mori#doc:<TAB>         # same, compact form
 ```
 
-The `ddd/` prefix is offered once rather than as seven near-identical entries;
-committing it lists the seven members.
+The `ddd/` prefix is offered once rather than as ten near-identical entries;
+committing it lists the ten members.
 
 Kind menus list every completable kind even when a kind has no rows, so you can
 complete a ref to a kind you have not populated yet. Key menus list only
@@ -270,3 +268,13 @@ reported way rather than resolving to the wrong thing.
 - [`mori browse`](/docs/commands/browse) — open a ref in a browser
 - [`mori validate`](/docs/commands/validate) — `--check-refs`
 - [Schema Reference](/docs/guides/schema-reference) — `DocLocation` and `MoriRef`
+
+## HTTP resolution
+
+`GET /v1/refs/resolve?uri=<encoded-mori-uri>` and `POST /v1/refs/resolve`
+share the CLI resolver and canonicalizer, including aliases and installed
+extension kinds. Success reports portable identity; checkout paths are absent
+unless `include_host_context` is requested. Batches retain input order and accept
+at most 100 URIs. Host paths are recorded facts with `path_verified: false`, and
+fragments are unverified navigation hints. These routes read current registry
+observations without refreshing them. See [HTTP reference resolution](/docs/guides/api#portable-reference-resolution).

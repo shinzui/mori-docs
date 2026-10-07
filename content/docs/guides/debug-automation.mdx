@@ -54,17 +54,26 @@ mori automate ingest git --path <dir>
 A repository is **stuck** when it has three or more consecutive ingest failures,
 or no successful ingest in the last six hours.
 
-If history was rewritten under mori — a force-push, a rebase of already-ingested
-commits — ingest detects it and stops. Recover the cursor with:
+If history was rewritten under Mori, ingest records the rewrite. An exact
+content-equivalent replay resumes from the merge base in the detecting tick;
+unproven rewrites, or `--no-auto-resume`, leave the repository durably halted.
+`mori doctor --ingest` reports the halt and its reset command, while
+`mori observe list` shows `paused:orphaned`.
+
+Preview the recovery before applying it:
 
 ```bash
-mori automate reset-checkpoint <PROJECT> --to-head
+mori automate reset-checkpoint <PROJECT> --to-merge-base --dry-run
+mori automate reset-checkpoint <PROJECT> --to-merge-base
 ```
 
-The argument is a project name, or `namespace/name` when the bare name is
-ambiguous. Prefer `--to-head`. `--to-commit <SHA>` targets one commit, and
-`--to-root` re-reads the whole history and **can produce duplicate webhook
-deliveries**.
+The project argument may be qualified with `namespace/name`. Merge-base mode
+refuses when it cannot prove that already observed work will be suppressed.
+`--allow-reemit` accepts the listed probable re-emissions. `--to-head` skips
+all unobserved commits, including new post-rewrite work; `--to-commit SHA`
+also previews skips. `--to-root` suppresses indexed content but can emit
+rewritten commits whose content changed. Every mode shows emit, suppress, and
+skip counts. See [Ingest Health](/docs/guides/ingest-health) for proof conditions.
 
 ## 3. Should the event have matched?
 

@@ -92,8 +92,10 @@ OK: 12 improvement request(s)
 
 Origins may name a project or one of its artifacts. `originPlan`, when present,
 must be an exactly registered plan owned by that origin project; `targetPlan`
-must be an exactly registered plan owned by the project that declares the
-bundle.
+must name a registered plan owned by the project that declares the bundle.
+It may be a canonical URI or a repository-relative `docs/plans/<id>-<slug>.md`
+or `docs/masterplans/<id>-<slug>.md`; Mori normalizes a relative path before
+checking ownership and registration.
 
 ## Querying
 

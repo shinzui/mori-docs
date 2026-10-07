@@ -353,7 +353,11 @@ mori registry templates show <namespace>/<name>/<template> --json
 
 ## `mori registry upgrade-schema`
 
-Walk the registry and upgrade every registered local project whose `schema_hash` diverges from the CLI's pinned schema version. Per project, the driver runs `mori schema upgrade`, then `mori schema migrate --apply` on `mori.dhall` and any known extension files (`mori/cookbook.dhall`, `mori/tech-radar.dhall`), then `mori validate`. One project's failure does not abort the others.
+Upgrade projects with work or source problems in their manifest, native extensions,
+or resolved automation sources. Active registrations select automation files and
+directories; the conventional config is used only when none exist. Each automation
+is migrated by file kind, then reloaded and semantically validated. A missing or
+empty registered source remains visible. One project's failure does not stop the others.
 
 ```bash
 mori registry upgrade-schema
@@ -370,11 +374,16 @@ mori registry upgrade-schema --allow-dirty
 |------|-------------|
 | `--dry-run` | Report what would change without touching any files |
 | `--filter GLOB` | Only act on projects whose `<namespace>/<name>` matches `GLOB` (supports `*` and `?`) |
-| `--all` | Include projects already on the current schema (default: only stale) |
+| `--all` | Include projects with no pending work (default: work or source problems only) |
 | `--commit` | Create a git commit in each upgraded project (default: leave changes unstaged) |
 | `--allow-dirty` | Upgrade projects even if their working tree has uncommitted changes |
 
-Projects without a `localPath`, or whose path is missing on disk, are reported as skipped. See [Schema Migrations](/docs/guides/schema-migrations) for the per-project migration semantics.
+Missing checkouts or manifests are skipped. With `--commit`, automation sources
+and members must resolve inside the project worktree; an external path or symlink
+escape is skipped before writes. Only changed manifest, extension, and automation
+files are staged. Automation migration or validation failure makes the project
+fail. See [Registry Schema Upgrade](/docs/guides/registry-upgrade) for selection,
+preview, and report semantics.
 
 ## `mori registry group`
 

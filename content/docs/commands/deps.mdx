@@ -45,9 +45,9 @@ mori deps locate shinzui/hasql:hasql-pool
 
 ### Resolution Order
 
-1. Local registry
-2. Global registry (if online)
-3. Not found
+Resolution uses the local registry. A global registry lookup is not implemented.
+Unregistered dependencies are reported as unresolved; ambiguous names need a
+qualified project or package identity.
 
 ## `mori deps tree`
 
@@ -86,3 +86,19 @@ hlint           [dev]
 `regular`-scoped deps display without a tag. See [Dependency
 Scope](/docs/schema-guide#dependency-scope) in the schema guide for the
 declaration form.
+
+## Reverse dependencies and ordered waves
+
+Use [`mori registry dependents`](/docs/commands/registry#mori-registry-dependents)
+for reverse lookup. Ordinary mode is one hop and includes pinned imports.
+
+```bash
+mori registry dependents acme/schema --transitive --waves
+mori registry dependents acme/schema --waves --scope regular --scope build --json
+```
+
+`--waves` implies transitive traversal, defaulting to regular scope. Explicit
+package and project dependencies impose order; pins do not. The root is already
+satisfied. Graph overflow or reachable cycles fail instead of returning a
+truncated success. Transitive JSON is a versioned object; one-hop JSON remains
+an array. See [Ordered dependency cascades](/docs/guides/cross-repo-workflows#ordered-dependency-cascades).

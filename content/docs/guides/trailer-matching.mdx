@@ -62,3 +62,23 @@ payload value. Unknown variables pass through unchanged, and the daemon logs a
 warning naming the reaction, triggering event, and unresolved placeholders.
 Optional values represented in the context, such as an absent changeset body,
 expand to an empty string.
+
+## Project and release variables
+
+A matched `ProjectSelector` provides these fields:
+
+| Variable | Meaning |
+|----------|---------|
+| `{{project.id}}` | Canonical `proj_` KindID v7 |
+| `{{project.reference}}` | Canonical project URI |
+| `{{project.family}}` | Stable family name, such as `release` |
+| `{{project.action}}` | `imported`, `added`, `updated`, or `removed` |
+| `{{project.eventType}}` | Private event type name |
+| `{{release.version}}` | Opaque version, for family `Release` |
+| `{{release.releasedAt}}` | Declared release time, for family `Release` |
+| `{{release.source}}` | Release provenance, for family `Release` |
+| `{{release.payloadJson}}` | Complete JSON with `project_id`, `project_reference`, `version`, `released_at`, and `source` |
+
+Use `{{release.payloadJson}}` as the entire `SignalAction.payloadJson` value
+so JSON escaping is preserved. See [Record observed tags](/docs/guides/registry-releases#record-observed-tags)
+for the tag-selector reaction that creates the immutable release fact.

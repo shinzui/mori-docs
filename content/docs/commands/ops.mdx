@@ -149,6 +149,12 @@ mori ops rebuild status RUN_ID
 mori ops rebuild abandon RUN_ID --code CODE --detail TEXT
 ```
 
+The groups are `app_models`, `automation_models`, `group_models`, `join_models`,
+`pattern_assurance_models`, `project_models`, `reaction_models`,
+`repository_models`, `signal_models`, and `workflow_models`.
+`pattern_assurance_models` restores immutable assessment rows with preserve-only
+replay and keeps their identity directory. See [Pattern Assurance](/docs/guides/pattern-assurance).
+
 `start` and `abandon` require operator evidence on the command line — there is
 no anonymous destructive read-side action.
 

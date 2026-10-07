@@ -31,7 +31,7 @@ synonym for `<namespace>/<name>#package:<package>`.
 
 ## Artifact kinds
 
-Twenty-one kinds are addressable. The order matches the Dhall union arms in
+Twenty-five built-in kinds are addressable. The order matches the Dhall union arms in
 `Schema.MoriArtifactKind` and the constructor order in the Haskell mirror.
 
 | Kind | URI segment | Compact | Dhall arm |
@@ -57,6 +57,10 @@ Twenty-one kinds are addressable. The order matches the Dhall union arms in
 | DddFlow | `ddd/flows` | `ddd-flow` | `DddFlow` |
 | DddGlossaryTerm | `ddd/glossary` | `ddd-term` | `DddGlossaryTerm` |
 | DddCollaborator | `ddd/collaborators` | `ddd-collaborator` | `DddCollaborator` |
+| OkfProfile | `profiles` | `profile` | `OkfProfile` |
+| DddReactor | `ddd/reactors` | `ddd-reactor` | `DddReactor` |
+| DddProcessManager | `ddd/process-managers` | `ddd-process-manager` | `DddProcessManager` |
+| DddDurableWorkflow | `ddd/durable-workflows` | `ddd-durable-workflow` | `DddDurableWorkflow` |
 
 Four segments do not pluralise: `cookbook` (the artifact is "the cookbook
 entry", and its extension already uses the singular form), `okf` (the format
@@ -70,7 +74,7 @@ them:
 
 ```dhall
 Schema.MoriRef::{
-, namespace = "shinzui"
+  namespace = "shinzui"
 , name = "mori"
 , kind = Some Schema.MoriArtifactKind.DddContext
 , key = Some "registry"
@@ -83,7 +87,7 @@ forms below cannot be expressed as a typed value. They travel as canonical
 
 ### Two-segment DDD kinds
 
-The seven [DDD](/docs/guides/ddd) kinds take a two-segment path. The bare
+The ten [DDD](/docs/guides/ddd) kinds take a two-segment path. The bare
 segment `mori://<ns>/<name>/ddd` is not a ref and reports an unknown kind —
 `ddd` is a namespace within the URI, not a kind of its own. The compact form is
 flat, so it needs no second segment: `shinzui/mori#ddd-context:registry`.
@@ -215,11 +219,13 @@ entries, and checklist source docs. Existing `LocalFile` / `LocalDir` /
 `RepoPath` / `Url` arms keep working unchanged; the addition is purely
 additive.
 
-Improvement-request `originPlan` and `targetPlan` fields accept only canonical,
-unanchored `masterplans/<id>-<slug>` or `plans/<id>-<slug>` references. The
-[improvement-request validator](/docs/guides/improvement-requests) additionally
-checks project ownership and exact registration; parsing a conventional plan
-path alone is not sufficient.
+Improvement-request `originPlan` fields use canonical, unanchored
+`masterplans/<id>-<slug>` or `plans/<id>-<slug>` references. `targetPlan` also
+accepts a conventional repository-relative plan path, which Mori normalizes to
+the owning project's canonical URI. The
+[improvement-request validator](/docs/guides/improvement-requests) checks project
+ownership and exact registration; parsing a conventional plan path alone is not
+sufficient.
 
 ## Output: canonicalRef in JSON and `--full`
 
@@ -244,13 +250,18 @@ files:
 mori validate --check-refs
 ```
 
-The check walks five sources — `mori.dhall`, `mori/cookbook.dhall`,
-`mori/checklist.dhall`, `mori/tech-radar.dhall`, and
-`mori/agent-plans.dhall` — printing a per-source ✓/✗/⚠ report. It exits zero
-if every ref resolves through the local registry; it exits 1 if any ref names a
-project that is not registered or a missing artifact key. A missing extension
-file contributes nothing and is not an error; a file that fails to load prints
-one warning and contributes no refs rather than failing the whole check.
+The check walks the manifest and shipped reference-bearing extensions, including
+DDD typed links, plus installed declarative extensions that opt into canonical
+reference collection and stored relationship targets. Manifest checks include
+text doc locations, typed dependency and standard companions, ownership refs,
+and upstream refs. DDD ownership companions must target the declaring project;
+mapping endpoints, succession, participant, and flow refs may cross projects.
+
+Missing optional extension files contribute no references. Load failures are
+reported; unresolved projects and artifact keys fail the check. An upstream
+outside the registry is carried as declared with a warning. Run the dedicated
+capability, terminology, and improvement-request validators for their typed
+OKF frontmatter semantics.
 
 ## Reference fragility
 
@@ -280,3 +291,13 @@ stable, sparse step numbers.
 - [`mori validate --check-refs`](/docs/commands/validate) — validates stored refs
 - [Schema Guide](/docs/schema-guide) — `DocLocation.Canonical` examples
 - [Schema Reference](/docs/guides/schema-reference) — `DocLocation` arms
+
+## HTTP resolution
+
+`GET /v1/refs/resolve?uri=<encoded-mori-uri>` and `POST /v1/refs/resolve`
+share the CLI resolver and canonicalizer, including aliases and installed
+extension kinds. Success reports portable identity; checkout paths are absent
+unless `include_host_context` is requested. Batches retain input order and accept
+at most 100 URIs. Host paths are recorded facts with `path_verified: false`, and
+fragments are unverified navigation hints. These routes read current registry
+observations without refreshing them. See [HTTP reference resolution](/docs/guides/api#portable-reference-resolution).

@@ -59,7 +59,7 @@ mori agent claude --debug
 ```
 
 Additional features:
-- Loads skills from `~/.config/mori/agents/` (user scope) and `.mori/agents/` (project scope)
+- Loads skills from `~/.config/mori/agents/` (user scope) and `<project root>/.mori/agents/` (project scope)
 - Adds `Read` permissions for each dependency path
 - Caches resolved dependencies keyed by a fingerprint of `mori.dhall` and `mori/` — subsequent launches skip resolution if nothing changed
 
@@ -162,7 +162,7 @@ corpus `bootstrap`).
 
 Sessions automatically discover and load agent directories:
 - **User scope:** `~/.config/mori/agents/`
-- **Project scope:** `.mori/agents/`
+- **Project scope:** `<project root>/.mori/agents/`, resolved from the nearest `mori.dhall`, `.mori`, or `.git` at or above the current directory
 
 Missing directories are silently skipped.
 

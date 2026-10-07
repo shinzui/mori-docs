@@ -540,13 +540,17 @@ bulk by `mori validate --check-refs`.
 
 ### MoriArtifactKind
 
-```
+```text
 Doc | Package | Repo | Skill | Subagent | Api | Cookbook | Template
+MasterPlan | ExecPlan | OkfBundle | Checklist | UpstreamIssue | Recommendation
+DddSubdomain | DddContext | DddAggregate | DddContextMapping | DddFlow
+DddGlossaryTerm | DddCollaborator | OkfProfile | DddReactor
+DddProcessManager | DddDurableWorkflow
 ```
 
-Eight pinned kinds used by the canonical-ref system. URI segments are
-plural (`docs`, `packages`, `repos`, `skills`, `subagents`, `apis`,
-`templates`) except `cookbook`, which stays singular.
+These twenty-five built-in kinds have canonical URI segments and typed Dhall
+arms. See [Canonical Refs](/docs/concepts/canonical-refs#artifact-kinds) for the
+segment and compact-token table. Installed extensions may add their own kinds.
 
 ### MoriRef
 
@@ -640,15 +644,37 @@ RunCommand : { command, args, workingDir, timeout, env }
 EmitEvent : { eventType, streamName, eventData }
 Notify : { url, method, headers, bodyTemplate }
 Schedule : { delaySeconds, action : ScheduledAction }
+Signal : { signalType, targets, payload, payloadJson, cascade }
+Decision : { command, args, workingDir, timeout, env, resultFile, maxResultBytes, routes }
 ```
 
 ### ScheduledAction
 
-Non-recursive subset of `ReactionAction` (no `Schedule` variant):
+Non-recursive subset of `ReactionAction` (no `Schedule` or `Decision` variant):
 
 ```
-RunCommand | EmitEvent | Notify (same fields as ReactionAction)
+RunCommand | EmitEvent | Notify | Signal (same fields as ReactionAction)
 ```
+
+### SignalCascade
+
+| Field | Type | Default |
+|-------|------|---------|
+| `scopes` | `List DependencyScope` | `[ Regular ]` |
+| `maxDepth` | `Natural` | `32` |
+
+`SignalAction.cascade` is `Optional SignalCascade`, default `None`. It is valid
+only with exactly `targets = [ "*dependents*" ]` and opts into a bounded,
+frozen dependency graph. Explicit project and package dependencies impose order;
+pins remain discoverable in one-hop targeting. See
+[Ordered dependency cascades](/docs/guides/cross-repo-workflows#ordered-dependency-cascades).
+
+### Project signal families
+
+`ProjectSignalFamily` includes `Release` and `AuditReceipt`. Release facts carry
+opaque version, time, and source; audit receipts carry immutable rule outcomes.
+Use a `ProjectSelector` with the desired family and action to react to them.
+See [Registry Releases](/docs/guides/registry-releases) and [Audit](/docs/guides/audit).
 
 ## Validation Rules
 
