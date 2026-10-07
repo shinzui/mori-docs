@@ -174,3 +174,77 @@ along with the rest of the daemon.
 - [Cross-Repo Workflows](/docs/guides/cross-repo-workflows) — the CLI equivalent of the chain endpoint
 - [Apps](/docs/guides/apps) — webhook receivers created through `/v1/apps`
 - [Agent Plans](/docs/guides/agent-plans) — the CLI equivalent of the plan graph endpoint
+
+
+## Portable reference resolution
+
+`GET /v1/refs/resolve?uri=<encoded-mori-uri>` verifies one registry reference.
+`POST /v1/refs/resolve` verifies an ordered list. Both use the parser, resolver,
+and canonicalizer behind `mori path`, including installed extension grammars.
+They require the normal bearer token when authentication is enabled.
+
+```bash
+curl -G http://127.0.0.1:8080/v1/refs/resolve \
+  --data-urlencode 'uri=mori://shinzui/mori' \
+  -H "Authorization: Bearer $MORI_API_TOKEN"
+curl http://127.0.0.1:8080/v1/refs/resolve \
+  -H "Authorization: Bearer $MORI_API_TOKEN" -H 'Content-Type: application/json' \
+  --data '{"uris":["mori://shinzui/mori","bad","mori://shinzui/mori/docs/missing"]}'
+```
+
+A success contains `status: resolved`, the original `uri`, `canonical_uri`,
+`artifact_kind`, and `project` (`ref`, `namespace`, `name`). A successful lookup
+through a project rename also includes `alias_of`, identifying the old project
+spelling. Direct project identity wins over aliases. Concept paths canonicalize
+to unique document handles; duplicated handles retain the successful path form.
+Radar references canonicalize to their qualified language/category/package key.
+Fragments are preserved navigation hints; the registry does not verify headings.
+
+`artifact_kind` is an open string vocabulary: `project`, `doc`, `package`,
+`repository`, `skill`, `subagent`, `template`, `api`, `cookbook_entry`,
+`okf_profile`, `okf_bundle`, `okf_concept`, `exec_plan`, `master_plan`,
+`checklist`, `checklist_step`, `upstream_issue`, `recommendation`,
+`ddd_subdomain`, `ddd_context`, `ddd_aggregate`, `ddd_context_mapping`,
+`ddd_flow`, `ddd_flow_step`, `ddd_glossary_term`, `ddd_collaborator`,
+`ddd_reactor`, `ddd_process_manager`, and `ddd_durable_workflow`.
+Installed kinds use `extension/<extension-name>/<kind-name>`.
+
+Single lookup failures use `application/problem+json` with the normal RFC 9457
+fields plus `uri`, `reason`, and `candidates`. `code` equals `reason`:
+
+| Reason | HTTP status |
+|--------|-------------|
+| `malformed` | 400 |
+| `unsupported-kind` | 400 |
+| `project-not-found` | 404 |
+| `artifact-not-found` | 404 |
+| `ambiguous` | 409 |
+
+Candidates contain `canonical_uri` and optional `description`. Distinct rows
+can share a URI after key normalization; descriptions distinguish them, and a
+candidate URI is not guaranteed to resolve uniquely. Other failures retain the
+ordinary problem shape: missing query parameters, invalid JSON, authentication,
+and infrastructure failures are request errors. A database outage returns 503,
+with `retryable: true`, rather than claiming artifacts are absent.
+
+The batch accepts `{"uris": ["..."], "include_host_context": false}`.
+`uris` is required and every element must be a string. The optional Boolean
+defaults to false only when absent. At most **100** inputs are accepted; 101
+returns 400 with `code: batch-limit-exceeded`, `limit: 100`, and `received`.
+A valid envelope returns 200 with `results` in input order, preserving duplicates.
+Each result is either the success above or `status: failed`, `uri`, `reason`,
+`message`, and `candidates`. Bad strings fail individually. Empty and all-failed
+lists are valid; infrastructure failures fail the whole request.
+
+Host facts are absent by default. GET `include_host_context=true` or the batch
+Boolean includes `host_context` with available `host_id`, `host_label`, and an
+absolute recorded `project_path`. A path carries `path_verified: false`; no
+file is checked. Missing facts are omitted, and a record with no facts yields
+an empty context object. Portable success remains valid after files move or
+are deleted; `mori path` can separately fail to open a local file.
+
+Resolution reports the current registry observations; it does not refresh or
+register projects. Plans currently resolve against published `agent-plans`
+rows. IR-36 (`mori://shinzui/mori/okf/improvement-requests/concepts/IR-36`)
+tracks independent plan catalog work; an unindexed plan returns
+`artifact-not-found`, with no special plan failure reason.

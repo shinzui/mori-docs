@@ -1,0 +1,56 @@
+---
+title: Terminology Catalogs
+description: Browse preferred wording and semantic relations across projects.
+icon: BookOpen
+---
+
+# Terminology Catalogs
+
+A terminology catalog is a project's controlled vocabulary, governed by the shared
+`documentation.terminology` profile that `mori://shinzui/okf-profiles` publishes (first released in
+v0.17.0). Each concept has `type: Term` and a bundle-scoped `TERM-N` handle. Its frontmatter
+records the canonical wording as `title`, a one-sentence `description`, `current` or `deprecated`
+status (a deprecated term names its successor in `replacedBy`), and optionally an `abbreviation`,
+a `scope`, `aliases`, `discouraged` wording, `broader`/`related`/`replaces` terms, cross-project
+`sameAs` equivalences, and code `anchors`. `narrower` is never authored; Mori derives it from
+`broader`. okf-profiles has not shipped an adoption blueprint yet, so declare a `terminology`
+bundle at `docs/terminology` bound to a local `mori/terminology-profile.dhall` selector, write
+one file per term, and register the project.
+
+The typed query surface reads the registration snapshot:
+
+```bash
+mori terms list [--project NAMESPACE/NAME] [--bundle NAME]
+  [--status current|deprecated] [--tag TAG] [--json]
+mori terms show mori://<ns>/<name>/okf/<bundle>/concepts/TERM-N [--json]
+mori terms show --project NAMESPACE/NAME --id TERM-N [--bundle NAME] [--json]
+mori terms search TEXT [--project NAMESPACE/NAME]... [--group GROUP]
+  [--status current|deprecated] [--json]
+```
+
+`search` answers "what should I call this?" across the registry, a set of projects, or a group.
+It matches titles, aliases, abbreviations, and discouraged wording, ignoring case. A hit on
+discouraged wording prints the preferred term and its URI, for example `"handler" is discouraged
+wording — use "decider" (mori://…/concepts/TERM-4)`. `show` adds the term's resolved relations, the
+relations other terms declare toward it (including the derived `narrower`), and its fleet-wide
+`sameAs` cluster. A target that does not resolve stays visible with its failure. These relations
+come from typed frontmatter, resolved at query time, not from `mori.okf_concept_edges`.
+
+Validation is two-layered, as for capabilities:
+
+```bash
+okf validate docs/terminology --strict --profile mori/terminology-profile.dhall --profile-enforce --log-enforce
+mori terms validate --path .
+```
+
+The profile owns shape, vocabularies, handles, and reference spelling. Mori's gate resolves every
+relation (a cross-project target must already be registered), finds `broader` cycles, enforces the
+`replaces`/`replacedBy` mirror, rejects discouraged wording that names another current term, and
+checks `file` and `doc` anchors against the checkout. It exits non-zero and `--json` emits stable
+snake_case problem codes.
+
+`mori agent context <role>` carries a `terminology` array: the terms of the project and of each
+project its `dependencies` resolve to, current terms first, at most 200 per project, with
+`omitted_count` and `invalid_count`. An agent working in a dependent project therefore sees the
+library's preferred and discouraged wording without being told where to look. After editing a
+term, re-run `mori observe` or `mori register`; `mori terms validate` reads disk and can run first.

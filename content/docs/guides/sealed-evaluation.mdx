@@ -1,0 +1,53 @@
+---
+title: Sealed Repository Evaluation
+description: Repair repository Dhall imports refused by the evaluation boundary.
+icon: ShieldCheck
+---
+
+# Sealed Repository Evaluation
+
+Repository Dhall is evaluated inside a bounded root. This applies to the project manifest,
+automation files, extension instances and install manifests, local OKF profiles, and seihou
+manifests. Mori checks their local import graph before evaluation.
+
+## Repair a refused import
+
+Run `mori validate` from the project root. It reports all sealing violations it can discover,
+including the importing file, import and rule. `mori validate --check-refs` also consults the
+installed extension catalog; without that connection, an unknown extension schema URL may
+produce a warning because Mori cannot establish whether it is served locally.
+
+| Refused input | Repair |
+|---|---|
+| `env:` import | Keep configuration values in the repository; read runtime secrets in the executed command |
+| Absolute or home-relative import | Use a relative import inside the evaluation root |
+| Relative import or symlink escaping the root | Move the file inside the project or publish a hash-pinned URL |
+| Unpinned remote import | Add the URL's Dhall `sha256:` integrity hash |
+| Remote import with `using` headers | Remove the custom headers |
+| `missing`, including behind an alternative | Supply an explicit value or an allowed import |
+| Entry file outside the root | Put the profile or manifest inside its evaluation root |
+| Legacy URL-valued OKF `profile` | Use a pinned `profileBinding` and remove the legacy field |
+
+The project directory is the root for its manifest, extensions, profiles and seihou files.
+A single automation file uses its containing directory; a directory of automation files uses
+that directory's parent. An extension install manifest uses the extension source directory.
+Containment follows symbolic links as well as `..` segments.
+
+## Allowed imports and network behavior
+
+Relative imports inside the root are allowed. Mori-schema URLs are resolved from the binary's
+embedded schema; installed declarative extension schema URLs are served from their install
+directory. These local schema routes do not require a hash for sealing. An `as Location`
+import reads no value and is allowed.
+
+Other remote imports require a hash. A semantic-cache miss can still fetch that URL over the
+network; the resulting value must match the pin. Sealing is an import boundary, not a promise
+that every allowed evaluation is offline. The operator's own user configuration under
+`~/.config/mori` is evaluated outside this repository policy.
+
+## Upgrade from earlier releases
+
+Configurations using environment, absolute, home-relative, out-of-root or unpinned remote
+imports no longer load. Repair those imports before registering or running automation.
+Updating only the schema pin does not repair a refused import. See `mori help sealed-evaluation`
+for the rule names and pinned-profile binding example.

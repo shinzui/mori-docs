@@ -49,6 +49,10 @@
 		"schema-migrations",
 		"registry-upgrade",
 		"audit",
-		"shell-integration"
+		"shell-integration",
+		"sealed-evaluation",
+		"registry-refresh",
+		"pattern-assurance",
+		"terminology"
 	]
 }

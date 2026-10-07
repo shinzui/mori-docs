@@ -153,10 +153,13 @@ Primary mappings from `docs/user/`:
 | `dependencies.md` | `content/docs/commands/deps.mdx` |
 | `ddd.md` | `content/docs/commands/ddd.mdx` and `content/docs/guides/ddd.mdx` |
 | `okf.md` | `content/docs/guides/okf.mdx` |
+| `sealed-evaluation.md` | `content/docs/guides/sealed-evaluation.mdx` |
+| `registry-refresh.md` | `content/docs/guides/registry-refresh.mdx` |
+| `pattern-assurance.md` | `content/docs/guides/pattern-assurance.mdx` |
 | `transitions.md` | `content/docs/guides/transitions.mdx` and `content/docs/commands/transitions.mdx` |
 | `operations.md` | `content/docs/commands/ops.mdx` |
 | `plan-dependencies.md` | `content/docs/commands/plans.mdx` |
-| `api.md` | `content/docs/commands/serve.mdx` (endpoint reference is an open gap) |
+| `api.md` | `content/docs/guides/api.mdx` and `content/docs/commands/serve.mdx` |
 | `navigation.md` | `content/docs/guides/navigation.mdx` plus `commands/cd.mdx`, `commands/path.mdx`, `commands/browse.mdx` |
 | `registry-domains.md` | `content/docs/commands/registry.mdx` and registry-related guide sections |
 | `registry-exec.md` | `content/docs/commands/registry.mdx` |
@@ -172,7 +175,7 @@ agent alias app audit automate backfill browse capabilities cd checklist
 completions cookbook ddd deps diagram doctor extension help identity
 improvement-requests init kit observe ops path plans project reaction register
 registry schema serve show signal status store tech-radar upstream-issues
-transitions validate workflow
+transitions terms patterns validate workflow
 ```
 
 Do not hand-maintain this list against memory. Enumerate the real surface and
@@ -206,8 +209,8 @@ delivery facts with a diagram's editorial shorthand.
 
 ### 6. Map Help Topics To Guides
 
-Thirty-five of the forty-three topics have a same-slug guide today, and the
-other eight are deliberate consolidations. Verify rather than trusting the list
+40 of the 48 topics have a same-slug guide today; the
+remaining topics have intentional consolidated coverage listed below. Verify rather than trusting the list
 — these counts drift every time a topic is added:
 
 ```bash
@@ -217,8 +220,7 @@ for t in /Users/shinzui/Keikaku/bokuno/mori-project/mori/mori-cli/help/*.md; do
 done
 ```
 
-Every topic *not* printed by that loop has a same-slug guide. The six that are
-printed are consolidated on purpose:
+Every topic *not* printed by that loop has a same-slug guide. The topics printed are consolidated on purpose:
 
 | Help Topic | Covered by |
 |---|---|
@@ -333,6 +335,8 @@ Current command-page assignments, read off the pages themselves:
 - `store`: `Archive`
 - `tech-radar`: `Radar`
 - `transitions`: `GitFork`
+- `terms`: `BookOpen`
+- `patterns`: `BadgeCheck`
 - `upstream-issues`: `CircleAlert`
 - `validate`: `CircleCheck`
 - `workflow`: `GitPullRequest`

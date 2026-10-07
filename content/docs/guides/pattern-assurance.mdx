@@ -1,0 +1,72 @@
+---
+title: Pattern Assurance
+description: Import evidence and inspect current service scorecards.
+icon: BadgeCheck
+---
+
+# Pattern Assurance
+
+Pattern assurance connects a service's structured pattern applications to immutable evidence.
+Mori stores what a producer assessed at exact Git and contract revisions, then derives whether
+that answer is current whenever you ask for a scorecard.
+
+## Prerequisites
+
+Register and observe the service and every pattern catalog in the same registry database. The
+service must publish `Pattern Application` concepts with explicit `service` and `pattern` edges,
+and the catalog must publish assessable pattern frontmatter with stable criteria. Mori reads that
+frontmatter from `mori.okf_concepts_functional_v2`; it does not infer a contract from prose.
+
+Each project also needs Repository state with an observed Git revision. When a revision or OKF
+observation is unavailable, the scorecard reports an input error rather than inventing provenance.
+
+## Record evidence
+
+An external check adapter creates a version 1 envelope with the actual service revision, pattern
+catalog revision, canonical pattern and application contract hashes, criterion binding, check
+revision, outcome, and at least one digest-addressed evidence descriptor. Use
+`Mori.Types.PatternAssessment.V1.withDerivedKeyV1` and `encodePatternAssessmentV1` to derive its
+identity and bytes.
+
+```bash
+mori patterns import-assessment .artifacts/pattern-scorecards/health.json
+```
+
+The first import appends one event and projects one immutable row. Repeating equivalent content is
+a successful no-op. Content that differs under the same deterministic key is a conflict and does
+not replace the original fact. A same-input correction needs a future envelope version with run
+identity; never fabricate a revision to force a second V1 fact.
+
+## Read a service scorecard
+
+```bash
+mori patterns scorecard mori://shinzui/mori
+mori patterns scorecard mori://shinzui/mori --json
+```
+
+For each applicable criterion, Mori compares the recorded service revision, check revision,
+pattern contract hash, application contract hash, and check target with current inputs. Any
+mismatch is `stale` and includes both values. A catalog-only commit stays current when the
+structured pattern hash is unchanged; the newer catalog commit is displayed as provenance.
+
+The count block covers criteria of applicable, decodable applications. `not_applicable`,
+`exception`, and `needs_triage` applications are listed separately. An unbound criterion is
+`unassessed`, and malformed applications increment `application_errors`.
+
+## Find reverse impact
+
+```bash
+mori patterns affected mori://shinzui/haskell-jitsurei/okf/patterns/concepts/PAT-1
+mori patterns affected mori://shinzui/haskell-jitsurei/okf/patterns/concepts/PAT-1 --json
+```
+
+The result is the URI-sorted set of current explicit applications for that exact pattern. It is a
+read surface only and does not start checks or schedule automation.
+
+## Recover the read model
+
+The `pattern_assurance_models` projection group uses preserve-only replay. Stop the daemon, inspect
+the group with `mori ops rebuild preview pattern_assurance_models`, and use the standard rebuild
+workflow in [Operations](/docs/commands/ops). Replay restores missing rows from the event log without
+truncating immutable history. Keep `mori.pattern_assessment_identity_directory`; it is routing
+state and is not reconstructed by projection replay.

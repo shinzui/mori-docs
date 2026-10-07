@@ -50,3 +50,6 @@ mori status --json | jq '.automationExecution'
 `automationExecution` carries `{"healthy": true|false, "unhealthyLegs": 0}`.
 
 See [Status](/docs/guides/status) for remediation guidance.
+
+
+Registration freshness appears in the `registration` JSON object. Use `mori registry freshness --stale-only` for a fleet query; see [Registry Refresh](/docs/guides/registry-refresh).

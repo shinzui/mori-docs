@@ -166,8 +166,8 @@ const cases = [
 		trigger: "A maintainer leaves repository reactions running unattended.",
 		steps: [
 			[
-				"Declared policy",
-				"Keep project identity separate from automation configuration.",
+				"Sealed configuration",
+				"Validate repository imports; keep identity separate from behavior.",
 				"delivered",
 			],
 			[

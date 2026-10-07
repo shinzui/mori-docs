@@ -610,40 +610,16 @@ The agent now has:
 4. **Structured output**: JSON for agents, human-readable for developers
 5. **Queryable**: Fine-grained queries, not monolithic dumps
 
-## Implementation Phases
+## Current registry boundary
 
-### Phase 1: Local-First (Current Focus)
+`mori register` writes the event-sourced local registry. Observed projects refresh automatically
+on input changes; see [Registry Refresh](/docs/guides/registry-refresh). Repository Dhall uses
+[sealed evaluation](/docs/guides/sealed-evaluation); external pinned values can still fetch on
+cache misses. Cross-machine registry synchronization remains future work.
 
-* Local registry as database-backed service
-* Manual creation of dependency wrapper projects
-* Manual registration via `mori register --local`
-* Works entirely offline
-
-### Phase 2: Global Registry
-
-* Any project with `mori.dhall` can be registered globally
-* Local registry becomes a performance cache
-* New developers bootstrap by syncing from global registry
-* Local still authoritative for doc updates and customization
-
-### Phase 3: Version Pinning
-
-* Third-party dependency version alignment
-* Ensure registered wrapper matches what services actually use
-* Version-aware doc resolution
-
-## Open Questions
-
-* **Doc freshness**: How to detect stale docs when upstream repos update?
-* **Standards distribution**: How are org-wide standards distributed and versioned?
-* **Agent context caching**: Should assembled context be cached for performance?
-* **Bundle conflicts**: What if two projects define bundles with the same name?
-
-### Resolved
-
-* **Registry storage**: PostgreSQL projections derived from events. See [Event Sourcing](/docs/concepts/event-sourcing).
-* **Cookbooks**: Modeled as `docs` entries with `kind = Cookbook` rather than a separate field.
-* **Project-level dependencies**: `List Text` at project root, resolved by name via registry.
+Dependency references can be typed at project or package grain and can carry ecosystem version
+constraints. See [Dependencies](/docs/commands/deps). Context is assembled from the registered
+knowledge and local dependency checkouts.
 
 ## Transition participation
 
@@ -652,3 +628,13 @@ predecessor or known successor. It lists up to twenty declarations with roles an
 `remaining_count`. Retiring predecessors see per-environment verdicts and open owner actions.
 Uninvolved projects have no section; readiness authorizes nothing. See
 [Platform Transitions](/docs/guides/transitions).
+
+## Terminology in agent context
+
+The `terminology` section includes catalogs for the current registered project and its resolved
+dependencies, with each project represented once. It carries preferred names, aliases,
+discouraged wording, definitions and replacement references. Each project contributes at most
+200 terms, current terms before deprecated ones, with `omitted_count` and `invalid_count` for
+what is not included. These values come from the registered snapshot; edit and register or
+observe the catalog before expecting context to change. Use `mori terms search` or
+`mori terms list --project <namespace/name>` for more detail; see `mori help terminology`.

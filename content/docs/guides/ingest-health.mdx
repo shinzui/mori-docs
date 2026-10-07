@@ -63,30 +63,34 @@ have been stuck.
 `mori observe list` shows the same health per project alongside its config
 state, in its `LastSuccess` and `IngestStatus` columns.
 
-## Recovering a stuck repo
+## Recovering a halted repository
 
-An `orphaned` cursor is the common case — someone force-pushed and the commit
-mori was resuming from no longer exists.
+A history rewrite first runs a content-equivalence analysis. If every orphaned observed commit
+is indexed and replayed with the same content and no observed tag moved, Mori resumes from the
+merge base in that detecting tick. Use `--no-auto-resume` on ingest or the daemon to disable it.
+An unproven rewrite leaves ingestion halted until an operator resets it; later ticks and UTC
+day boundaries do not clear the halt. `mori doctor --ingest` exits 2 for halted repositories
+and prints the reset command. A halted tick is never recorded as an ingest success.
+
+Preview the recovery first:
 
 ```bash
-# Preferred: clear the orphaned cursor, resume from the current tip
-mori automate reset-checkpoint my-app --to-head
-
-# Resume from a specific commit instead
-mori automate reset-checkpoint my-app --to-commit 9f2c1ab
-
-# Last resort: re-ingest the entire history
-mori automate reset-checkpoint my-app --to-root
-mori observe --reingest              # the same thing, from inside the repo
+mori automate reset-checkpoint shinzui/my-app --to-merge-base --dry-run
+mori automate reset-checkpoint shinzui/my-app --to-merge-base
 ```
 
-`--to-head` is the default and almost always what you want. `--to-root` re-emits
-the repo's full history, which means **duplicate webhook deliveries** to every
-registered Mori App that matches those events. Reach for it only when you
-actually need the history re-observed.
+`--to-merge-base` refuses unless it can prove that already-observed changes will not be emitted
+again. A refusal names probable rewrites; accepting those with `--allow-reemit` also accepts
+that their reactions can fire again. The preview lists emitted, suppressed and skipped commits.
 
-A `missing` repo is not a cursor problem — restore the working directory at the
-recorded path, or deregister the project.
+| Mode | Effect |
+|---|---|
+| `--to-merge-base` | Preserve new commits after the rewrite while requiring a no-re-emission proof |
+| `--to-head` (default) | Skip every unobserved commit before the current tip |
+| `--to-commit SHA` | Move to a validated commit, showing skipped commits |
+| `--to-root` | Re-read history; indexed content is suppressed, changed rewritten content can emit again |
+
+A missing working directory requires restoring that path or deregistering the project.
 
 ## Changeset deduplication
 

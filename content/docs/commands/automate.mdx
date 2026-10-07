@@ -30,36 +30,25 @@ are classified and recorded — see [Ingest Health](/docs/guides/ingest-health).
 
 ## `mori automate reset-checkpoint`
 
-Reset a project's ingest cursor. This is the recovery path when the stored
-cursor is no longer in `HEAD`'s ancestry — typically after a force-push, rebase,
-or other history rewrite, which surfaces as the `orphaned` ingest error class.
+Recover an ingest halt after a history rewrite. Preview before writing:
 
 ```bash
-mori automate reset-checkpoint my-app
-mori automate reset-checkpoint shinzui/my-app --to-head
-mori automate reset-checkpoint my-app --to-commit 9f2c1ab
-mori automate reset-checkpoint my-app --to-root
+mori automate reset-checkpoint shinzui/my-app --to-merge-base --dry-run
+mori automate reset-checkpoint shinzui/my-app --to-merge-base
 ```
 
-The project argument is a bare name, or `namespace/name` when the bare name is
-ambiguous.
+| Flag | Behavior |
+|---|---|
+| `--to-merge-base` | Resume from the merge base only when analysis proves no observed change will re-emit |
+| `--allow-reemit` | With merge-base mode, explicitly accept the listed probable re-emissions |
+| `--to-head` | Default; skip all unobserved commits before HEAD |
+| `--to-commit SHA` | Reset to a validated commit and preview skipped commits |
+| `--to-root` | Re-read history; indexed content is suppressed but changed content may re-emit |
+| `--dry-run` | Print the emit/suppress/skip preview without writing |
 
-### Flags
-
-| Flag | Description |
-|------|-------------|
-| `--to-head` | Reset the cursor to current `HEAD` (**default**) |
-| `--to-commit SHA` | Reset to a specific commit; validated with `git cat-file -e` |
-| `--to-root` | Re-read the entire repository history from scratch |
-
-Prefer `--to-head`: it clears the orphaned cursor and resumes from the current
-tip. `--to-root` is heavy but safe — it does not duplicate downstream work.
-Content-stable changeset identity guards `IngestChangeset` on
-`contentHashKnown == False`, so a commit already recorded in
-`mori.changeset_content_index` emits no `ChangesetObserved` event at all and
-nothing re-fires. What `--to-root` costs is the re-read, not re-emission.
-
-`mori observe --reingest` is an alias for the `--to-root` form.
+A proven replay resumes automatically in the tick detecting the rewrite. `--no-auto-resume`
+on ingest or the daemon disables that recovery. Unproven rewrites remain halted until reset.
+See [Ingest Health](/docs/guides/ingest-health) for the proof and recovery workflow.
 
 ## `mori automate run`
 
@@ -373,3 +362,10 @@ Generate automation config templates.
 mori automate generate <template>
 mori automate generate <template> --output path/to/output.dhall
 ```
+
+
+## Registration refresh
+
+The daemon refreshes observed project registrations on changed input content or registration
+contract. `--no-registry-refresh` disables it for the daemon; per-project policy lives under
+`mori observe refresh-policy`. See [Registry Refresh](/docs/guides/registry-refresh).

@@ -1,8 +1,10 @@
 ---
 title: Kit
-description: Manage Claude Code skills and subagents with mori kit
+description: Manage skills, project scopes, local edits and JSON reports.
 icon: Package
 ---
+
+# Kit
 
 Mori Kit manages Claude Code skills and subagents — reusable prompt modules
 that teach Claude how to perform mori-specific tasks. Skills and agents are
@@ -22,14 +24,26 @@ installed to `.claude/skills/{name}/`.
 
 **Agents** are single markdown files installed to `.claude/agents/{name}.md`.
 
+Every installed item carries a sidecar, `.mori-kit.json`, that records its
+version, the hash of its kit sources, and the hash of the files that were
+written. `mori kit status` and `mori kit update` compare against both.
+
 ## Installation Scopes
 
 | Scope | Path | Purpose |
 |-------|------|---------|
 | User (default) | `~/.config/mori/agents/.claude/` | Available in all projects |
-| Project | `.mori/agents/.claude/` | Available only in the current project |
+| Project | `<project root>/.mori/agents/.claude/` | Available only in this project |
 
 Use `--project` to install at project scope.
+
+The project root is the nearest directory, at or above the current one, that
+contains `mori.dhall`, a `.mori` directory, or `.git`; outside any project it
+is the current directory. Install, status, update, uninstall, and agent
+sessions all resolve the same root, so a `--project` install made from
+`mori-cli/src` lands in the repository's `.mori/agents`, is reported by
+`mori kit status` run from the root, and is mounted by a session started from
+any subdirectory.
 
 ## Listing Available Items
 
@@ -38,26 +52,39 @@ mori kit list
 ```
 
 ```
-Skills
-  exec-plan       Create and implement execution plans
-  kit-skill       Create new mori-kit skills
-
-Agents
-  mori-assist     General mori project assistance
+Skills:
+  mori-config         Author, validate, and edit project configuration
+  automation-config   Author, validate, and debug automation configuration
 ```
 
-This fetches the latest manifest from the mori-kit repository.
+This fetches the latest manifest from the mori-kit repository. When the
+repository cannot be reached, the cached copy is used and a warning says so.
 
 ## Installing
 
 ```bash
-mori kit install exec-plan                # user scope (default)
-mori kit install exec-plan --project      # project scope
+mori kit install mori-config                # user scope (default)
+mori kit install mori-config --project      # project scope
 ```
 
 ```
-Installed skill 'exec-plan' to user scope.
+Installed skill 'mori-config' to user scope.
 ```
+
+### Choosing interactively
+
+Omit the name to pick from the kit:
+
+```bash
+mori kit install
+mori kit install --project
+```
+
+The command refreshes the kit and opens an fzf picker over every skill and
+subagent, showing each item's name, kind, version, and description. The item
+you choose is installed exactly as if you had typed its name. Cancelling the
+picker installs nothing and exits successfully. Without fzf, or when no
+terminal is available, the command asks for a `NAME` instead.
 
 ## Updating
 
@@ -70,23 +97,31 @@ mori kit update
 Update a specific item:
 
 ```bash
-mori kit update exec-plan
+mori kit update mori-config
 ```
 
 ```
 Kit repository updated.
-Updated 'exec-plan' (user)
-Updated 2 item(s).
+Updated 'mori-config' (user)
+Skipped 'automation-config' (user): installed files were modified locally; run 'kit update automation-config --force' to overwrite.
+Updated 1 item(s).
+Skipped 1 item(s).
 ```
 
 Updates pull the latest mori-kit repository and reinstall items in both scopes
-where they are currently installed.
+where they are currently installed. An item whose installed files were edited
+since install is skipped so your edits survive; a skip is not a failure. Pass
+`--force` to overwrite those edits:
+
+```bash
+mori kit update automation-config --force
+```
 
 ## Uninstalling
 
 ```bash
-mori kit uninstall exec-plan                # user scope (default)
-mori kit uninstall exec-plan --project      # project scope
+mori kit uninstall mori-config                # user scope (default)
+mori kit uninstall mori-config --project      # project scope
 ```
 
 ## Checking Status
@@ -96,39 +131,57 @@ mori kit status
 ```
 
 ```
-NAME          KIND     SCOPE     INSTALLED   LATEST      STATE
-exec-plan     skill    user      1.2.0       1.3.0       outdated
-kit-skill     skill    user      0.4.1       0.4.1       up-to-date
-mori-assist   agent    project   0.2.0       0.2.0       dirty
+NAME               TYPE   SCOPE  PROVIDERS  INSTALLED  LATEST  STATE
+mori-config        skill  user   claude     0.7.0      0.7.0   up-to-date
+automation-config  skill  user   claude     1.4.0      1.5.0   outdated+modified
 ```
 
-Shows all installed items across both scopes, with the version recorded
-in the per-install sidecar (`*.mori-kit.json`), the latest version from
-the upstream manifest, and a state column.
+Shows all installed items across both scopes. `STATE` lists every condition
+that applies, joined with `+`; a row with none reads `up-to-date`:
 
-State precedence is `unknown > outdated > dirty > up-to-date`:
+| Condition | Meaning |
+|-----------|---------|
+| `outdated` | The kit has a newer version than the installed one |
+| `changed-upstream` | The kit's sources for the item changed without a version bump; `update` reinstalls it |
+| `modified` | The installed files were edited since install; `update` skips it unless `--force` |
+| `edits-unknown` | Installed by an older mori that recorded no content hash; reinstall to record one |
+| `delisted` | The kit no longer lists the item |
+| `refused` | The kit now lists a source the installer refuses (a symbolic link, or a path outside the kit) |
+| `unknown` | No readable sidecar, so nothing can be compared |
 
-| State | Meaning |
-|-------|---------|
-| `unknown` | No sidecar (installed before sidecar support, or upstream removed) |
-| `outdated` | Upstream version differs from the sidecar's installed version |
-| `dirty` | Versions match, but upstream content hash differs from the sidecar hash |
-| `up-to-date` | Versions and content hash both match |
+Status needs no network. It compares against the cached kit, and says on
+stderr when that cache could not be refreshed or does not exist.
 
-When the kit cache is unavailable (no network, no `kit.json`), `LATEST`
-is blank and every row falls back to `unknown`. Sidecar files live next
-to the installed item — `.claude/skills/<name>/.mori-kit.json` for
-skills, `.claude/agents/<name>.mori-kit.json` for agents — and are
-removed automatically by `mori kit uninstall`.
+## Machine-Readable Output
+
+`mori kit list`, `mori kit status`, and `mori kit update` accept `--json`. A
+successful command then prints exactly one JSON document on stdout, followed
+by a newline, with every warning on stderr; a failed command prints nothing
+on stdout and exits 1. Every document carries `formatVersion` (currently `1`)
+and `document`, which names the shape: `kit-list`, `kit-status`, or
+`kit-update`.
+
+```bash
+mori kit status --json | jq -r '.items[] | select(.upToDate | not) | .name'
+```
+
+The status document has one entry per installed copy — item, scope, and
+provider — with `installedVersion`, `latestVersion`, the `conditions` list
+using the labels above, and `upToDate`. The list document reports each item
+the kit offers with where it is installed, and the update document reports
+the refresh outcome and the items updated and skipped. The full shapes are
+documented in the baikai-kit user guide
+(`mori://shinzui/baikai/docs/user/kit.md`).
 
 ## How Agent Sessions Use Kit
 
 The `mori agent claude` and `mori agent assist` commands automatically load
 installed skills and agents by passing the agent directories to Claude via
 `--add-dir`. Both user-scope and project-scope directories are included when
-available.
+available, and the project-scope directory is resolved from the same project
+root the kit commands use.
 
-## Related
+## Related Documentation
 
 - [Agent Sessions](/docs/guides/agent-sessions) — Claude sessions that load kit items
 - [Agent Context](/docs/concepts/agent-context) — structured context for AI agents

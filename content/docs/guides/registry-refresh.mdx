@@ -1,0 +1,62 @@
+---
+title: Keeping Registrations Current
+description: Follow registration inputs, diagnose freshness and control automatic refresh.
+icon: RefreshCw
+---
+
+# Keeping Registrations Current
+
+A registration records the content it read, its input manifest and the binary's registration
+contract. `mori automate daemon` checks those recorded inputs each ingest cycle and refreshes
+changed **observed** projects through the same reconciliation as `mori register`.
+
+## Follow a project
+
+Register and observe the project, then run the daemon:
+
+```bash
+mori register
+mori observe
+mori automate daemon
+```
+
+No registry-sync automation is needed. Existing registry-sync automations still work but can
+cause an extra no-op reconciliation. A registered project that is not observed is reported for
+freshness but is never refreshed automatically.
+
+## Understand the refresh trigger
+
+| Trigger | Meaning |
+|---|---|
+| `commit` | All changed inputs match committed content |
+| `drift` | At least one changed input has uncommitted modifications |
+| `contract` | The binary's registration contract changed, or this host has no recorded registration |
+
+Inputs include `mori.dhall`, extension instances, relative Dhall imports, declared plan files,
+OKF bundle trees and local profiles, seihou manifests, and local documentation. Content digests
+matter; modification times do not. Changes to the manifest itself cause registration to derive
+and record a new input manifest. An idle cycle writes nothing. Several intervening commits
+coalesce into one refresh; uncommitted content can also be registered.
+
+## Inspect and control it
+
+```bash
+mori status --json
+mori registry show shinzui/mori
+mori registry freshness --stale-only --json
+mori observe list
+mori observe refresh-policy shinzui/mori off
+mori observe refresh-policy shinzui/mori default
+mori automate daemon --no-registry-refresh
+```
+
+Freshness is `current`, `stale` or `untracked`. `untracked` means this host has no freshness
+record yet. The status JSON's `registration` object includes reasons, changed inputs,
+last refresh, last automatic refresh and automatic-refresh policy. Policy is operator state
+in this registry, rather than a repository-controlled field. Refresh defaults on for every
+project origin, subject to sealed repository evaluation.
+
+Malformed or invalid input preserves the last good registration and records an `invalid`
+attempt. The same broken content is not retried every cycle; a changed input makes it eligible
+again. Database or I/O errors are logged and retried on the next cycle. See
+`mori help registry-refresh` for the complete input and outcome reference.

@@ -20,10 +20,13 @@ are gone.
 
 ## How it works
 
-1. [`mori.dhall`](/docs/schema-guide) declares project identity; the separate `mori.automation.dhall` declares reactive behavior. Registration alone grants no execution.
+1. Validate [sealed repository inputs](/docs/guides/sealed-evaluation), then declare identity and behavior. [`mori.dhall`](/docs/schema-guide) declares project identity; the separate `mori.automation.dhall` declares reactive behavior. Registration alone grants no execution.
 2. Target-owned signal consent and emitter bounds limit cross-repository delivery.
 3. [`mori automate explain`](/docs/commands/automate), reaction history, and [workflow traces](/docs/commands/workflow) expose matching and execution decisions.
 4. Recorded config, provenance, and event history support projection rebuild and replay audit. See the [event store lifecycle guide](/docs/guides/event-store-lifecycle).
+
+Sealed repository evaluation is delivered. Pinned external imports can still fetch on cache
+misses; this boundary does not sandbox executed commands.
 
 The source records **ExecutionPolicy enforcement** as discovered: its
 `allowLocal`, `allowCI`, and `maxConcurrency` fields are declared but execution

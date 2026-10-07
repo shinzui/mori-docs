@@ -11,7 +11,7 @@ manifest, and installs items into your Claude Code agent directories.
 
 ## `mori kit list`
 
-List available skills and subagents from the current project.
+List available skills and subagents from the cached or refreshed kit catalog.
 
 ```bash
 mori kit list
@@ -64,40 +64,25 @@ mori kit uninstall <NAME> --project
 
 ## `mori kit status`
 
-Show installed skills and subagents with installed-vs-latest versions and a
-state column.
-
 ```bash
 mori kit status
+mori kit status --json
 ```
 
-### Output columns
+Conditions compose with `+`: `outdated`, `changed-upstream`, `modified`, `edits-unknown`,
+`delisted`, `refused` and `unknown`. A row with none reads `up-to-date`. Local `modified` files
+are skipped by update unless `--force` is supplied. The comparison uses the installed sidecar
+and cached manifest; see [Kit](/docs/guides/kit) for meanings and cache diagnostics.
 
-| Column | Description |
-|--------|-------------|
-| `NAME` | Skill or subagent name |
-| `KIND` | `skill` or `agent` |
-| `SCOPE` | `user` or `project` |
-| `INSTALLED` | Version recorded in the per-install sidecar (`*.mori-kit.json`) at install time |
-| `LATEST` | Version field from the upstream `kit.json` manifest |
-| `STATE` | `up-to-date`, `outdated`, `dirty`, or `unknown` |
+## Interactive install, scopes and JSON
 
-State precedence:
+`mori kit install` without NAME refreshes the catalog and opens an fzf picker when a terminal
+and fzf are available. Cancelling installs nothing; otherwise supply NAME. Project scope resolves
+the nearest ancestor with `mori.dhall`, `.mori` or `.git`, and uses its `.mori/agents/.claude`
+directory. The same root is used by status, update, uninstall and agent sessions.
 
-- `unknown` — no sidecar (item installed before sidecar support, or upstream removed)
-- `outdated` — upstream version differs from the sidecar's installed version
-- `dirty` — versions match but upstream content hash differs from the sidecar hash
-- `up-to-date` — versions and hashes match
-
-When the kit cache is unavailable (no network, no `kit.json`), `LATEST` is
-blank and every row falls back to `unknown`.
-
-## Installation Scopes
-
-| Scope | Path | Purpose |
-|-------|------|---------|
-| User (default) | `~/.config/mori/agents/.claude/` | Available in all projects |
-| Project | `.mori/agents/.claude/` | Available only in the current project |
+List, status and update accept `--json`, producing one versioned document on stdout and warnings
+on stderr. `mori kit update NAME --force` overwrites local edits.
 
 ## Relationship to Agent Sessions
 

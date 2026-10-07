@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1040" height="875" viewBox="0 0 1040 875" role="img" aria-labelledby="title desc">
-<title id="title">UC-4: Trust repository automation</title><desc id="desc">UC-4: A maintainer leaves repository reactions running unattended. Keep project identity separate from automation configuration. Check target consent and enforce delivery reach limits. Inspect why a selector matched and trace what each reaction did. Rebuild projections and audit durable provenance after logs are gone. A maintainer can explain reach, cause, execution, and recorded history. ExecutionPolicy enforcement · discovered; Selective event compaction · blocked</desc>
+<title id="title">UC-4: Trust repository automation</title><desc id="desc">UC-4: A maintainer leaves repository reactions running unattended. Validate repository imports; keep identity separate from behavior. Check target consent and enforce delivery reach limits. Inspect why a selector matched and trace what each reaction did. Rebuild projections and audit durable provenance after logs are gone. A maintainer can explain reach, cause, execution, and recorded history. ExecutionPolicy enforcement · discovered; Selective event compaction · blocked</desc>
 <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#166534"/></marker></defs>
 <rect width="1040" height="875" rx="20" fill="#f4f8f5"/>
 <g font-family="Inter, system-ui, sans-serif"><text x="40" y="42" font-size="12" font-weight="700" fill="#166534" letter-spacing="2">UC-4 · AT A GLANCE</text>
@@ -16,11 +16,11 @@
 <path d="M266 250 H295" fill="none" stroke="#166534" stroke-width="2" marker-end="url(#arrow)"/>
 <rect x="304" y="174" width="448" height="108" rx="13" fill="#ffffff" stroke="#166534" stroke-width="1.5"/>
 <rect x="304" y="174" width="6" height="108" rx="3" fill="#166534"/>
-<text x="326" y="203" font-size="14" font-weight="700" fill="#18352a" >1. Declared policy</text>
+<text x="326" y="203" font-size="14" font-weight="700" fill="#18352a" >1. Sealed configuration</text>
 <rect x="636" y="186" width="100" height="23" rx="11" fill="#e8f5ec"/>
 <text x="686" y="202" font-size="10.5" font-weight="700" fill="#166534" text-anchor="middle">exists today</text>
-<text x="326" y="231" font-size="14" font-weight="400" fill="#3f5b4b" >Keep project identity separate from automation</text>
-<text x="326" y="251" font-size="14" font-weight="400" fill="#3f5b4b" >configuration.</text>
+<text x="326" y="231" font-size="14" font-weight="400" fill="#3f5b4b" >Validate repository imports; keep identity separate</text>
+<text x="326" y="251" font-size="14" font-weight="400" fill="#3f5b4b" >from behavior.</text>
 <path d="M528 284 V303" fill="none" stroke="#166534" stroke-width="2" marker-end="url(#arrow)"/>
 <rect x="304" y="306" width="448" height="108" rx="13" fill="#ffffff" stroke="#166534" stroke-width="1.5"/>
 <rect x="304" y="306" width="6" height="108" rx="3" fill="#166534"/>
