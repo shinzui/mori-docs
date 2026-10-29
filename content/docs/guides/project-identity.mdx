@@ -115,3 +115,18 @@ upstream that is not registered locally warns rather than failing
 - [`mori identity`](/docs/commands/identity) — exact command syntax
 - [Canonical refs](/docs/concepts/canonical-refs) — how `mori://` references resolve
 - [Project Configuration](/docs/guides/project-config) — the full `ProjectIdentity` record
+
+## Crossing registries
+
+A project crosses registries when `mori registry push` publishes it from your
+workstation registry to a shared one. Own and fork projects must carry a
+`stableId` before they cross: their manifest lives in the upstream repository, so
+the stable ID travels with it and is the only key that identifies the same project
+in two registries. Third-party and vendored records are exempt, because their
+stable ID was minted by the curator and reconciles nothing across registries.
+`mori validate` warns `this own/fork project has no stableId; run mori identity
+mint --write before publishing it to a shared registry`, local registration stays
+legal, and `mori registry push` refuses an own or fork project without one. The
+registry itself has an identity too: `mori registry identity show` prints it. A
+`mori://` reference never names a registry; the registry you are connected to
+resolves it.

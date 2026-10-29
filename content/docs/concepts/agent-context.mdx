@@ -184,19 +184,14 @@ mori deps locate streamly
 }
 ```
 
-### Registry Hierarchy
+### Configured registry and local files
 
-```
-Local Registry (machine-specific)
-       ↓ fallback
-Global Registry (org-wide, optional)
-       ↓ fallback
-Not Found
-```
-
-* Local registry is authoritative for development
-* Global registry provides org-wide defaults
-* Services don't hardcode paths; they reference by name
+Dependency queries use the PostgreSQL registry selected by
+`MORI_PG_CONNECTION_STRING`; they do not fall back to a remote registry.
+A shared catalog record establishes metadata availability. Local source and
+files require [mori-lite checkout bindings](/docs/guides/lite) or a registered
+checkout in the full runtime. Lightweight context is project-level; role-aware
+context still requires `mori agent context`.
 
 ### `mori.local.dhall` (Optional Overrides)
 

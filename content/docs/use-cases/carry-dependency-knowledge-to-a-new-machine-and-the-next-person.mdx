@@ -7,7 +7,7 @@ description: Attach team knowledge to dependency wrapper projects so it survives
 
 ## At a glance
 
-![A wrapper project holds upstream source and curated knowledge; the registry resolves it by name and searches its findings, while syncing the fleet index to a new machine remains a discovered feature.](/diagrams/use-cases/carry-dependency-knowledge-to-a-new-machine-and-the-next-person.svg)
+![A wrapper project holds upstream source and curated knowledge; the registry resolves it by name and searches its findings, while shared-registry reading has an implementation and fresh-machine delivery remains planned pending packaging and a teammate pilot.](/diagrams/use-cases/carry-dependency-knowledge-to-a-new-machine-and-the-next-person.svg)
 
 [Open the SVG at full size](/diagrams/use-cases/carry-dependency-knowledge-to-a-new-machine-and-the-next-person.svg)
 
@@ -24,11 +24,19 @@ typed findings, provenance, and a qualified name that consumers can declare.
 2. Consumers depend on the wrapper by name. The [local registry](/docs/concepts/local-registry) resolves its path for each machine, so durable documents do not encode checkout layouts.
 3. [`mori registry docs`](/docs/commands/registry) and catalog search find the team's guidance from any registered project. See the [corpus learning guide](/docs/guides/corpus-learning).
 
-The wrapper, named resolution, catalogs, and navigation are delivered. The
-**new-machine step is still discovered**: a fresh environment currently needs
-PostgreSQL, migrations, and registration of its checkouts before fleet-wide
-queries work. Registry sync between machines and a lower-friction read tier
-remain separate design gaps. [UC-5](/docs/use-cases/ground-a-coding-agent-in-declared-project-knowledge)
-shows how an agent uses knowledge after it is available locally.
+The wrapper, named resolution, catalogs, and navigation are delivered. A
+[shared registry](/docs/guides/shared-registry) and [mori-lite](/docs/guides/lite)
+now implement portable index publication and offline reading without a local
+PostgreSQL server. The catalog carries metadata; clone the repositories for
+source and document files.
+
+The source still marks **registry sync between machines** and the
+**low-friction read tier** as **planned**, coordinated by
+`mori://shinzui/mori/masterplans/39-onboard-the-team-on-a-shared-registry-with-a-push-from-the-workstation-and-a-lightweight-read-only-client`.
+Implementation children are complete, but standalone installation on a machine
+without Nix and the two-person pilot remain adoption gates. The concept stays
+**draft**; available commands do not close those gates. See
+[UC-5](/docs/use-cases/ground-a-coding-agent-in-declared-project-knowledge)
+for agent grounding.
 
 **Source concept:** `mori://shinzui/mori/okf/use-cases/concepts/UC-6`

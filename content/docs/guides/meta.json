@@ -53,6 +53,10 @@
 		"sealed-evaluation",
 		"registry-refresh",
 		"pattern-assurance",
-		"terminology"
+		"terminology",
+		"lite",
+		"shared-registry",
+		"registry-access",
+		"registry-push"
 	]
 }

@@ -1,18 +1,128 @@
 ---
 title: Mori Apps
-description: Webhook receivers that subscribe to repository events
+description: Signed webhook receivers for repository events and Project releases
 icon: Webhook
 ---
 
-Mori Apps are webhook receivers that subscribe to repository events. When an
+Mori Apps are webhook receivers that subscribe to repository events and root Project facts, including recorded releases. When an
 event matches an app's selectors, mori delivers a signed webhook to the app's
-URL. This enables external services to react to VCS events without polling.
+URL. This enables external services to react to changes without polling.
 
 ## Prerequisites
 
 - Database set up and migrations run (see [Local Registry](/docs/concepts/local-registry))
 - The automation daemon running (`mori automate daemon`) to process deliveries
 - Event selectors defined in a Dhall file
+- For repository events, the project has been set up with `mori observe` (below)
+- For release facts, the Project is registered and active
+
+## Observing a project without an automation config
+
+Repository subscriptions receive `RepositoryEvent`s (changesets, refs, workflow signals).
+Those events only exist in the event store once the project is **observed** —
+that is, it has been assigned a `RepoId` and has at least one ingest run
+against its git history. If you only ran `mori init` and `mori register`, the
+read model knows the project exists but the event store has no
+`RepositoryEvent`s tagged with its `RepoId`, and repository selectors have nothing to match.
+
+Before, the only way to get a `RepoId` was to go through `mori automate
+register` or `mori automate ingest` — which implied you wanted local
+reactions (`mori.automation.dhall`). That is no longer required. Run:
+
+```bash
+cd /path/to/your/project
+mori observe
+```
+
+`mori observe`:
+
+1. Ensures the project is registered (same as `mori register`).
+2. Assigns a stable `RepoId` and writes it to `{project}/mori/repo-id`.
+3. Emits a `ProjectRepoLinked` event on the Project stream so
+   `mori registry show <name>` and `mori registry list --observed` can
+   tell you which projects are observed.
+4. Runs an initial VCS ingest so every existing commit becomes a
+   `ChangesetObserved` event in the event store.
+
+After this command, matching apps receive subsequent repository events while the daemon runs.
+
+```
+Project observed: shinzui/mori
+  RepoId:  repo_01kh9280qte2hvc4h8jp0tg5b3
+  Ingest:  running...
+Ingested 301 changesets, 0 refs (301 events written)
+Next:
+  - Register a Mori App:  mori app register --name <name> --url <url> --selectors <file>
+  - Refresh events later: mori automate ingest
+```
+
+`mori observe` is idempotent. Running it a second time in the same project
+prints `Already observed: ...` and re-runs the ingest (which is itself a
+no-op on an unchanged tree). To skip the ingest entirely, pass
+`--skip-ingest`.
+
+If you run the daemon (`mori automate daemon`), observed projects are
+automatically re-ingested on a periodic cycle (default: every 300 seconds).
+You can tune the interval with `--ingest-interval SECONDS` or disable
+auto-ingest with `--ingest-interval 0`. You can also ingest manually with
+`mori automate ingest git` (cron, file watcher, CI) at any time — the
+ingest pipeline is idempotent.
+
+## Subscribing to Project releases
+
+A release subscription needs an active registered Project and a running daemon.
+It does not need `mori observe`, a repository ingest, a registered reaction, or Kafka.
+Copy the `let Schema = ...` import from the project's `mori.dhall` when using another
+schema pin. A complete `release-selectors.dhall` for the current pin is:
+
+```dhall
+let Schema =
+      https://raw.githubusercontent.com/shinzui/mori-schema/3522f4a51181d73c9c90fc27a7c0838bd29ae95f/package.dhall
+        sha256:dcb19e2312e790bad14e622cc98a1281cd2298c5b564a2f0d0534d3c718d8803
+
+in Schema.Automation::{
+  events =
+    [ Schema.EventSelector.ProjectSelector
+        Schema.ProjectSelector::{
+          name = "project-releases"
+        , families = [ Schema.ProjectSignalFamily.Release ]
+        , actions = [ Schema.ProjectSignalAction.Added ]
+        }
+    ]
+}
+```
+
+```bash
+mori app register --name releases --url https://example.com/webhook --selectors release-selectors.dhall
+mori registry release record default/my-project 5.0.0 --source ci --released-at 2026-08-03T00:00:00Z
+```
+
+Start the daemon and wait for its project app subscription to attach before recording
+the release. The permanent `mori-project-app-webhook-fanout-store` subscription starts
+at the current event-log head on its first run, skipping historical facts. Later runs
+resume its saved checkpoint. The repository app worker has its own checkpoint and
+first-start policy.
+
+App Project subscriptions cover `projectRoot` facts. Artifact facts on
+`projectArtifactV2` are outside this channel. The same compiled `ProjectSelector`
+matching used by reactions applies: empty restriction lists are wildcards; every
+nonempty restriction must hold. `projectIds` uses the canonical `proj_` ID and
+`references` uses the event's classified canonical reference. Root facts have no
+artifact kind, so a nonempty `artifactKinds` restriction rejects a root release.
+Imported facts require `includeImported = True`; `Imported` never also means `Added`.
+An app with multiple matching selectors receives one delivery for the source event.
+Only active apps receive new deliveries.
+
+The webhook envelope contains `eventType`, delivery-time `timestamp`, and `eventData`.
+For a release, `eventType` is `ProjectReleaseRecorded`; `eventData` is the original
+stored JSON with `kind`, `projectId`, `projectReference`, `version`, `releasedAt`, and
+`source`. It uses the stored-event contract; the Kafka DTO has a separate shape.
+The envelope timestamp is distinct from `releasedAt`. Existing signing, delivery
+history, and retries apply, with one stable `webhook-id` across HTTP retries.
+Source replay deduplicates the delivery row and enqueue after a successful enqueue.
+The existing separate row-insert and queue-send operations leave a failure window:
+a crash between them can leave a pending row without a queued message; source replay
+does not repair that window.
 
 ## Registering an App
 
@@ -46,10 +156,18 @@ mori app list --json
 ```
 
 ```
-ID                                    NAME          URL                              STATUS
-app_01h455vb4pex5vsknk084sn02q        CI Trigger    https://ci.example.com/webhook   active
-app_01h456abc7def8ghij9k0l1m2n        Slack Bot     https://slack.example.com/hook    suspended
+ID                                    NAME          URL                              STATUS      SELECTORS
+app_01h455vb4pex5vsknk084sn02q        CI Trigger    https://ci.example.com/webhook   active      2 (1 changeset, 1 ref)
+app_01h456abc7def8ghij9k0l1m2n        Slack Bot     https://slack.example.com/hook   suspended   1 (1 signal)
 ```
+
+The `SELECTORS` column shows the total selector count followed by a
+per-kind breakdown. Empty buckets are omitted; an app with no selectors
+shows `0`. The literal `?` means the stored selector JSON could not be
+decoded.
+
+With `--json` each app object includes a `selector_count` integer and a
+`selectors` array containing the decoded event selectors.
 
 ## Showing App Details
 
@@ -57,6 +175,30 @@ app_01h456abc7def8ghij9k0l1m2n        Slack Bot     https://slack.example.com/ho
 mori app show app_01h455vb4pex5vsknk084sn02q
 mori app show app_01h455vb4pex5vsknk084sn02q --json
 ```
+
+The text output prints the app's metadata and a `Selectors` block that
+lists every selector with its kind and the match criteria that are set:
+
+```
+App ID:     app_01h455vb4pex5vsknk084sn02q
+Name:       CI Trigger
+URL:        https://ci.example.com/webhook
+Status:     active
+Created:    2026-04-12 12:34:56 UTC
+Updated:    2026-04-12 12:34:56 UTC
+Selectors (2):
+  - src-changes (changeset)
+      paths: src/**
+      branches: main
+  - release-tags (ref)
+      patterns: refs/tags/v*
+      kinds: tag
+```
+
+Only non-empty fields are printed, so a minimally-configured selector
+shows just its name and kind. An app with zero selectors prints
+`Selectors:  none`. With `--json`, the same information appears as a
+`selector_count` integer and a `selectors` array on the app object.
 
 ## Updating an App
 
@@ -139,7 +281,7 @@ Retried deliveries are re-queued with status "pending".
 ## Event Flow
 
 ```
-VCS events (via mori automate ingest)
+VCS events (via daemon auto-ingest or manual mori automate ingest)
     │
     ▼
 mori automate daemon
@@ -157,6 +299,35 @@ webhook delivery
 The daemon handles app event fan-out — when an event matches an app's selectors,
 it queues a webhook delivery. The app registration subscription keeps the
 in-memory app registry in sync with new registrations and updates.
+
+## Decoding events in Haskell
+
+Import `Mori.Types.Webhook` from `mori-types` and use `parseMoriEvent` after
+signature verification and decoding the body as `WebhookEventPayload`:
+
+```haskell
+case parseMoriEvent payload of
+  Right (Just (RepositoryEventReceived event)) -> print event
+  Right (Just (ProjectEventReceived (ProjectReleaseRecorded release))) -> print release
+  Right Nothing -> pure ()
+  Left err -> fail err
+```
+
+`Right Nothing` means an unknown outer event name; `Left` means malformed data
+for a known event, including a mismatch between repository outer and inner types.
+`ProjectReleaseRecordedData` requires `projectId`, `projectReference`, `version`,
+`releasedAt` and `source`, plus `kind: "ProjectReleaseRecorded"`. It retains the
+flat stored shape, opaque version and release-time reference, and ignores extra
+keys. Direct `ProjectEvent` JSON decoding rejects an unknown `kind`.
+Existing repository-only callers may keep `parseEventData` unchanged.
+
+### Repository event constructors
+
+The typed decoder covers `ChangesetObserved`, `RefObserved`,
+`MoriAutomationObserved`, `MoriConfigObserved`, `RepositoryDayOpened`,
+`WorkflowSignalEmitted`, `WorkflowSignalReceived`, `RepositoryHistoryRewritten`,
+`CheckpointReset`, `MalformedCommitSkipped`, `RepositoryIngestStuck`, and
+`ContentHashAttached`. Verify the signature before decoding the envelope.
 
 ## Related
 

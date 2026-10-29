@@ -1,0 +1,327 @@
+---
+title: Running a Shared Registry
+description: Publish project knowledge and grant teammates access to a shared registry
+icon: Server
+---
+
+A shared registry is an ordinary Mori registry that one publisher fills with
+`mori registry push` and teammates read with [mori-lite](/docs/guides/lite). It is
+headless: nobody registers checkouts on it, runs `mori path` against it, or runs
+`mori automate` on it. Its project paths are the publisher's host context, and
+[daemon lock](/docs/commands/ops#one-executor-per-database) permits one
+automation executor per database, which stays on the workstation.
+
+Every command below was run once against a throwaway database; the outputs are
+from that run, with IDs left as they came out.
+
+## 1. Provision PostgreSQL
+
+Mori needs PostgreSQL 18 and one database. On the server host:
+
+```bash
+createdb mori
+```
+
+Mori learns where its database is only from `MORI_PG_CONNECTION_STRING`, for
+example `host=/run/postgresql dbname=mori` over a local socket or
+`host=db.internal port=5432 dbname=mori user=mori password=…` over the network.
+Put it, and every other secret below, in an environment file only the service
+user can read.
+
+## 2. Install the server binaries
+
+```bash
+nix build github:shinzui/mori#mori -o mori-server
+nix build github:shinzui/mori#mori-migrations -o mori-migrations
+```
+
+Put `mori-server/bin/mori` and `mori-migrations/bin/mori-migrations` on the
+operator's `PATH`, or copy both closures from a workstation with `nix copy`.
+
+## 3. Apply migrations
+
+```bash
+$ HASKELL_ENV=production mori-migrations up --database-url "$MORI_PG_CONNECTION_STRING"
+…
+mori/20261028224857_project_publications outcome=applied_now duration_ms=1
+
+kioku read models: 19 checked, 0 updated
+$ mori-migrations verify --database-url "$MORI_PG_CONNECTION_STRING"
+verification ok
+applied=198
+pending=0
+unknown=0
+
+projection catalog: candidate group slices are compatible
+```
+
+Migrations are idempotent: `up` on a current database applies nothing. Never
+apply migration SQL by hand through `psql`; the ledger would not record it and
+every later `verify` would fail.
+
+## 4. Check the connection
+
+```bash
+$ mori doctor
+mori v7.0.0.0 (673214f)
+
+━━━ System Health Check ━━━
+
+  Host identity: host_01m62dbgzzet2bg8b26zk1x7dw
+
+  PostgreSQL connection... ✓ OK
+  Automation registrations... ✓ OK (0 active)
+…
+All checks passed.
+```
+
+## 5. Mint the registry identity
+
+Once per database:
+
+```bash
+$ mori registry identity mint --name "acme registry"
+Registry ID: registry_01m62dbh61em6bf6e21ftnftrn
+Display name: acme registry
+Minted at: 2026-10-28T23:26:04.481349Z
+```
+
+`mori registry identity show` prints the same three lines afterwards. Every
+client pins this ID and refuses a server that answers with another.
+
+## 6. Tokens, principals, and grants
+
+The operator token is the server's own bearer token. It can publish and
+administer, so it belongs to the publisher alone:
+
+```bash
+openssl rand -hex 32   # store as MORI_API_TOKEN in the server's environment file
+```
+
+Each teammate is a principal with grants and a personal token. With
+`MORI_PG_CONNECTION_STRING` pointing at the shared database:
+
+```bash
+$ mori registry access principal create --label alice
+Principal: principal_01m62dc1g2emzvpv1m8avjqngp
+Label: alice
+Status: active
+$ mori registry access grant --principal principal_01m62dc1g2emzvpv1m8avjqngp --namespace acme --permission read
+Granted read on namespace acme to principal_01m62dc1g2emzvpv1m8avjqngp
+$ mori registry access token mint --principal principal_01m62dc1g2emzvpv1m8avjqngp --label laptop
+Token (store it now; it is not shown again): morit_…
+Credential: cred_01m62dctkkendsnq5n4kperbvq
+```
+
+Hand the token to the teammate over a channel you trust; it is shown once. A
+principal with no grants syncs an empty catalog, which is the intended default.
+See `mori help registry-access` for project and registry grants and `publish`.
+
+## 7. Start the server under a supervisor
+
+`mori serve` binds `127.0.0.1` by default and refuses any other address unless
+`MORI_API_TOKEN` is set ([API security perimeter](/docs/guides/api#security-perimeter)).
+Never use `--insecure-no-auth` on a shared server. Behind the proxy in step 8 it
+stays on loopback. On start it checks the store, registers its projection
+catalog, and logs:
+
+```text
+mori-api listening on http://127.0.0.1:8080 (application endpoints under /v1; probes under /health); auth: bearer token; cors origins: 0
+```
+
+A `systemd` unit:
+
+```text
+[Unit]
+Description=Mori shared registry
+After=postgresql.service
+
+[Service]
+User=mori
+EnvironmentFile=/etc/mori/registry.env
+ExecStart=/usr/local/bin/mori serve --host 127.0.0.1 --port 8080
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Or `process-compose`, which the dev shell already ships:
+
+```yaml
+version: "0.5"
+processes:
+  mori-registry:
+    command: mori serve --host 127.0.0.1 --port 8080
+    env_file: /etc/mori/registry.env
+    availability:
+      restart: on_failure
+    readiness_probe:
+      http_get:
+        host: 127.0.0.1
+        port: 8080
+        path: /health/ready
+```
+
+`/etc/mori/registry.env` holds `MORI_PG_CONNECTION_STRING` and `MORI_API_TOKEN`
+and is readable only by the service user.
+
+## 8. Put TLS in front
+
+`mori serve` speaks plain HTTP. Terminate TLS in a reverse proxy; Caddy
+provisions its own certificate:
+
+```text
+registry.acme.internal {
+  reverse_proxy 127.0.0.1:8080
+}
+```
+
+## 9. Verify from outside
+
+The transcript is from the loopback rehearsal; substitute your HTTPS URL.
+
+```bash
+$ curl -s https://registry.acme.internal/health/ready
+{"check":"all","failingSince":null,"status":"ok"}
+$ curl -s -H "Authorization: Bearer $ALICE_TOKEN" https://registry.acme.internal/v1/access-context
+{"authMode":"mori-token","cacheScopeId":"principal_01m62dc1g2emzvpv1m8avjqngp","catalogProtocols":[1],"grantGeneration":"3","principalId":"principal_01m62dc1g2emzvpv1m8avjqngp","principalLabel":"alice","registryId":"registry_01m62dbh61em6bf6e21ftnftrn"}
+$ curl -s -H "Authorization: Bearer $ALICE_TOKEN" https://registry.acme.internal/v1/registry
+{"displayName":"acme registry","mintedAt":"2026-10-28T23:26:04.481349Z","registryId":"registry_01m62dbh61em6bf6e21ftnftrn"}
+$ curl -s https://registry.acme.internal/v1/registry
+{"code":"unauthorized","detail":"Missing or invalid bearer token.","retryable":false,"status":401,"title":"Unauthorized","type":"about:blank"}
+$ curl -s -H "Authorization: Bearer $ALICE_TOKEN" https://registry.acme.internal/v1/projects
+{"code":"principal_scope","detail":"this token may only read the catalog","retryable":false,"status":403,"title":"Forbidden","type":"about:blank"}
+```
+
+## The first push
+
+From the workstation, with the workstation's own `MORI_PG_CONNECTION_STRING`
+and the operator token:
+
+```bash
+$ export MORI_PUSH_TOKEN="<operator token>"
+$ mori registry push --url https://registry.acme.internal --all
+Target: acme registry (registry_01m62dbh61em6bf6e21ftnftrn) at https://registry.acme.internal
+acme/legacy: refused (own/fork project has no stable ID; run mori identity mint --write in /Users/publisher/src/legacy, mori register, then push again)
+acme/widgets: created
+vendor/left-pad: created
+2 pushed, 0 pruned, 0 skipped, 1 refused, 0 failed
+```
+
+The command exits 1 because something was refused. The refusal is the stable-ID
+rule: an own or fork project must carry a stable ID before it leaves the
+workstation. `--all` is safe to re-run; an unchanged project appends nothing:
+
+```bash
+$ mori registry push --url https://registry.acme.internal --all
+…
+acme/widgets: unchanged
+vendor/left-pad: unchanged
+```
+
+Now that projects exist, prove a grant before a teammate tries:
+
+```bash
+$ mori registry access check --principal principal_01m62dc1g2emzvpv1m8avjqngp --project acme/widgets --permission read
+allowed
+$ mori registry access check --principal principal_01m62dc1g2emzvpv1m8avjqngp --project vendor/left-pad --permission read
+denied
+```
+
+See `mori help registry-push` for `--prune` and the outcomes.
+
+## Hosting checklist for the publisher
+
+Every project the catalog lists must be cloneable by the team: each needs at
+least one `repos` entry with `github`, `gitlab`, or `git` pointing at a host
+every teammate can reach. Curated third-party projects are the usual gap. Their
+manifests live in wrapper repositories in the publisher's private hub, and the
+wrapper, not the upstream, carries the curated docs, so the wrapper itself has
+to be pushed to the team's git host and its `repos` entry pointed there.
+
+The check is `mori-lite doctor`, run by the publisher with the operator token,
+which sees the whole catalog. After every `--all` push:
+
+```bash
+$ export MORI_LITE_TOKEN="<operator token>"
+$ mori-lite setup --url https://registry.acme.internal
+Connected to acme registry (registry_01m62dbh61em6bf6e21ftnftrn) at https://registry.acme.internal as the operator
+$ mori-lite sync
+Synced 2 projects in 1 pages from acme registry (full replacement)
+$ mori-lite doctor
+Registry: registry_01m62dbh61em6bf6e21ftnftrn
+Principal: the operator (scope operator)
+Protocol: v1, schema v1
+Grant generation: 4
+Catalog database: /Users/publisher/.cache/mori-lite/catalog/registry_01m62dbh61em6bf6e21ftnftrn/operator/v1.sqlite
+Last sync: 2026-10-28T23:31:27.971143Z
+Projects: 2
+Cached projects with no github, gitlab, or git repository:
+  vendor/left-pad
+```
+
+`doctor` exits 1 while the list is non-empty; `--json` gives the same report for
+scripts. Treat every listed project as work to do before telling a teammate it
+exists. Nothing else should open the client's SQLite files; their layout is the
+client's to change.
+
+## 10. Back up
+
+Archive every category `mori store lifecycle inventory` lists, verify each
+archive, and keep a plain `pg_dump` beside them:
+
+```bash
+$ mori store lifecycle archive --category principal --output /var/backups/mori/2026-10-28/principal
+Events: 4
+Segments: 1
+Digest: sha256:e2593a1744a0894e7d8d16b9f3232bd9948580d2f82b89d2c33aee0a9b1ba7d2
+$ mori store lifecycle verify-archive /var/backups/mori/2026-10-28/principal/manifest.json
+Events: 4
+Segments: 1
+Digest: sha256:e2593a1744a0894e7d8d16b9f3232bd9948580d2f82b89d2c33aee0a9b1ba7d2
+```
+
+A shared registry holds at least `projectRoot`, `projectArtifactV2`,
+`principal`, and `accessGrant`. The archives are the replay-grade record of the
+event store; the `pg_dump` is the fast restore path for the whole database,
+read models included. Prune the previous day's backup only after
+`verify-archive` passes on the new one.
+
+## 11. Rotate tokens
+
+- Operator token: change `MORI_API_TOKEN` in the environment file and restart
+  the service; update the publisher's `MORI_PUSH_TOKEN`. A leaked operator token
+  can publish and administer, so rotate it immediately.
+- A teammate's token: `mori registry access token revoke <cred_id>`, then
+  `token mint` again. No restart is needed. A leaked personal token exposes only
+  that principal's catalog until revoked.
+- A departing teammate: `mori registry access revoke` their grants, or retire
+  the principal, which revokes everything at once.
+
+## 12. Upgrade
+
+Pull the new closures, run `mori-migrations up` and `verify` again, and restart.
+A binary that adds a projection owner changes a catalog slice; run
+`mori ops rebuild adopt project_models --force` on an existing registry when
+`verify` reports the slice as changed. The release replay gate ran on the
+workstation before the release was tagged and is not repeated on the server.
+
+## The same-machine layout
+
+The shared registry may also be a second database in the workstation's own
+PostgreSQL, which is how the publisher rehearses this runbook: `createdb
+mori_shared`, migrate it with its own connection string, mint its own identity,
+and serve it under the supervisor with an environment file naming that database,
+on a port your own tooling does not use, behind the proxy. Your shell keeps the
+workstation's connection string, so `mori registry push` moves projects from one
+database into the other over HTTP and never reads the shared database directly.
+
+Three consequences. The shared registry is up only while the workstation is;
+mori-lite tolerates that because every read command works from its cache. The
+shared registry stays headless. And `mori registry access …` must run against the
+shared database, so keep a wrapper to make a grant impossible to misdirect:
+
+```bash
+alias mori-shared='MORI_PG_CONNECTION_STRING="host=$HOME/path/to/db dbname=mori_shared" mori'
+```

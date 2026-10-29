@@ -8,7 +8,7 @@ icon: Globe
 > Key decisions that have been **superseded**:
 >
 > - **Local registry**: This doc describes a standalone JSON/SQLite registry. The project now uses PostgreSQL read models derived from events in the keiro/kiroku runtime. See [Event Sourcing](/docs/concepts/event-sourcing).
-> - **`mori register`**: This doc describes global registry upload as the default. Phase 1 uses `mori register --local` only.
+> - **`mori register`** writes to the configured PostgreSQL database. `--local` is a compatibility no-op. Shared publication uses [Registry Push](/docs/guides/registry-push); offline readers use [mori-lite](/docs/guides/lite).
 > - **Command details**: The authoritative CLI specification is [CLI Architecture](/docs/architecture/cli).
 >
 > Some concepts here (navigation, search, namespacing) remain valid and are referenced by CLI.md.

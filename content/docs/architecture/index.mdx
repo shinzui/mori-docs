@@ -41,9 +41,11 @@ It contains:
 
 ### Control Plane: Global Registry
 
-The global registry is the future shared governance/indexing plane. It can
-provide organization-wide discovery, trust, and policy, but it does not execute
-automation directly.
+A [shared registry](/docs/guides/shared-registry) now supports portable snapshot
+publication, durable registry identity, personal tokens, and hierarchical grants.
+The [mori-lite reader](/docs/guides/lite) caches its authorized catalog in SQLite
+and binds local clones. Automation stays on the workstation. Organization-wide
+governance and cross-machine signal transport remain future work.
 
 ## Runtime Stack
 
@@ -65,40 +67,15 @@ historical context.
 ## Component Diagram
 
 ```text
-┌──────────────────────────────┐
-│      Global Mori Registry    │
-│                              │
-│  - project index             │
-│  - org policies              │
-│  - trust levels              │
-│  - shared discovery          │
-└───────────────┬──────────────┘
-                │ optional sync / policy input
-┌───────────────▼──────────────┐
-│      Local Mori Runtime      │
-│                              │
-│  CLI commands                │
-│  ├─ init / validate / show   │
-│  ├─ register / observe       │
-│  ├─ registry / deps / path   │
-│  ├─ agent / kit              │
-│  ├─ automate / reaction      │
-│  └─ plans / ddd / okf / ...  │
-│                              │
-│  PostgreSQL                  │
-│  ├─ kiroku event streams     │
-│  ├─ keiro runtime tables     │
-│  ├─ pgmq queues              │
-│  └─ mori read models         │
-│                              │
-│  Daemon worker host          │
-│  ├─ shibuya processors       │
-│  ├─ keiro routers            │
-│  ├─ process managers         │
-│  ├─ async projections        │
-│  └─ durable timers           │
-└──────────────────────────────┘
+Workstation Mori + PostgreSQL
+    | mori registry push (portable snapshots)
+    v
+Shared Mori HTTP API + PostgreSQL
+    | personal-token grants and catalog sync
+    v
+mori-lite + SQLite cache + local checkout bindings
 ```
+
 
 ## Configuration Layers
 
@@ -177,13 +154,14 @@ Examples:
 
 | Aspect | Local Mori | CI Mori |
 |---|---|---|
-| Execution | local-first | policy-gated |
+| Execution | local-first | same runtime; declared ExecutionPolicy remains unenforced |
 | Config loading | checked-out filesystem | ephemeral checkout |
-| Registry source | local read model plus optional global input | local read model plus required policy input |
+| Registry source | configured PostgreSQL read model | configured PostgreSQL read model |
 | Event model | same runtime | same runtime |
 | Replay | yes | yes |
 
-CI uses the same event/runtime model with stricter policy decisions.
+CI uses the same event/runtime model. `ExecutionPolicy` is declared but not enforced;
+see [Automation](/docs/guides/automation).
 
 ## Design Invariants
 
@@ -211,3 +189,15 @@ command reference or with source behavior, prefer the command docs and
 - [Schema Architecture](/docs/architecture/schema) - the `mori.dhall` type system
 - [Registry Design](/docs/architecture/registry) - historical registry and navigation design
 - [Event Sourcing](/docs/concepts/event-sourcing) - current runtime and migration boundary
+
+## Packages
+
+| Package | Responsibility |
+|---|---|
+| `mori-types` | Shared wire types and typed webhook decoding |
+| `mori-core` | Domain modules, event sourcing, projections, automation and migrations |
+| `mori-cli` | Full CLI and daemon |
+| `mori-api` | HTTP server and request authorization |
+| `mori-client` | Shared-registry client and per-principal SQLite cache |
+| `mori-lite` | Lightweight read-only CLI and local checkout navigation |
+| `mori-schema-pin` | Pinned schema commit and integrity hashes |

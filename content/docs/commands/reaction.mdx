@@ -130,30 +130,28 @@ it names which mode applies.
 
 ### Recover one stuck reaction
 
-Unstick a reaction stuck at `status: triggered` because of an older daemon
-build that did not catch executor exceptions (pre-`76c9f6f`). Marks the row
-`failed` with the canonical error `manually recovered via mori reaction
-recover` and advances the `mori-reaction-executor` checkpoint past the stuck
-event so the next reaction fires normally. Recent daemon builds no longer
-produce this state — `recover` is for cleaning up rows left behind by older
-runs.
-
 ```bash
-mori reaction recover <REACTION_ID>
-mori reaction recover <REACTION_ID> --retry
+mori reaction recover <REACTION_ID> [--retry]
 ```
 
-### Flags
+Use `recover` for a reaction stuck in `status=triggered` or `status=executing`.
+For a legacy `triggered` row, stop the daemon and all standalone automation processes first.
+Recovery refuses a held executor lock, rechecks the reaction under a row lock, and commits
+its failed status together with a public upstream checkpoint reset in one Serializable
+transaction. The checkpoint can only advance; an absent row remains absent, and its saved
+target binding stays intact. A concurrent cursor change refuses and rolls back the repair.
 
-| Flag | Description |
-|------|-------------|
-| `--retry` | Re-emit a fresh `ReactionTriggered` carrying the original actions under a new reaction ID — use this once you've fixed the root cause and want the action to run again |
+A free advisory key does not prove that old processes have stopped: a daemon can keep its
+workers running while reacquiring a lost lock connection. Stop the processes explicitly.
+Restart the daemon after a successful legacy repair.
 
-The command refuses to operate on rows already in `completed` or `failed`
-state (exit code 2, "nothing to recover"). It updates the `checkpoints`
-table directly, so stop the daemon first if you're unsure — `recover` is
-safe against a genuinely stuck (non-advancing) subscription, but racing a
-live consumer can collide. The command is idempotent on non-triggered rows.
+A current `executing` reaction is recovered through its aggregate by appending a retryable
+terminal event. This path preserves its existing event-sourced behavior.
+
+With `--retry`, Mori also emits a fresh `ReactionTriggered` event with the original actions
+under a new reaction ID. Use this after fixing the root cause, such as a missing binary,
+bad path, or broken command. Settled reactions remain unchanged.
+
 
 ### Recover parked events
 

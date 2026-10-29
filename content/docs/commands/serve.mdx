@@ -174,3 +174,11 @@ which starts Kiroku's own server and listens on **all** interfaces.
 - [`mori automate`](/docs/commands/automate) — the daemon and its `--serve` flag
 - [Automation Daemon](/docs/guides/automation-daemon) — running the daemon in practice
 - [`mori workflow`](/docs/commands/workflow) — the CLI equivalent of the chain endpoint
+
+## Shared registry access
+
+`MORI_API_TOKEN` is the operator credential. Teammates use personal tokens minted
+with `mori registry access token mint`; grants restrict their catalog and publication
+access. Startup checks event-store lifecycle compatibility and registers or verifies
+the projection catalog before serving. See [API token permissions](/docs/guides/api#operator-and-personal-tokens)
+and the [shared registry runbook](/docs/guides/shared-registry).

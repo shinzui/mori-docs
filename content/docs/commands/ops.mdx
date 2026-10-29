@@ -146,17 +146,21 @@ mori ops rebuild list
 mori ops rebuild preview GROUP
 mori ops rebuild start GROUP --run-id ID --requested-by WHO --reason WHY
 mori ops rebuild status RUN_ID
+mori ops rebuild resume RUN_ID
 mori ops rebuild abandon RUN_ID --code CODE --detail TEXT
 ```
 
-The groups are `app_models`, `automation_models`, `group_models`, `join_models`,
+The twelve groups are `access_models`, `app_models`, `automation_models`, `group_models`, `join_models`,
 `pattern_assurance_models`, `project_models`, `reaction_models`,
-`repository_models`, `signal_models`, and `workflow_models`.
+`repository_models`, `signal_models`, `transition_evidence_models`, and `workflow_models`.
 `pattern_assurance_models` restores immutable assessment rows with preserve-only
 replay and keeps their identity directory. See [Pattern Assurance](/docs/guides/pattern-assurance).
 
 `start` and `abandon` require operator evidence on the command line — there is
 no anonymous destructive read-side action.
+
+An interrupted run still marked `running` can resume from its saved cursor and captured
+head with `mori ops rebuild resume RUN_ID`. Preview first, then add `--force`.
 
 A failed or abandoned rebuild leaves its group fenced, by design. The recovery
 sequence is **abandon, then start again**. `rebuild adopt` is not part of it

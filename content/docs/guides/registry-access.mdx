@@ -1,0 +1,79 @@
+---
+title: Registry Access
+description: Manage principals, personal tokens, and hierarchical grants
+icon: Database
+---
+
+A shared registry knows its readers by name. Each reader is a *principal*, holds
+personal tokens the operator minted for them, and sees only what their *grants*
+allow. `mori registry access` administers all three against the registry
+database; there is no HTTP grant API. Every command refuses to run until the
+registry identity exists (`mori registry identity mint`), because every resource
+identifier embeds it.
+
+## Principals
+
+```bash
+mori registry access principal create --label alice
+mori registry access principal list
+mori registry access principal relabel principal_01… --label "alice (platform)"
+mori registry access principal retire principal_01…
+```
+
+Retiring a principal revokes every outstanding grant (one `Revoked …` line each),
+refuses every one of its tokens, and keeps its history. It is terminal: a retired
+principal cannot be granted again.
+
+## Tokens
+
+```bash
+mori registry access token mint --principal principal_01… [--label laptop]
+mori registry access token list --principal principal_01…
+mori registry access token revoke cred_01…
+```
+
+`token mint` prints the token once — `Token (store it now; it is not shown
+again): morit_…` — and nothing ever prints it again. The registry stores only its
+SHA-256 hash. A lost token cannot be recovered: revoke the credential and mint
+another. Hand the token to its owner out of band; they put it in the environment
+of their client, never on a command line.
+
+## Grants
+
+```bash
+mori registry access grant --principal principal_01… --namespace tan --permission read
+mori registry access grant --principal principal_01… --project tan/billing --permission read
+mori registry access grant --principal principal_01… --registry --permission administer
+mori registry access revoke --principal principal_01… --namespace tan --permission read
+mori registry access list [--principal principal_01…]
+mori registry access check --principal principal_01… --project tan/billing --permission read
+```
+
+There are three permissions, ordered: `administer` implies `publish` implies
+`read`. There are three resources: the registry, a namespace in it, and a project
+in it. A namespace grant covers whatever projects sit in that namespace when a
+reader asks; a project grant follows that project through renames. A principal
+with no grants sees nothing. Granting an existing grant reports `Already
+granted` and records nothing; revoking an absent one reports `nothing to
+revoke`. `--by` names who is acting and defaults to `cli:$USER`.
+
+`check` prints `allowed` and exits 0, or `denied` and exits 1, so a runbook can
+prove a grant before a teammate tries.
+
+A personal token may publish through `mori registry push` when its principal holds
+`publish` (or `administer`) on the target resource. A new project needs a namespace
+grant; an existing project is checked against its project grant and inherited
+namespace or registry grants. Publication refusal is 403 `publish_not_permitted`.
+The operator token may publish everywhere. Grant administration remains a CLI
+operation against the registry database; there is no HTTP grant API.
+
+## What a reader's client observes
+
+Each principal has a *grant generation* that moves when one of that principal's
+grants is made or revoked, and never when another principal's grants change. A
+client compares it on every sync and replaces its cache when it moved, so a
+revocation is observed on the next sync. One case is not: a project renamed out
+of a namespace a reader holds a grant on leaves their visible set without moving
+their generation, so their cache keeps the old row until `mori-lite sync --full`.
+
+JSON output (`--json`) uses snake_case keys.

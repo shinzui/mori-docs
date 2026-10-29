@@ -14,7 +14,7 @@ For the complete command reference, see [Commands](/docs/commands).
 
 1. **Single binary** -- `mori`
 2. **Local-first** -- works without a registry
-3. **Registry-enhanced** -- global discovery when available
+3. **Registry-enhanced** -- configured PostgreSQL lookup; shared discovery through mori-lite
 4. **Explicit side effects** -- no background mutation
 5. **Explainable behavior** -- every decision can be inspected
 
@@ -254,3 +254,14 @@ Registry client is always mockable.
 > - Rendering = backend
 
 This framing should guide all implementation decisions.
+
+## Shared registry readers and Project app delivery
+
+The full CLI publishes portable snapshots with `mori registry push`. The
+`mori-client` library and `mori-lite` CLI sync a per-registry, per-principal
+SQLite catalog; files resolve through local clone/bind records. See
+[mori-lite](/docs/guides/lite) for the read and offline boundaries.
+
+Apps can receive root Project facts without repository ingestion or reaction
+registration. `parseMoriEvent` in `mori-types` dispatches all twelve repository
+event constructors and recorded Project releases. See [Mori Apps](/docs/guides/apps).

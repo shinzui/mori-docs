@@ -1,0 +1,177 @@
+---
+title: mori-lite
+description: Read, search, clone, and navigate a shared registry with an offline cache
+icon: Laptop
+---
+
+## What mori-lite is
+
+`mori-lite` is a read-only client for a shared Mori registry. It needs no local
+PostgreSQL or schema checkout. It talks to the registry's HTTP API
+with a personal token, keeps what your grants allow in a SQLite cache, and
+answers catalog queries from that cache, offline. It clones the projects it
+lists and resolves `mori://` references to files in those clones. It never
+writes to the registry.
+
+| What | Where |
+| --- | --- |
+| Config | `~/.config/mori-lite/config.json` (`$XDG_CONFIG_HOME`, or `$MORI_LITE_CONFIG` for a file of your choice) |
+| Catalog cache | `~/.cache/mori-lite/catalog/<registry>/<principal>/v1.sqlite` (`$XDG_CACHE_HOME`) |
+| Checkout bindings | beside the catalog cache, in a database no sync ever clears |
+| Clones | `~/src/mori/<namespace>/<name>` unless `setup --checkouts-root` says otherwise |
+| Token | an environment variable you name at setup (`MORI_LITE_TOKEN` by default); never stored |
+
+## Install
+
+The current release installs through Nix (repository access is required):
+
+```bash
+nix profile install github:shinzui/mori#mori-lite
+mori-lite --version
+```
+
+Release 7.1.0.0 does not attach a standalone client archive. The executable's
+native libraries currently come from its Nix closure, so copying just the binary
+to a machine without Nix is insufficient. Standalone distribution is deferred to
+the client’s separate packaging work. The client still needs no local PostgreSQL
+server; its cache and registry connection work as described below.
+
+## Your first hour
+
+You need two things from the registry's publisher: its URL and your personal
+token. The transcript below was captured against a rehearsal registry named
+`acme registry`; your names, IDs, and projects differ.
+
+Put the token in your environment, never on a command line, then connect:
+
+```bash
+$ export MORI_LITE_TOKEN='<your personal token>'
+$ mori-lite setup --url https://registry.acme.internal
+Connected to acme registry (registry_01m62dbh61em6bf6e21ftnftrn) at https://registry.acme.internal as alice
+```
+
+`setup` records the URL, the *name* of the variable holding your token (pass
+`--token-env` to use another), and the registry identity it read from
+`/v1/registry`. A URL that later answers with a different registry is refused;
+`setup --replace` switches on purpose.
+
+```bash
+$ mori-lite whoami
+alice (principal_01m62dc1g2emzvpv1m8avjqngp)
+```
+
+`whoami` names the principal the publisher created for you. When something
+looks wrong, check it first.
+
+```bash
+$ mori-lite sync
+Synced 1 projects in 1 pages from acme registry (full replacement)
+```
+
+`sync` fills the cache with exactly the projects your grants allow. Run it
+whenever you like. Catalog reads work offline; `search --remote` contacts the server,
+and `whoami` verifies online when possible, marking its stored fallback as unverified.
+Cloning needs access to the repository host. A
+project a colleague can see and you cannot is simply absent, not an error; ask
+the publisher for a grant.
+
+```bash
+$ mori-lite search widget
+acme/widgets
+  project: Widget rendering library
+  package: widgets-core
+
+$ mori-lite show acme/widgets
+acme/widgets
+  Widget rendering library
+  Lifecycle: Active   Type: library   Origin: own
+  Packages:
+    widgets-core (library, haskell)
+  Docs:
+    getting-started  guide  docs/getting-started.md
+  Repositories:
+    widgets git:https://git.acme.internal/acme/widgets.git
+  Checkout: not cloned; run mori-lite clone acme/widgets
+```
+
+`deps acme/widgets` lists a project's dependencies (and `--reverse` the cached
+projects that depend on it); it prints nothing for a project without any.
+
+```bash
+$ mori-lite clone acme/widgets
+Cloned into /Users/alice/src/mori/acme/widgets
+$ mori-lite path acme/widgets
+/Users/alice/src/mori/acme/widgets
+$ cd "$(mori-lite cd acme/widgets)"
+```
+
+`clone` uses the project's `github`, `gitlab`, or `git` entry from the catalog,
+clones under your checkout root, and binds the checkout, so `path` and `cd`
+resolve to it. `bind` records a checkout you already have; `browse` opens the
+repository's web page.
+
+Now the point of it all. A commit message says "see
+`mori://acme/widgets/docs/getting-started`":
+
+```bash
+$ mori-lite path mori://acme/widgets/docs/getting-started
+/Users/alice/src/mori/acme/widgets/docs/getting-started.md
+```
+
+A `mori://namespace/name/<kind>/<key>` reference resolves against the one
+registry you set up, to a catalog record (`mori-lite show <ref>`), and, once the
+repository is cloned, to a file in your checkout.
+
+For an agent, `agent context` assembles project-level grounding from the cache:
+
+```bash
+$ mori-lite agent context acme/widgets
+# acme/widgets
+
+Widget rendering library
+
+Lifecycle: Active
+
+Role-aware context is not available in mori-lite; use `mori agent context` on a full installation.
+```
+
+### If a project has no hosting URL
+
+```bash
+$ mori-lite show vendor/left-pad | tail -1
+  Checkout: none; the catalog lists no repository to clone (ask the publisher to add one)
+$ mori-lite clone vendor/left-pad
+vendor/left-pad declares no repository
+```
+
+The publisher's hosting checklist in [Running a Shared Registry](/docs/guides/shared-registry)
+exists for exactly this case. `mori-lite doctor` lists every cached project like
+it and exits 1.
+
+## Commands
+
+From `mori-lite --help`:
+
+```text
+Available commands:
+  setup                    Connect to a registry and pin its identity
+  sync                     Sync the projects your grants allow
+  registry                 Show the pinned registry, cursor, and last sync
+  whoami                   Show which principal your token is
+  namespaces               List cached namespaces
+  show                     Show a project, or the artifact a reference names
+  search                   Search the cache
+  deps                     List a project's dependencies
+  doctor                   Report the cache identity and projects that cannot be
+                           cloned
+  clone                    Clone a project and bind the checkout
+  bind                     Bind an existing checkout to a project
+  path                     Print the local file a reference names
+  cd                       Print a project's checkout directory
+  browse                   Open a project's repository in the browser
+  agent                    Agent grounding from the cache
+  completions              Print a shell completion script
+  help                     Print the mori-lite guide
+```
+
+`mori-lite help` prints the full guide embedded in the binary.

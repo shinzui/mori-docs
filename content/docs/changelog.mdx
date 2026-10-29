@@ -4,6 +4,14 @@ description: Notable changes and new features in mori
 icon: ScrollText
 ---
 
+## 2026-10-29 — Shared registries and release webhooks
+
+- [Run a shared registry](/docs/guides/shared-registry), [publish portable snapshots](/docs/guides/registry-push), and [grant personal-token access](/docs/guides/registry-access).
+- [mori-lite](/docs/guides/lite) installs through Nix and provides offline catalog queries, clone/bind navigation, and project-level agent context without a local PostgreSQL server. Standalone packaging remains deferred.
+- [Mori Apps](/docs/guides/apps) receive root Project release facts; Haskell consumers can use typed unified event decoding. The [API guide](/docs/guides/api) explains scoped catalogs and publication permissions.
+- [Operations](/docs/commands/ops) lists twelve rebuild groups and interrupted-run resume; [reaction recovery](/docs/commands/reaction) documents atomic legacy repair after stopping automation.
+- Updated [architecture](/docs/architecture), the [roadmap](/docs/roadmap), and [knowledge portability](/docs/use-cases/carry-dependency-knowledge-to-a-new-machine-and-the-next-person) diagrams while preserving planned adoption gates.
+
 ## 2026-10-07 — Automation and knowledge reference sync
 
 - [Status](/docs/guides/status) and [registry schema upgrades](/docs/guides/registry-upgrade)

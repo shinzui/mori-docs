@@ -157,3 +157,13 @@ Apps are delivered events by the automation daemon. The daemon fans out matching
 events to all registered apps based on their event selectors. See
 [Automation Daemon](/docs/guides/automation-daemon) for details and
 [Apps guide](/docs/guides/apps) for the full documentation.
+
+## Project release subscriptions
+
+Apps also match root Project facts, including `ProjectReleaseRecorded`, through
+`ProjectSelector`. An active Project and running daemon suffice; observation,
+repository ingest, reaction registration, and Kafka are unnecessary. The first
+Project subscription starts at the event-log head; later starts resume its saved
+checkpoint. Register the app and attach the daemon before recording a release.
+See [Project releases](/docs/guides/apps#subscribing-to-project-releases) for a
+complete selector, stored payload, retry behavior, and the enqueue failure window.

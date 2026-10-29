@@ -209,7 +209,7 @@ delivery facts with a diagram's editorial shorthand.
 
 ### 6. Map Help Topics To Guides
 
-40 of the 48 topics have a same-slug guide today; the
+42 of the 50 topics have a same-slug guide today; the
 remaining topics have intentional consolidated coverage listed below. Verify rather than trusting the list
 — these counts drift every time a topic is added:
 

@@ -254,15 +254,15 @@ const cases = [
 			],
 			[
 				"New machine",
-				"Acquire a fleet index before visiting every checkout.",
-				"discovered",
+				"Read a shared index; standalone delivery and pilot await acceptance.",
+				"planned",
 			],
 		],
 		outcome:
-			"Findings stay with the dependency; fresh-machine lookup awaits registry sync.",
+			"Shared index and read client exist; fresh-machine adoption gates remain.",
 		gaps: [
-			"Registry sync between machines · discovered",
-			"Low-friction read tier · discovered",
+			"Registry sync delivery and pilot · planned",
+			"Low-friction read tier acceptance · planned",
 		],
 	},
 	{

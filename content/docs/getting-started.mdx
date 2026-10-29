@@ -8,7 +8,7 @@ icon: Rocket
 
 **Required:**
 
-- PostgreSQL with mori's database migrations applied. The current event runtime
+- PostgreSQL 18 with mori's database migrations applied. The current event runtime
   uses the keiro/kiroku stack, plus pgmq-backed queues for deferred work.
 - The `mori` CLI built and on your PATH (`cabal install mori-cli`)
 - A `MORI_PG_CONNECTION_STRING` environment variable pointing to your database:
@@ -933,7 +933,7 @@ mori automate explain 15
 | `mori automate explain POS [-c PATH] [--json]` | Explain event matching | Yes |
 | `mori reaction list [--status S] [--name N]` | List recent reactions | Yes |
 | `mori reaction show ID` | Show reaction details | Yes |
-| `mori reaction recover ID [--retry]` | Unstick a reaction stuck in `triggered` state | Yes |
+| `mori reaction recover ID [--retry]` | Recover a `triggered` or `executing` reaction; stop automation before legacy repair | Yes |
 | `mori schema migrate [--apply] [--dry-run] [--file F] [--kind automation]` | Check or apply schema migrations (`--kind automation` for a named automation config not called `mori.automation.dhall`) | No |
 | `mori extension list` | List active extension types | Yes |
 | `mori extension query NAME [--project P]` | Query extension data across projects | Yes |

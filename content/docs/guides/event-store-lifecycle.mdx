@@ -20,7 +20,8 @@ for a bounded historical adjacent-ref repetition defect; a candidate is not dele
 A category unknown to the binary is `review-required`.
 
 Status reads Mori's versioned lifecycle-definition ledger. If it is incompatible, guarded writers
-stop before projection-catalog registration or another write. Keep the JSON report as evidence,
+stop before projection-catalog registration or another write. The shared API write runner,
+including publication, applies the same compatibility check. Keep the JSON report as evidence,
 deploy a binary whose definitions match the store, and follow the reviewed recovery for any named
 interrupted or corrupt operation. Do not edit the ledger or keep restarting the daemon.
 

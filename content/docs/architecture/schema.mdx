@@ -618,7 +618,7 @@ Mori is designed for organizations with **many services across many repositories
 
 Problems with per-service path declarations:
 
-* 50 services x 10 shared dependencies = 500 path declarations
+* 50 services × 10 shared dependencies = 500 path declarations
 * Path drift when checkouts move
 * No single source of truth
 * Duplicated documentation references
@@ -626,6 +626,8 @@ Problems with per-service path declarations:
 **Solution: Registry-first resolution.**
 
 Services reference dependencies by name. The local registry resolves names to filesystem paths. Dependency metadata lives in **wrapper projects** registered once.
+
+---
 
 ### Core Principles
 
@@ -635,163 +637,80 @@ Services reference dependencies by name. The local registry resolves names to fi
 > **Metadata follows ownership.**
 > A dependency owns its own Mori metadata; consumers may only *augment* it.
 
+---
+
 ### Resolution Algorithm
 
-For each dependency declared in a project:
+The CLI queries the PostgreSQL registry selected by `MORI_PG_CONNECTION_STRING`.
+`Mori.Modules.Project.Infrastructure.ReadModelRepository.resolveDepRef` is the
+implementation: a qualified `namespace/name` selects that project; a bare name
+tries a project, then a uniquely owned package, then a bundle's primary package.
+`namespace/name:package` verifies that package belongs to the selected project.
+Ambiguous names and unknown packages are explicit failures. There is no automatic
+second global-registry or remote fallback in this lookup.
 
-1. **Extract dependency name** from declaration
-2. **Query local registry** for name
-3. **If found in local registry:**
-   * Return filesystem path to registered project
-   * Load that project's `mori.dhall` as **authoritative**
-4. **Else query global registry** (if online)
-   * Return cached metadata
-5. **Else check `localPathOverride`** (fallback for unregistered deps)
-   * Load that path's `mori.dhall` as authoritative
-6. **Else:**
-   * Treat dependency as **unannotated**
-   * Warn user to register the dependency
-
-```
-                  +-------------------+
-                  | "streamly"        |
-                  +--------+----------+
-                           |
-                  +--------v----------+
-                  | Local Registry    |
-                  | (SQLite)          |
-                  +--------+----------+
-                           | found?
-              +------------+------------+
-              | yes                     | no
-    +---------v---------+     +---------v---------+
-    | Return path:      |     | Global Registry   |
-    | /Users/dev/oss/   |     | (if online)       |
-    | streamly-project  |     +---------+---------+
-    +-------------------+               | found?
-                              +---------+---------+
-                              | yes               | no
-                    +---------v---------+   +-----v-----+
-                    | Return cached     |   | Fallback: |
-                    | metadata          |   | localPath |
-                    +-------------------+   | Override  |
-                                            +-----------+
-```
+Returned paths describe the registered host's checkout. A catalog record from
+another machine does not establish local file availability. Use `mori-lite clone`
+and its checkout bindings to resolve files from a shared registry. A `mori://`
+reference identifies a project/artifact in the configured registry; it does not
+select a registry URL.
 
 ### Wrapper Projects
 
-Dependencies become first-class Mori projects:
+A wrapper owns its dependency metadata and the repository checkouts it describes.
+Register it once with `mori register`, then use qualified project or package names
+from consumers. Registration writes to the selected database; `--local` is still
+parsed but does not switch databases or alter registration behavior.
 
+### Dependency Metadata and Augmentation
+
+Project-level `dependencies` contains names; `dependencyRefs` provides typed
+project or package references. Package-level dependencies use the `Schema.Dependency`
+union, with `ByName` and `WithAugmentation` arms. An augmented dependency can carry
+consumer-specific docs, classification, source, scope and opaque version constraints;
+it does not redefine the provider's metadata. `localPathOverride` remains a schema
+field, but `mori deps locate` and `explain` do not consult it as a fallback.
+
+This complete package-dependency value typechecks from the repository root:
+
+```dhall
+let Schema = ./schema/package.dhall
+
+in Schema.Dependency.WithAugmentation
+  { name = "hasql"
+  , extraDocs = [] : List Schema.DocRef.Type
+  , localPathOverride = None Text
+  , kind = Some Schema.DependencyKind.ThirdParty
+  , source = Some Schema.DependencySource.Hackage
+  , scope = Some Schema.DependencyScope.Regular
+  , versionConstraint = Some ">=2.2 && <2.3"
+  }
 ```
-streamly-project/
-├── streamly/           # git clone
-├── streamly-core/      # git clone
-├── mori.dhall          # project manifest
-└── docs/
-    ├── folds-guide.md
-    └── streaming-patterns.md
-```
-
-Register once:
-
-```bash
-cd streamly-project
-mori register --local
-```
-
-All services can now reference `"streamly"` without specifying paths.
-
-### Merge Semantics
-
-When authoritative dependency metadata is found:
-
-* Dependency Mori **cannot be overridden**
-* Consumer-declared metadata is **merged additively**
-
-Allowed consumer additions:
-
-* Additional `extraDocs`
-* Local usage notes
-
-Disallowed consumer overrides:
-
-* Package type
-* APIs owned
-* Domain model
-* Config requirements
-
-### Augmentation Example
-
-Most dependencies need no augmentation:
-
-```haskell
-{ dependencies = [ "streamly", "effectful", "hasql" ] }
-```
-
-When you need to add project-specific documentation:
-
-```haskell
-{ dependencies =
-    [ "streamly"
-    , "effectful"
-    , < WithAugmentation =
-        { name = "hasql"
-        , extraDocs =
-            [ { key = "our-usage"
-              , audience = < Internal >
-              , kind = < Notes >
-              , description = Some "How payments uses hasql connection pooling"
-              , location = < LocalFile "docs/hasql-notes.md" >
-              }
-            ]
-        , localPathOverride = None Text
-        }
-      >
-    ]
-}
-```
-
-### Fallback: Unregistered Dependencies
-
-For dependencies not yet in the registry (experimental, one-off):
-
-```haskell
-< WithAugmentation =
-    { name = "experimental-lib"
-    , extraDocs = []
-    , localPathOverride = Some "/Users/dev/scratch/experimental-lib"
-    }
->
-```
-
-This is rare. The expectation is that frequently-used dependencies are registered.
 
 ### CLI Introspection
 
 ```bash
-# Locate a dependency
-mori deps locate streamly
-
-# Explain resolution
-mori deps explain streamly
-
-# Resolve all dependencies
+mori deps locate hasql
+mori deps explain hasql
 mori deps resolve
 ```
 
-Output always shows:
+`locate` returns the provider path and, when selected, its package. `explain`
+reports the resolution and provider metadata. `resolve` checks the project's
+name-list dependencies. Unknown or ambiguous providers need a corrected declaration
+or a registration; the CLI does not invent a path or fetch a missing checkout.
 
-* Resolution source (local registry / global registry / fallback)
-* Filesystem path
-* Applied augmentations
+---
 
 ### Invariants
 
-* **Registry-first**: Name lookup before path fallback
+* **Registry-first**: Lookup in the configured registry; no hidden remote or path fallback
 * **Single authority**: Exactly one `mori.dhall` per dependency
 * **No override**: Consumers augment, never redefine
-* **Deterministic**: Same name -> same resolution
+* **Deterministic**: Same name → same resolution
 * **Offline-capable**: Local registry works without network
+
+---
 
 ## Example `mori.dhall`
 

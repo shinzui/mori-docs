@@ -9,12 +9,12 @@ what was originally scoped as Phase 3 shipped along the way. This page describes
 state honestly: what works, what is declared but not enforced, what is actively being built, and
 what has been requested but not committed.
 
-Release preparation review: 2026-10-07.
+Release documentation review: 2026-10-29.
 
 | Phase | Focus | State |
 |-------|-------|-------|
 | **Phase 1** | Local-First — fully functional on a single developer machine | **Complete** |
-| **Phase 2** | Global Registry — organization-wide coordination and sync | Not started |
+| **Phase 2** | Global Registry — organization-wide coordination and sync | Shared publication and reading delivered; adoption and governance remain |
 | **Phase 3** | Advanced features — pinning, trust policies, cross-repo workflows | Partly delivered early |
 
 ---
@@ -109,7 +109,7 @@ registry. Projects carry stable identity that survives renames.
 - `mori ops` — durable workflows, timers, outbox, inbox, PGMQ, projections, shards, snapshots,
   streams, replay audit, and projection-catalog rebuilds
 - `mori app` — Mori Apps as webhook receivers, with delivery retry
-- `mori serve` — the HTTP read API
+- `mori serve` — HTTP queries, scoped catalogs, and publication writes
 - `mori reaction list | show | scheduled | cancel | recover` — reaction history, pending
   schedules, and recovery
 - Projection-catalog drift gates at deploy and daemon startup, recovered by preview-then-adopt
@@ -170,11 +170,15 @@ plans, and closed.
 
 ## Phase 2: Global Registry
 
-Not started. Mori today is local-first: one registry, one database, resolution within it.
-Phase 2 makes that organization-wide.
+Shared publication and reading now ship: [Registry Push](/docs/guides/registry-push),
+[principal grants and personal tokens](/docs/guides/registry-access),
+[server operations](/docs/guides/shared-registry), and
+[mori-lite offline discovery](/docs/guides/lite). The client installs through Nix;
+standalone distribution and the teammate pilot remain open adoption gates.
+Organization-wide governance and cross-machine automation remain future work.
 
-- A registry service with authentication, authorization, and namespace management
-- Sync — push local registrations, pull global metadata, resolve conflicts, keep working offline
+- Shared registry identity, personal-token authorization and portable snapshot publication are available
+- Offline catalog sync is available; source and document files require local clones
 - Organization features — team ownership, discovery, dependency graph visualization
 - CI integration — registry-gated execution and policy enforcement
 
@@ -200,7 +204,7 @@ provenance arrived early — they are in the shipped list above. What remains ge
 |----------|----------|
 | Event store | Kiroku on PostgreSQL, with the Keiro runtime. MessageDB and the legacy path have been removed entirely |
 | Aggregate style | Functional event sourcing — every aggregate is a Keiki transducer with a pure decide/evolve core |
-| Local registry storage | PostgreSQL projections, not SQLite |
+| Registry storage | Full runtime uses PostgreSQL projections; mori-lite uses a per-principal SQLite catalog cache |
 | Registry read models | Inline projections, current the moment their writing command returns — not polled by a daemon |
 | Dependency model | Registry-first resolution, at package grain |
 | Repository identity | TypeID minted on `mori init`; stable identity survives renames |

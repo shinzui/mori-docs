@@ -170,3 +170,25 @@ Use [`mori ops replay-audit`](/docs/commands/ops#mori-ops-replay-audit) to
 prove that streams still fold cleanly without writing anything, and
 [`mori ops rebuild`](/docs/commands/ops#mori-ops-rebuild) to rebuild a read
 model from the event log when it has genuinely drifted.
+
+## Pushing to a shared registry
+
+A team can share one registry that your workstation fills. `mori registry push`
+rebuilds each project you have registered from its checkout, exactly as
+`mori register` does, and posts it to the shared server's `/v1/publications`.
+The server reconciles it into its own event history; it never reads a path on
+your machine, and pushing the same content twice appends nothing.
+
+```bash
+export MORI_PUSH_URL=https://registry.example
+export MORI_PUSH_TOKEN=…   # the server's operator token, or a personal token with publish grants
+mori registry push acme/billing
+mori registry push --all --prune
+```
+
+Each line of output names one project and its outcome: `created`, `updated`,
+`unchanged`, `pruned`, `skipped`, `refused`, or `failed`. Own and fork projects
+need a stable ID first (`mori identity mint --write`, then `mori register`).
+`--prune` retires only server projects that this registry pushed and no longer
+has. Document contents are not pushed; teammates clone repositories for those.
+See `mori help registry-push` for the full reference.

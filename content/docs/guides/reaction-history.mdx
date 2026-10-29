@@ -184,40 +184,27 @@ mori doctor --reactions
 
 ### Recover one stuck reaction
 
-Unsticks a reaction that is stuck in `status=triggered`. Older daemon
-builds (before the executor wrapped its action loop in an exception
-boundary) could halt the `mori-reaction-executor` subscription on a
-spawn-time failure; the reaction row stayed `triggered` forever and no
-further reactions on the same target advanced.
-
-**Default behavior:**
-
-1. Marks the stuck row `failed` with the canonical error message
-   `manually recovered via mori reaction recover`.
-2. Advances the `mori-reaction-executor` subscription's checkpoint past
-   the stuck event so the next reaction fires normally.
-
-With `--retry`, additionally re-emits a fresh `ReactionTriggered` event
-carrying the original actions under a new reaction ID. Use this once you
-have fixed the root cause (PATH, missing binary, bad cwd) and want the
-action to run again.
-
-The command refuses to operate on rows already in `completed` or `failed`
-state (exit code 2, "nothing to recover"). It is idempotent on
-non-triggered rows.
-
-> **Safety.** `recover` updates the `checkpoints` table directly. Running
-> it while the daemon is actively processing the same subscription can
-> race with the live consumer. It is safe against a genuinely stuck
-> subscription (which by definition is not advancing), but stop the
-> daemon first if unsure.
-
-#### Example
-
 ```bash
-mori reaction recover rxn_01hy3x...           # Skip the stuck event
-mori reaction recover rxn_01hy3x... --retry   # Skip and re-fire
+mori reaction recover <REACTION_ID> [--retry]
 ```
+
+Use `recover` for a reaction stuck in `status=triggered` or `status=executing`.
+For a legacy `triggered` row, stop the daemon and all standalone automation processes first.
+Recovery refuses a held executor lock, rechecks the reaction under a row lock, and commits
+its failed status together with a public upstream checkpoint reset in one Serializable
+transaction. The checkpoint can only advance; an absent row remains absent, and its saved
+target binding stays intact. A concurrent cursor change refuses and rolls back the repair.
+
+A free advisory key does not prove that old processes have stopped: a daemon can keep its
+workers running while reacquiring a lost lock connection. Stop the processes explicitly.
+Restart the daemon after a successful legacy repair.
+
+A current `executing` reaction is recovered through its aggregate by appending a retryable
+terminal event. This path preserves its existing event-sourced behavior.
+
+With `--retry`, Mori also emits a fresh `ReactionTriggered` event with the original actions
+under a new reaction ID. Use this after fixing the root cause, such as a missing binary,
+bad path, or broken command. Settled reactions remain unchanged.
 
 ### Recover parked events
 

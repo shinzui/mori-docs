@@ -1,0 +1,74 @@
+---
+title: Registry Push
+description: Publish portable project snapshots from a workstation
+icon: Database
+---
+
+`mori registry push` sends the projects this registry knows to a shared
+registry over HTTP. Each project is rebuilt from its checkout exactly as
+`mori register` builds it, made portable, and posted to the server's
+`/v1/publications`; the server reconciles it into its own history and serves it
+to readers as if it had been registered there. The server never reads a path on
+your machine.
+
+```bash
+mori registry push --url https://registry.example acme/billing
+mori registry push --all
+mori registry push --all --prune --json
+```
+
+## Target and token
+
+- `--url`, else `MORI_PUSH_URL`, names the receiving registry's base URL.
+- `MORI_PUSH_TOKEN` is the bearer token: the server's operator token, or a
+  personal token whose principal holds `publish` on every namespace you push
+  (`mori registry access grant --principal … --namespace acme --permission publish`
+  on the server). There is no token flag, so the token never lands in shell
+  history or a process listing.
+
+The first line names the server's registry identity, so you can see where the
+push went:
+
+```text
+Target: team registry (registry_01…) at https://registry.example
+acme/billing: created
+1 pushed, 0 pruned, 0 skipped, 0 refused, 0 failed
+```
+
+## Outcomes
+
+| Outcome | Meaning |
+| --- | --- |
+| `created` | The server did not have the project; it now does, under this registry's project ID. |
+| `updated` | The server reconciled a changed snapshot. |
+| `unchanged` | The server already had this exact snapshot from this registry; nothing was appended. |
+| `pruned` | With `--prune`, the server retired a project this registry pushed but no longer has. |
+| `skipped (…)` | The project's checkout is not on disk. |
+| `refused (…)` | Sent nothing (no stable ID), or the server refused the token's grants (403). |
+| `failed (…)` | The server refused the snapshot or could not be reached; the problem code says why. |
+
+The command exits 1 when anything was refused or failed. A push is idempotent:
+run it again after fixing the cause, and projects already pushed report
+`unchanged`.
+
+## Stable IDs
+
+An own or fork project must carry a stable ID before it can leave this machine,
+because the shared registry matches projects by it across renames. Run
+`mori identity mint --write` in the repository, then `mori register`, then push
+again. Third-party and vendored records need none.
+
+## What `--prune` touches
+
+Only projects whose last publication on the server came from this registry,
+and only with `--all`. Projects registered directly on the server, or pushed by
+another registry, are never retired.
+
+## What is not pushed
+
+Document contents. The server stores what a registration stores: identity,
+packages, dependencies, docs metadata, repositories, skills, extensions, and
+OKF concepts with their bodies. Teammates clone repositories for the rest
+(`mori-lite clone`). Your machine's paths and host identity travel as the
+project's host context, which the server records as where the project was
+observed and never shows to a reader.

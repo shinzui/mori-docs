@@ -445,3 +445,45 @@ mori registry open-doc mori://shinzui/streamly/docs/effects-cookbook
 
 Uses `$EDITOR` (or `$VISUAL`, falling back to `vi`). URLs are opened with the
 system `open` command.
+
+## Shared registry identity, access, and publication
+
+```bash
+mori registry identity mint --name "team registry"
+mori registry identity show
+mori registry push --url https://registry.example acme/billing
+mori registry push --all --prune --json
+```
+
+`identity mint` creates the durable registry ID once; readers pin it. Own and fork
+projects need `mori identity mint --write` and registration before publication.
+`push` uses `--url` or `MORI_PUSH_URL`, and `MORI_PUSH_TOKEN` for the operator or a
+personal token with publish grants. It rebuilds each snapshot from its checkout.
+`--all` selects every registered project; `--prune` takes effect only with `--all` and retires only
+projects last published by this registry that it no longer has. `--json` emits
+machine-readable results. Refused or failed projects cause exit 1.
+
+See [Registry Push](/docs/guides/registry-push) for outcomes and portability limits,
+and [Running a Shared Registry](/docs/guides/shared-registry) for server setup.
+
+```bash
+mori registry access principal create --label alice
+mori registry access principal list
+mori registry access principal relabel PRINCIPAL --label alice
+mori registry access principal retire PRINCIPAL
+mori registry access token mint --principal PRINCIPAL --label laptop
+mori registry access token list --principal PRINCIPAL
+mori registry access token revoke CREDENTIAL
+mori registry access grant --principal PRINCIPAL --namespace acme --permission read
+mori registry access revoke --principal PRINCIPAL --namespace acme --permission read
+mori registry access list --principal PRINCIPAL
+mori registry access check --principal PRINCIPAL --project acme/billing --permission read
+```
+
+Access commands run directly against the shared database after its identity is minted.
+Grant and revoke accept one resource: `--registry`, `--namespace NAME`, or
+`--project NAME`. Permissions are `read`, `publish`, and `administer`, each stronger
+permission implying the preceding ones. `check` takes `--project`. Grant/revoke `--by` names the actor and defaults to
+`cli:$USER`; `--json` uses snake_case keys. Tokens are displayed once; retirement
+is terminal. `check` exits 0 for allowed and 1 for denied. See
+[Registry Access](/docs/guides/registry-access) for inheritance and cache revocation.

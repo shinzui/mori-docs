@@ -84,20 +84,52 @@ never has to satisfy the auth check.
 
 ## Surface
 
-| Path | Contents |
-|------|----------|
-| `/health/*` | Standard, unversioned probes. `/health/live` and `/health/ready` stay reachable without a token |
-| `/v1/health` | Versioned health compatibility surface |
-| `/v1/health/db` | Database smoke check |
+| Path | Purpose |
+|------|---------|
+| `/health/*` | Standard, unversioned operational probes. `/health/live` and `/health/ready` stay reachable without a token |
+| `/v1/health`, `/v1/health/db` | Versioned health compatibility surface, including a database smoke check |
 | `/v1/openapi.json` | Generated OpenAPI 3.1 document, including the published security contract |
+| `/v1/registry` | This registry's durable identity (`registryId`, `displayName`, `mintedAt`); `404` with code `registry_identity_unminted` until an operator runs `mori registry identity mint` |
+| `/v1/access-context` | Who the caller is: principal, cache scope, auth mode, and grant generation |
+| `/v1/catalog`, `/v1/catalog/projects/{namespace}/{name}`, `/v1/search` | The caller's catalog of visible projects, one visible project, and search across them |
+| `/v1/publications` | Receive, list or withdraw portable project snapshots; personal tokens require the appropriate publish grant |
 | `/v1/projects`, `/v1/reactions`, `/v1/workflows`, `/v1/repositories`, `/v1/groups`, `/v1/apps`, `/v1/ingest` | Application resources |
-| `/v1/workflows/{id}/steps` | One workflow's steps |
-| `/v1/workflows/{id}/chain` | The complete causal chain — the HTTP equivalent of `mori workflow trace` |
-| `/v1/plans/graph` | The canonical plan dependency DAG — the HTTP equivalent of `mori plans graph` |
+| `/v1/workflows/{id}/steps`, `/v1/workflows/{id}/chain` | A workflow's steps, and its complete causal chain — the HTTP equivalent of `mori workflow trace` |
+| `/v1/plans/graph` | The canonical cross-project plan dependency DAG — the HTTP equivalent of `mori plans graph` |
+| `/v1/improvement-requests/fulfillment` | One request's bounded source-fulfillment graph, readiness, and actionable frontier |
 
-Fallible routes return typed **RFC 9457 problem documents** rather than bare
-error strings. Requests carry OpenTelemetry instrumentation, and JSON field
-names use the API's snake_case convention.
+Fallible routes return typed RFC 9457 problem documents rather than bare error
+strings. Requests are instrumented with OpenTelemetry. JSON field names use the
+API's snake_case convention, except for the shared-registry wire types that
+lightweight clients decode without `mori-api` (`/v1/registry`, `/v1/access-context`,
+`/v1/catalog`, `/v1/search`, `/v1/publications`), which keep camelCase field names.
+
+## Operator and personal tokens
+
+`MORI_API_TOKEN` is the operator credential: it may call every route and sees
+every project. A teammate presents a personal token minted with
+`mori registry access token mint` (see `mori help registry-access`) and is a
+*principal*. A principal without registry `administer` may call `GET` on the health probes,
+`/v1/registry`, `/v1/access-context`, `/v1/catalog`,
+`/v1/catalog/projects/{namespace}/{name}`, `/v1/search`, `/v1/namespaces`, and
+`/v1/domains`. It may also call `GET`, `POST` and `DELETE` on `/v1/publications`;
+the handler checks `publish` for the namespace of a new project or the project
+resource for an existing project. A refusal is `403 publish_not_permitted`.
+Other routes answer `403 principal_scope`. A principal holding registry
+`administer` may call every route. A
+revoked token, or one belonging to a retired principal, answers `401`.
+
+The catalog serves only projects the principal's grants cover, as a Relay page
+ordered by read-model position (`first`/`after`), each node carrying an opaque
+`resourceId`, the project's packages, dependencies, docs, repositories, OKF
+concepts with their bodies, and releases, and no host-local fact such as an
+absolute path or a checkout identity. A retired project appears once as a node
+with `lifecycle: "retired"` and empty lists. A project the caller may not read
+answers the same `404` as one that does not exist. `/v1/access-context`
+reports a `grantGeneration` that changes whenever one of the caller's grants is
+made or revoked; a client compares it for equality and replaces its cache when
+it moved. Until the registry identity is minted, the catalog, search, and
+access-context routes answer `503` with code `registry_identity_unminted`.
 
 ## Pagination
 
