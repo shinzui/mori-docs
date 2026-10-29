@@ -143,6 +143,8 @@ Primary mappings from `docs/user/`:
 | `automation-test-repos.md` | `content/docs/guides/automation-test-repos.mdx` |
 | `cross-repo-workflows.md` | `content/docs/guides/cross-repo-workflows.mdx` |
 | `reaction-history.md` | `content/docs/guides/reaction-history.mdx` |
+| `lite.md` | `content/docs/guides/lite.mdx` |
+| `shared-registry.md` | `content/docs/guides/shared-registry.mdx` |
 | `apps.md` | `content/docs/guides/apps.mdx` |
 | `agent-context.md` | `content/docs/concepts/agent-context.mdx` |
 | `agent-sessions.md` | `content/docs/guides/agent-sessions.mdx` |
