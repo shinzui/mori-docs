@@ -25,6 +25,13 @@ mori registry push --all --prune --json
   (`mori registry access grant --principal … --namespace acme --permission publish`
   on the server). There is no token flag, so the token never lands in shell
   history or a process listing.
+- `MORI_PUSH_AUTH_MODE=shomei` authenticates as a Shomei service account instead,
+  and refuses to mix with `MORI_PUSH_TOKEN`. Set `MORI_PUSH_SHOMEI_ISSUER`,
+  `MORI_PUSH_SHOMEI_CLIENT_ID`, `MORI_PUSH_SHOMEI_CLIENT_SECRET`, and optionally
+  `MORI_PUSH_SHOMEI_SCOPE`. The service account's subject must be bound to a
+  principal on the receiving registry that holds `publish`
+  (see [Registry Access](/docs/guides/registry-access#principals)). Tokens are
+  short-lived and obtained as needed.
 
 The first line names the server's registry identity, so you can see where the
 push went:

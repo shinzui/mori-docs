@@ -4,6 +4,14 @@ description: Notable changes and new features in mori
 icon: ScrollText
 ---
 
+## 2026-11-09 — Shomei sign-in, En access, and bounded catalog sync
+
+- [Running a Shared Registry](/docs/guides/shared-registry) now covers [Shomei publishers](/docs/guides/shared-registry#shomei-publishers), [preparing](/docs/guides/shared-registry#prepare-en-grants) and [selecting En](/docs/guides/shared-registry#select-en-and-administer-permissions) as the access decision owner, and [bounded catalog snapshots](/docs/guides/shared-registry#bounded-catalog-snapshots) with the `MORI_CATALOG_MODE` and `MORI_SYNC_*` settings.
+- [mori-lite](/docs/guides/lite) documents [browser login](/docs/guides/lite#browser-login) (`login`, `whoami`, `logout`, credential storage) and protocol 2 sync, which downloads a complete visible snapshot every run, so a rename out of a granted namespace no longer needs `sync --full`.
+- [Registry Access](/docs/guides/registry-access) adds `principal bind`, `export-en`, and En-mode administration through `/v1/access`; [Registry Push](/docs/guides/registry-push) adds Shomei service-account authentication.
+- [`mori registry`](/docs/commands/registry) and [`mori serve`](/docs/commands/serve) list the new commands, environment variables, and the `/v1/session`, `/v1/access`, `/v2/catalog`, and `/v2/catalog/complete` routes.
+- Corrected command examples in [Agent Context](/docs/concepts/agent-context) (`mori agent context ROLE`), [VCS Integration](/docs/concepts/vcs-integration) (`mori automate ingest git`), [`mori deps`](/docs/commands/deps) (`deps resolve --json`), and [Aliases](/docs/guides/aliases) (`registry list --json`).
+
 ## 2026-10-29 — Shared registries and release webhooks
 
 - [Run a shared registry](/docs/guides/shared-registry), [publish portable snapshots](/docs/guides/registry-push), and [grant personal-token access](/docs/guides/registry-access).

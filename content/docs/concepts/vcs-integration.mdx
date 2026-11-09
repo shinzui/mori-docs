@@ -241,13 +241,12 @@ Reactor + Projections
 ### Suggested Commands
 
 ```bash
-mori automate ingest --repo /path --vcs git
-mori automate ingest --repo /path --vcs jj
-mori automate watch  --repos /path/a,/path/b
-mori automate run    --once
+mori automate ingest git --path /path/to/repo
+mori automate run --path /path/to/repo   # long-running, one repository
+mori automate daemon                     # long-running, every registered repository
 ```
 
-Each repo maintains its own cursor. Imperfect cursors are safe due to replay + idempotency.
+`git` is the only VCS type `mori automate ingest` accepts today. Each repo maintains its own cursor. Imperfect cursors are safe due to replay + idempotency.
 
 ## Key Design Takeaway
 

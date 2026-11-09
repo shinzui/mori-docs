@@ -458,7 +458,8 @@ mori registry push --all --prune --json
 `identity mint` creates the durable registry ID once; readers pin it. Own and fork
 projects need `mori identity mint --write` and registration before publication.
 `push` uses `--url` or `MORI_PUSH_URL`, and `MORI_PUSH_TOKEN` for the operator or a
-personal token with publish grants. It rebuilds each snapshot from its checkout.
+personal token with publish grants; `MORI_PUSH_AUTH_MODE=shomei` authenticates as a
+Shomei service account instead. It rebuilds each snapshot from its checkout.
 `--all` selects every registered project; `--prune` takes effect only with `--all` and retires only
 projects last published by this registry that it no longer has. `--json` emits
 machine-readable results. Refused or failed projects cause exit 1.
@@ -470,6 +471,7 @@ and [Running a Shared Registry](/docs/guides/shared-registry) for server setup.
 mori registry access principal create --label alice
 mori registry access principal list
 mori registry access principal relabel PRINCIPAL --label alice
+mori registry access principal bind PRINCIPAL --issuer URL --subject SUBJECT
 mori registry access principal retire PRINCIPAL
 mori registry access token mint --principal PRINCIPAL --label laptop
 mori registry access token list --principal PRINCIPAL
@@ -478,12 +480,39 @@ mori registry access grant --principal PRINCIPAL --namespace acme --permission r
 mori registry access revoke --principal PRINCIPAL --namespace acme --permission read
 mori registry access list --principal PRINCIPAL
 mori registry access check --principal PRINCIPAL --project acme/billing --permission read
+mori registry access export-en --json
 ```
 
-Access commands run directly against the shared database after its identity is minted.
+In the default local decision mode, access commands run directly against the shared
+database after its identity is minted. With `MORI_ACCESS_MODE=en` and `MORI_ACCESS_URL`,
+`grant`, `revoke`, `list`, and `check` go through the registry's `/v1/access` API instead.
 Grant and revoke accept one resource: `--registry`, `--namespace NAME`, or
-`--project NAME`. Permissions are `read`, `publish`, and `administer`, each stronger
+`--project NAME`. In En mode, `--group GROUP_ID` can replace `--principal` on grant and revoke.
+Permissions are `read`, `publish`, and `administer`, each stronger
 permission implying the preceding ones. `check` takes `--project`. Grant/revoke `--by` names the actor and defaults to
 `cli:$USER`; `--json` uses snake_case keys. Tokens are displayed once; retirement
 is terminal. `check` exits 0 for allowed and 1 for denied. See
 [Registry Access](/docs/guides/registry-access) for inheritance and cache revocation.
+
+### Flags (`access principal bind`)
+
+Binds an exact external identity to an existing principal. The binding keeps the
+principal's grants and grants nothing by itself.
+
+| Flag | Description |
+|------|-------------|
+| `PRINCIPAL_ID` | The existing `principal_…` identifier |
+| `--issuer URL` | Exact external issuer |
+| `--subject SUBJECT` | Exact external subject |
+| `--json` | Emit command-owned snake_case JSON |
+
+### Flags (`access export-en`)
+
+Copies granted Phase 1 rows and resource parents through En's public API without
+switching the decision source. Credentials come from the `MORI_EN_*` environment
+settings, and a rejected grant or parent exits nonzero. Refused in En mode. See
+[Export grants to En](/docs/guides/registry-access#export-grants-to-en).
+
+| Flag | Description |
+|------|-------------|
+| `--json` | Emit command-owned snake_case JSON |

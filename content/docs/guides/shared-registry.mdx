@@ -12,7 +12,8 @@ headless: nobody registers checkouts on it, runs `mori path` against it, or runs
 automation executor per database, which stays on the workstation.
 
 Every command below was run once against a throwaway database; the outputs are
-from that run, with IDs left as they came out.
+from that run, with IDs left as they came out and updated only where a later
+release changed their shape.
 
 ## 1. Provision PostgreSQL
 
@@ -185,7 +186,7 @@ The transcript is from the loopback rehearsal; substitute your HTTPS URL.
 $ curl -s https://registry.acme.internal/health/ready
 {"check":"all","failingSince":null,"status":"ok"}
 $ curl -s -H "Authorization: Bearer $ALICE_TOKEN" https://registry.acme.internal/v1/access-context
-{"authMode":"mori-token","cacheScopeId":"principal_01m62dc1g2emzvpv1m8avjqngp","catalogProtocols":[1],"grantGeneration":"3","principalId":"principal_01m62dc1g2emzvpv1m8avjqngp","principalLabel":"alice","registryId":"registry_01m62dbh61em6bf6e21ftnftrn"}
+{"authMode":"mori-token","cacheScopeId":"principal_01m62dc1g2emzvpv1m8avjqngp","catalogProtocols":[1,2],"grantGeneration":"3","principalId":"principal_01m62dc1g2emzvpv1m8avjqngp","principalLabel":"alice","registryId":"registry_01m62dbh61em6bf6e21ftnftrn"}
 $ curl -s -H "Authorization: Bearer $ALICE_TOKEN" https://registry.acme.internal/v1/registry
 {"displayName":"acme registry","mintedAt":"2026-10-28T23:26:04.481349Z","registryId":"registry_01m62dbh61em6bf6e21ftnftrn"}
 $ curl -s https://registry.acme.internal/v1/registry
@@ -193,6 +194,69 @@ $ curl -s https://registry.acme.internal/v1/registry
 $ curl -s -H "Authorization: Bearer $ALICE_TOKEN" https://registry.acme.internal/v1/projects
 {"code":"principal_scope","detail":"this token may only read the catalog","retryable":false,"status":403,"title":"Forbidden","type":"about:blank"}
 ```
+
+## Shomei publishers
+
+On a server configured with `MORI_AUTH_MODE=shomei`, set
+`MORI_SHOMEI_ISSUER` and `MORI_SHOMEI_AUDIENCE` to the trusted identity deployment
+(`mori://shinzui/shomei`). The issuer supplies access tokens through its public
+HTTP endpoints; Mori verifies signature, issuer, audience, expiry, and token type.
+An ID token cannot authenticate to Mori. Existing personal tokens continue to work
+until explicitly revoked.
+
+Create a service account through your Shomei operator, store its one-time secret in
+protected operator environment storage, and obtain its exact backing-user subject
+from that deployment. Bind that identity to an existing Mori principal on the
+receiving registry, then grant only the namespace or project it may publish:
+
+```bash
+mori registry access principal bind "$PRINCIPAL" --issuer "$ISSUER" --subject "$SUBJECT"
+mori registry access grant --principal "$PRINCIPAL" --namespace acme --permission publish
+```
+
+On the workstation, load these settings from protected environment storage:
+
+```bash
+export MORI_PUSH_AUTH_MODE=shomei
+export MORI_PUSH_SHOMEI_ISSUER=https://identity.acme.internal
+export MORI_PUSH_SHOMEI_CLIENT_ID=svcacct_example
+export MORI_PUSH_SHOMEI_CLIENT_SECRET="<load from protected storage>"
+export MORI_PUSH_SHOMEI_SCOPE=mori:publish
+unset MORI_PUSH_TOKEN
+mori registry push --url https://registry.acme.internal --all
+```
+
+The optional scope must be allowed by that service account; it does not grant a
+Mori permission. Tokens are short-lived and refresh-less: the publisher obtains
+another as needed. Failed issuance stops publication. Mixed mode settings are
+refused. Neither the secret nor token belongs in `mori.dhall`, a snapshot, or a
+command argument. Revoke or rotate the service credential in Shomei to stop new
+issuance; an issued stateless token remains valid until expiry, while retiring
+its bound Mori principal prevents its use immediately.
+
+Publication history retains the workstation registry ID separately from the API
+actor's verified issuer, exact subject, and stable principal. A publisher registry
+ID alone grants no authority. Delegated tokens are currently refused.
+
+## Prepare En grants
+
+`mori registry access export-en --json` copies granted Phase 1 rows and their
+resource-parent layout to a standalone En deployment (`mori://shinzui/en`). It
+preserves principal and registry-qualified resource IDs and leaves the current
+decision source in place. Repeated exports skip existing tuples without advancing
+En's generation. A rejected grant or conflicting parent is named in the report and
+exits nonzero.
+
+The En deployment must load the model at `mori-api/access/registry.en` in
+`mori://shinzui/mori` (artifact-level URI pending). Load its base URL, separate
+read-only/write-capable credentials, schema hash, and datastore ID from protected
+operator environment storage as `MORI_EN_BASE_URL`, `MORI_EN_READ_TOKEN`,
+`MORI_EN_WRITE_TOKEN`, `MORI_EN_SCHEMA_HASH`, and `MORI_EN_DATASTORE_ID`. The owner
+reports its hash and datastore ID at startup; Mori verifies the public model and
+consistency evidence against those values. `MORI_EN_TIMEOUT_MILLIS` defaults to
+5000 and may be at most 30000. En must permit its public relationship-query route
+for read-only keys. Use a deployment containing the query-classification fix
+described by `mori://shinzui/mori/okf/friction-log/concepts/FRIC-21`.
 
 ## The first push
 
@@ -252,9 +316,9 @@ Synced 2 projects in 1 pages from acme registry (full replacement)
 $ mori-lite doctor
 Registry: registry_01m62dbh61em6bf6e21ftnftrn
 Principal: the operator (scope operator)
-Protocol: v1, schema v1
+Protocol: v2, schema v1
 Grant generation: 4
-Catalog database: /Users/publisher/.cache/mori-lite/catalog/registry_01m62dbh61em6bf6e21ftnftrn/operator/v1.sqlite
+Catalog database: /Users/publisher/.cache/mori-lite/catalog/registry_01m62dbh61em6bf6e21ftnftrn/operator/v2.sqlite
 Last sync: 2026-10-28T23:31:27.971143Z
 Projects: 2
 Cached projects with no github, gitlab, or git repository:
@@ -304,8 +368,11 @@ read models included. Prune the previous day's backup only after
 Pull the new closures, run `mori-migrations up` and `verify` again, and restart.
 A binary that adds a projection owner changes a catalog slice; run
 `mori ops rebuild adopt project_models --force` on an existing registry when
-`verify` reports the slice as changed. The release replay gate ran on the
-workstation before the release was tagged and is not repeated on the server.
+`verify` reports the slice as changed. The release replay gate normally runs on
+the workstation before a release is tagged and is not repeated on the server.
+A release that waives it says so in its release notes, as 7.2.0.0 does; rehearse
+such an upgrade on a restored clone before applying it to a registry holding
+real history.
 
 ## The same-machine layout
 
@@ -325,3 +392,76 @@ shared database, so keep a wrapper to make a grant impossible to misdirect:
 ```bash
 alias mori-shared='MORI_PG_CONNECTION_STRING="host=$HOME/path/to/db dbname=mori_shared" mori'
 ```
+
+## Select En and administer permissions
+
+After exporting and reconciling Phase 1 grants, run the normal database migration
+runner and start the registry with `MORI_ACCESS_MODE=en` plus the protected
+`MORI_EN_*` settings above. Read and write owner keys must be different. Local
+mode remains the default and refuses ambiguous En server settings. Do not repeat
+the historical export after cutover; the CLI refuses `export-en` in En mode.
+
+Project decisions are materialized into an indexed visible set before catalog
+paging. Missing or stale state returns 503. Watch changes close affected scopes
+and refresh them; unrelated principals keep their generation when their visible
+set did not change. `MORI_EN_MAX_STALENESS_SECONDS` defaults to 30, with a maximum
+of 300. External owner writes propagate through the watch within that freshness
+boundary. An owner outage never reactivates local grants.
+
+Permission administrators set `MORI_ACCESS_MODE=en` and `MORI_ACCESS_URL` in the
+workstation CLI. Authenticate with `MORI_PUSH_TOKEN`, or the explicit Shomei
+service-account `MORI_PUSH_*` settings used for publication. Run the same
+`mori registry access grant|revoke|list|check` commands. The server checks live
+administer permission on the target before using its separate En write key.
+Whole-registry grant listings require registry administration. `--group GROUP_ID`
+can replace `--principal` for grant/revoke; group membership stays in En.
+Grant/revoke JSON returns owner consistency evidence and a null local grant ID.
+
+Bootstrap registry administration through En's public relationship API using the
+object `registry:<receiving registry ID>`, relation `administrator`, and a direct
+`principal` subject whose ID is the existing Mori principal ID. The trusted Mori
+operator credential remains available for administration. Identity bindings and
+personal-token lifecycle remain Mori-owned in both decision modes.
+
+A new project or namespace move stays hidden until its parent relationships are
+verified. If a publication commits before the owner write fails, retrying or
+restarting the server resumes its persisted admission with the same resource ID.
+Retirement closes visibility before cleanup and retains an identity tombstone.
+A genuinely new project with the same name needs a new identity.
+
+## Bounded catalog snapshots
+
+New Lite clients require protocol 2. Discovery advertises `[1,2]` by default;
+existing V1 clients continue to work during migration. After upgrading clients,
+set `MORI_CATALOG_MODE=v2-only` on the registry to advertise only 2 and refuse
+`/v1/catalog` bulk downloads with `426 catalog_upgrade_required` before content.
+Project DTOs, personal tokens, Shomei identities and Mori references retain their
+existing contracts.
+
+A sync captures a coherent, immutable visible snapshot in a short read-only
+transaction; no transaction stays open while a laptop downloads. Continuations
+and completion revalidate the caller, current access evidence and membership.
+A permission change or namespace move can return `409 access_scope_changed`;
+start a fresh sync. Expired/completed cursors return `409 sync_session_expired`.
+Regrant cannot revive a revoked session. Another principal's unrelated direct
+grant preserves this principal's session.
+
+The following protected server settings bound capture and retention:
+
+| Variable | Default | Accepted range |
+| --- | ---: | ---: |
+| `MORI_SYNC_MAX_PROJECTS` | 20000 | 1–100000 |
+| `MORI_SYNC_MAX_BYTES` | 67108864 | 1024–268435456 |
+| `MORI_SYNC_CAPTURE_MILLIS` | 30000 | 1–120000 |
+| `MORI_SYNC_SESSION_SECONDS` | 300 | 1–3600 |
+| `MORI_SYNC_MAX_CONCURRENT` | 8 | 1–32 |
+| `MORI_SYNC_MAX_PER_SCOPE` | 2 | 1–8 |
+| `MORI_SYNC_MAX_STORED` | 128 | 1–2048 |
+
+Exceeded capacity returns `503 catalog_sync_capacity` before a partial snapshot
+can activate. Retry after capacity or expiry clears, or adjust the operator limit.
+Startup closes old sessions; completed sessions discard payloads, and expired
+sessions are removed when new sessions are reserved. Apply the catalog-session
+migration through the normal migration runner. The client keeps checkout bindings
+outside the disposable catalog and blocks it after a known authorization refusal;
+ordinary outages preserve the last authorized export for explicit offline reads.

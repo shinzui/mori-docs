@@ -8,7 +8,7 @@ icon: Laptop
 
 `mori-lite` is a read-only client for a shared Mori registry. It needs no local
 PostgreSQL or schema checkout. It talks to the registry's HTTP API
-with a personal token, keeps what your grants allow in a SQLite cache, and
+with a personal token or a Shomei sign-in, keeps what your grants allow in a SQLite cache, and
 answers catalog queries from that cache, offline. It clones the projects it
 lists and resolves `mori://` references to files in those clones. It never
 writes to the registry.
@@ -16,7 +16,7 @@ writes to the registry.
 | What | Where |
 | --- | --- |
 | Config | `~/.config/mori-lite/config.json` (`$XDG_CONFIG_HOME`, or `$MORI_LITE_CONFIG` for a file of your choice) |
-| Catalog cache | `~/.cache/mori-lite/catalog/<registry>/<principal>/v1.sqlite` (`$XDG_CACHE_HOME`) |
+| Catalog cache | `~/.cache/mori-lite/catalog/<registry>/<principal>/v2.sqlite` (`$XDG_CACHE_HOME`) |
 | Checkout bindings | beside the catalog cache, in a database no sync ever clears |
 | Clones | `~/src/mori/<namespace>/<name>` unless `setup --checkouts-root` says otherwise |
 | Token | an environment variable you name at setup (`MORI_LITE_TOKEN` by default); never stored |
@@ -30,13 +30,58 @@ nix profile install github:shinzui/mori#mori-lite
 mori-lite --version
 ```
 
-Release 7.1.0.0 does not attach a standalone client archive. The executable's
-native libraries currently come from its Nix closure, so copying just the binary
-to a machine without Nix is insufficient. Standalone distribution is deferred to
-the client’s separate packaging work. The client still needs no local PostgreSQL
-server; its cache and registry connection work as described below.
+Nix is the supported install path. The executable's native libraries currently
+come from its Nix closure, so copying just the binary to a machine without Nix is
+insufficient. Standalone distribution is deferred to the client’s separate
+packaging work. The client still needs no local PostgreSQL server; its cache and
+registry connection work as described below.
 
-## Your first hour
+## Browser login
+
+Your operator can enable Shomei sign-in, register a public OAuth client with an exact
+loopback redirect, and bind your verified identity to your existing Mori principal.
+The identity service is owned by `mori://shinzui/shomei`; your organization supplies
+its login page. The operator gives you the issuer URL, client ID, and registered
+redirect URL. On first login:
+
+```bash
+mori-lite login --url https://registry.example \
+  --issuer https://identity.example --client-id oauthclient_example \
+  --redirect-uri http://127.0.0.1:18090/callback
+mori-lite whoami
+mori-lite sync
+```
+
+Later, `mori-lite login` reuses those public settings. Login opens the system browser,
+uses S256 PKCE, and waits up to three minutes on the registered callback port. Close
+the process occupying that port or use another operator-registered redirect if the
+port is busy. The server verifies the sign-in and resolves your existing principal;
+your grants and cache scope stay with that principal.
+
+New sessions prefer macOS Keychain, or Linux Secret Service through `secret-tool`
+when it is installed and available. Otherwise, credentials
+use owner-only files under the XDG data directory, separate from config and catalog
+files: directories are 0700 and files are 0600. `MORI_LITE_CREDENTIAL_STORE=file`
+chooses the file backend for a new session. Login reports the selected storage.
+Refresh is serialized across processes. An interrupted or ambiguous refresh requires
+a fresh login instead of replaying a possibly consumed refresh token.
+
+`whoami` reports the verified issuer and subject online and labels historical output
+as stored when offline. An online 401 or 403 is a command failure. To finish locally:
+
+```bash
+mori-lite logout
+```
+
+Logout clears this login's credentials and downloaded catalog generations, including
+raw and search content, while keeping checkout bindings and user-owned repositories.
+The organization's browser session and tokens in your shell remain separately managed;
+use the organization's login page to change browser accounts. A public OAuth client
+cannot call Shomei's confidential-client revocation endpoint. An offline catalog is
+previously authorized exported knowledge; a disconnected machine cannot learn about
+a later revocation until it reconnects.
+
+## Your first hour (personal token)
 
 You need two things from the registry's publisher: its URL and your personal
 token. The transcript below was captured against a rehearsal registry named
@@ -68,12 +113,27 @@ $ mori-lite sync
 Synced 1 projects in 1 pages from acme registry (full replacement)
 ```
 
-`sync` fills the cache with exactly the projects your grants allow. Run it
-whenever you like. Catalog reads work offline; `search --remote` contacts the server,
-and `whoami` verifies online when possible, marking its stored fallback as unverified.
-Cloning needs access to the repository host. A
-project a colleague can see and you cannot is simply absent, not an error; ask
-the publisher for a grant.
+`sync` requires catalog protocol 2 and downloads a complete visible snapshot on
+every run. Grants, revocations and namespace moves are reflected even when the
+projects' content did not change. `sync --full` remains available and now has the
+same behavior. All pages must agree on registry, principal, snapshot and access
+evidence. The client verifies the snapshot digest and final completion receipt
+before atomically activating the new SQLite generation. A failed or interrupted
+download cannot activate partial rows; retry starts a fresh snapshot.
+
+A detected login/scope change or an online 401/403 blocks and clears the affected
+downloaded catalog. Sign in and complete a fresh sync before using it again. A
+permission change during paging fails the command; retry `sync`. Raw JSON, concept
+bodies, nested collections, search and agent context all use the active generation.
+Checkout bindings and your own repository files survive replacement and purge;
+regrant can reuse the same binding.
+
+An ordinary network or service outage fails online sync and preserves the last
+authorized export for explicit offline reads. `registry` shows when it was synced.
+A disconnected machine cannot learn about a later revoke. `search --remote`
+contacts the server, and `whoami` marks stored fallback identity as unverified.
+Cloning needs access to the repository host. A project a colleague can see and you
+cannot is absent; ask the publisher for a grant.
 
 ```bash
 $ mori-lite search widget
@@ -154,6 +214,9 @@ From `mori-lite --help`:
 
 ```text
 Available commands:
+  login                    Sign in through the registered Shomei browser client
+  logout                   Clear local credentials and this login's downloaded
+                           catalog
   setup                    Connect to a registry and pin its identity
   sync                     Sync the projects your grants allow
   registry                 Show the pinned registry, cursor, and last sync

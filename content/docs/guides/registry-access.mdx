@@ -6,10 +6,12 @@ icon: Database
 
 A shared registry knows its readers by name. Each reader is a *principal*, holds
 personal tokens the operator minted for them, and sees only what their *grants*
-allow. `mori registry access` administers all three against the registry
-database; there is no HTTP grant API. Every command refuses to run until the
-registry identity exists (`mori registry identity mint`), because every resource
-identifier embeds it.
+allow. In the default local decision mode, `mori registry access` administers all
+three against the registry database. With En as the decision owner, grants go
+through the registry's `/v1/access` API instead (see
+[Use En as the decision owner](#use-en-as-the-decision-owner)). Every command
+refuses to run until the registry identity exists (`mori registry identity mint`),
+because every resource identifier embeds it.
 
 ## Principals
 
@@ -17,8 +19,13 @@ identifier embeds it.
 mori registry access principal create --label alice
 mori registry access principal list
 mori registry access principal relabel principal_01… --label "alice (platform)"
+mori registry access principal bind principal_01… --issuer https://identity.example --subject user_01…
 mori registry access principal retire principal_01…
 ```
+
+`principal bind` attaches an exact external issuer and subject to an existing
+principal, so a verified Shomei identity acts as that principal. Binding keeps
+the principal's grants and cache identity and grants nothing by itself.
 
 Retiring a principal revokes every outstanding grant (one `Revoked …` line each),
 refuses every one of its tokens, and keeps its history. It is terminal: a retired
@@ -64,16 +71,77 @@ A personal token may publish through `mori registry push` when its principal hol
 `publish` (or `administer`) on the target resource. A new project needs a namespace
 grant; an existing project is checked against its project grant and inherited
 namespace or registry grants. Publication refusal is 403 `publish_not_permitted`.
-The operator token may publish everywhere. Grant administration remains a CLI
-operation against the registry database; there is no HTTP grant API.
+The operator token may publish everywhere. In local mode, grant administration
+remains a CLI operation against the registry database; only En mode routes grants
+through `/v1/access`.
 
 ## What a reader's client observes
 
 Each principal has a *grant generation* that moves when one of that principal's
-grants is made or revoked, and never when another principal's grants change. A
-client compares it on every sync and replaces its cache when it moved, so a
-revocation is observed on the next sync. One case is not: a project renamed out
-of a namespace a reader holds a grant on leaves their visible set without moving
-their generation, so their cache keeps the old row until `mori-lite sync --full`.
+grants is made or revoked, and never when another principal's grants change.
+`mori-lite sync` uses catalog protocol 2 and downloads a complete visible snapshot
+every time, so grants, revocations and namespace moves are observed on the next
+sync even when no project content changed. `sync --full` behaves the same. A
+permission change or namespace move during a sync can end it with
+409 `access_scope_changed`; run the sync again.
+
+## Export grants to En
+
+`mori registry access export-en [--json]` copies granted Phase 1 rows and the
+registry/namespace/project parent layout through En's public API. It prepares
+En without switching the registry's decision source. Resource IDs and principal
+IDs are preserved. Each result names a grant or parent and reports `exported`,
+`already_present`, or `rejected`; a rejection exits nonzero. Repeat exports do
+not write existing tuples or move En's grant generation. A conflicting parent
+is rejected rather than adding a second inheritance path.
+
+Load operator settings from protected environment storage: `MORI_EN_BASE_URL`,
+`MORI_EN_READ_TOKEN`, `MORI_EN_WRITE_TOKEN`, `MORI_EN_SCHEMA_HASH`, and
+`MORI_EN_DATASTORE_ID`. The optional `MORI_EN_TIMEOUT_MILLIS` defaults to 5000
+and is limited to 30000. Use HTTPS except on loopback. Use separate read-only
+and write-capable owner credentials. The configured hash and datastore ID must
+match the En deployment, which must load Mori's `mori-api/access/registry.en`
+model from `mori://shinzui/mori` (artifact-level URI pending). Mori embeds that
+model and verifies the owner's public schema and consistency evidence. No key is
+accepted in a command argument or manifest.
+
+Shomei identities bind to these same principals through `principal bind`;
+identity alone grants no resource permission.
 
 JSON output (`--json`) uses snake_case keys.
+
+## Use En as the decision owner
+
+Start the registry with `MORI_ACCESS_MODE=en` and the protected `MORI_EN_*`
+settings above. The default is `local`; En configuration while serving local
+mode is refused. Run database migrations before starting the new server.
+`MORI_EN_MAX_STALENESS_SECONDS` defaults to 30 and accepts 1 through 300.
+Missing, stale or unavailable owner evidence answers 503. Project visibility is
+materialized before paging; the local grant table is never a fallback.
+
+For permission administration set `MORI_ACCESS_MODE=en` in the CLI and
+`MORI_ACCESS_URL` to the receiving registry (`MORI_PUSH_URL` is also accepted).
+Authenticate with the existing `MORI_PUSH_*` credential settings: either
+`MORI_PUSH_TOKEN` or explicit `MORI_PUSH_AUTH_MODE=shomei` and its service-account
+settings. This credential must administer the target resource. The CLI sends
+resource references to Mori's narrow `/v1/access` API; En credentials stay at the
+server. Principal creation/binding and personal-token lifecycle remain Mori-owned.
+
+`grant`, `revoke`, `list` and `check` keep their existing shape. En-mode grant
+JSON adds `consistency_token` and `owner_generation`; `grant_id` is null because
+the grant belongs to En. `list` assembles the API's scoped Relay pages into the
+existing command array. A changed scope or owner generation requires restarting
+the list. `--group GROUP_ID` may replace `--principal` on grant/revoke to target
+that En group's member userset. Membership itself is administered through En.
+
+Bootstrap the initial registry administrator through En's public relationship
+API: object type `registry`, object ID `registry:<receiving registry ID>`, relation
+`administrator`, direct subject type `principal` with the existing Mori principal
+ID. An operator credential can also administer the receiving registry. No email,
+Shomei subject string or publishing-registry ID substitutes for that principal.
+
+New projects and namespace moves remain hidden during incomplete parent
+provisioning. The server retries persisted admission after restart. Retirements
+retain an identity tombstone; publishing a different project with the same name
+requires a new identity. `export-en` is refused in En mode so old local history
+cannot restore a revoked owner grant.
