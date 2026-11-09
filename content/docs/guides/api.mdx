@@ -110,9 +110,10 @@ lightweight clients decode without `mori-api` (`/v1/registry`, `/v1/access-conte
 every project. A teammate presents a personal token minted with
 `mori registry access token mint` (see `mori help registry-access`) and is a
 *principal*. A principal without registry `administer` may call `GET` on the health probes,
-`/v1/registry`, `/v1/access-context`, `/v1/catalog`,
-`/v1/catalog/projects/{namespace}/{name}`, `/v1/search`, `/v1/namespaces`, and
-`/v1/domains`. It may also call `GET`, `POST` and `DELETE` on `/v1/publications`;
+`/v1/registry`, `/v1/access-context`, `/v1/session`, `/v1/catalog`,
+`/v1/catalog/projects/{namespace}/{name}`, `/v2/catalog`, `/v2/catalog/complete`,
+`/v1/search`, `/v1/namespaces`, and `/v1/domains`. `POST /v1/access` is admitted
+with a live `administer` check on its target. It may also call `GET`, `POST` and `DELETE` on `/v1/publications`;
 the handler checks `publish` for the namespace of a new project or the project
 resource for an existing project. A refusal is `403 publish_not_permitted`.
 Other routes answer `403 principal_scope`. A principal holding registry
